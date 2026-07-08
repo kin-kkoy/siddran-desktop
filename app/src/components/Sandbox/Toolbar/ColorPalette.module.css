@@ -1,0 +1,42 @@
+/* Floating vertical colour strip, portalled to body (position:fixed). */
+.panel {
+    position: fixed;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px;
+    width: 48px;
+    background-color: rgba(18, 18, 30, 0.96);
+    border: 1px solid var(--border-default);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 32px var(--shadow-color);
+}
+
+.swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    padding: 0;
+    border: 2px solid transparent;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+}
+.swatch:hover { transform: scale(1.12); }
+
+/* Current colour shown larger on top. */
+.current {
+    width: 34px;
+    height: 34px;
+    box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 3px var(--accent-warning);
+}
+
+.divider {
+    width: 28px;
+    height: 1px;
+    background-color: var(--border-default);
+    margin: 2px 0;
+}

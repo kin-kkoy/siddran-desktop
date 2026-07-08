@@ -1,0 +1,135 @@
+/* Notes list container */
+.notesListContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.listTitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: 0 0 10px 0;
+    padding: 0 0 0 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.notesList {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+/* Scrollbar styling */
+.notesList::-webkit-scrollbar {
+    width: 6px;
+}
+
+.notesList::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.notesList::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+
+.notesList::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+}
+
+/* Individual note item */
+.noteItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.noteItem:hover {
+    background-color: var(--bg-elevated);
+}
+
+.noteItem.active {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.notebookGroup {
+    border: 1px solid color-mix(in srgb, var(--notebook-color) 35%, transparent);
+    background: color-mix(in srgb, var(--bg-elevated) 92%, #000 8%);
+    border-radius: 8px;
+    padding: 6px 0 8px;
+    margin: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.notebookHeader {
+    padding: 4px 12px 0 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.notebookLabel {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--notebook-color) 70%, var(--text-dim) 30%);
+}
+
+.chevron {
+    color: var(--text-dim);
+    transition: transform 0.2s ease;
+}
+
+.chevronCollapsed {
+    transform: rotate(-90deg);
+}
+
+.notebookNotes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px 6px;
+}
+
+.groupedNote {
+    padding-left: 8px;
+}
+
+.noteIcon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.noteTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.emptyMessage {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 20px;
+    padding: 0 16px;
+}

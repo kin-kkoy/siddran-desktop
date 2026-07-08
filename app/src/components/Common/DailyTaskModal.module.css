@@ -1,0 +1,707 @@
+/* Backdrop */
+.backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Modal */
+.modal {
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    width: 92%;
+    max-width: min(92vw, 1100px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 8px 32px var(--shadow-color);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background-color: var(--accent-warning);
+    flex-shrink: 0;
+}
+
+.title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.saveBtn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.saveBtn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.saveBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.closeBtn {
+    background: rgba(0, 0, 0, 0.2);
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.closeBtn:hover {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+/* Progress */
+.progress {
+    padding: 12px 20px;
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.progressBar {
+    width: 100%;
+    height: 6px;
+    background-color: var(--border-default);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.progressFill {
+    height: 100%;
+    background-color: var(--accent-warning);
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+.progressText {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Add-task row */
+.addRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.addInput {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 12px;
+    outline: none;
+}
+
+.addInput:focus {
+    border-color: var(--accent-warning);
+}
+
+.addSelect {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    cursor: pointer;
+}
+
+.addBtn {
+    background: var(--accent-warning);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+}
+
+.addBtn:hover {
+    opacity: 0.85;
+}
+
+/* Recurrence toggle (off = ephemeral daily, on = recurring) + the picker it reveals. */
+.repeatToggle {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 17px;
+    line-height: 1;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.repeatToggle:hover {
+    border-color: var(--accent-warning);
+    color: var(--text-primary);
+}
+.repeatToggleOn {
+    background: var(--accent-warning);
+    border-color: var(--accent-warning);
+    color: #fff;
+}
+
+.recurrenceRow {
+    padding: 10px 20px 12px;
+    border-bottom: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+/* Columns container */
+.columnsContainer {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+}
+
+.column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-right: 1px solid var(--border-default);
+}
+
+.column:last-child {
+    border-right: none;
+}
+
+.columnHeader {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.columnHeader.high   { color: #ff5722; }
+.columnHeader.normal { color: #2196f3; }
+.columnHeader.low    { color: #4caf50; }
+
+/* Task List */
+.taskList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.taskList::-webkit-scrollbar {
+    width: 6px;
+}
+
+.taskList::-webkit-scrollbar-track {
+    background: var(--bg-surface);
+}
+
+.taskList::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+
+.taskList::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+}
+
+.taskItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+/* DailyTaskModal-only: stack the clickable row over its inline recurrence panel. (BundleDetailModal
+   shares this stylesheet and keeps the plain row layout above.) */
+.taskItemCol {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    cursor: default;
+}
+/* The clickable row (checkbox · title · recur · delete); the recurrence panel sits below it. */
+.taskRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.taskItem:last-child {
+    border-bottom: none;
+}
+
+.taskItem:hover {
+    background-color: var(--border-default);
+}
+
+.taskItem.completed .taskTitle {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+/* Checkbox */
+.checkbox {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    border-radius: 4px;
+    border: 2px solid var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    padding: 0;
+    transition: all 0.2s;
+}
+
+.checkbox:hover {
+    border-color: var(--text-primary);
+}
+
+.checked {
+    background-color: var(--accent-warning);
+    border-color: var(--accent-warning);
+}
+
+/* Task Content */
+.taskContent {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.taskTitle {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+    flex: 1;
+    word-break: break-word;
+}
+
+/* Priority badge (kept for potential reuse) */
+.priority {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.low {
+    background-color: #4caf5020;
+    color: #4caf50;
+}
+
+.normal {
+    background-color: #2196f320;
+    color: #2196f3;
+}
+
+.high {
+    background-color: #ff572220;
+    color: #ff5722;
+}
+
+/* Delete Button */
+.deleteBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.taskItem:hover .deleteBtn {
+    opacity: 1;
+}
+
+.deleteBtn:hover {
+    background-color: #ff444420;
+    color: #ff4444;
+}
+
+/* Per-task recurrence toggle (↻). Reveals on row hover; stays amber when the task is recurring. */
+.recurBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity 0.2s, color 0.2s, background-color 0.2s;
+}
+.taskItem:hover .recurBtn { opacity: 1; }
+.recurBtn:hover { color: var(--accent-warning); background-color: var(--accent-warning-alpha); }
+.recurBtnOn { opacity: 1; color: var(--accent-warning); }
+.recurBtnOpen { background-color: var(--accent-warning-alpha); }
+
+/* Small ↻ tag next to a recurring task's title. */
+.recurTag {
+    color: var(--accent-warning);
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+/* Header "Select" toggle for batch recurrence. */
+.batchToggle {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.batchToggle:hover { border-color: var(--accent-warning); color: var(--text-primary); }
+.batchToggleOn {
+    background: var(--accent-warning);
+    border-color: var(--accent-warning);
+    color: var(--bg-primary, #11111a);
+    font-weight: 600;
+}
+
+/* Batch action bar: pick a recurrence, apply it to all selected tasks. */
+.batchBar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--accent-warning-alpha);
+    flex-shrink: 0;
+}
+.batchHint { font-size: 13px; color: var(--text-secondary); }
+.batchHint strong { color: var(--accent-warning); }
+.batchActions { display: flex; gap: 8px; }
+.batchApply, .batchStop {
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.batchApply {
+    background: var(--accent-warning);
+    border: none;
+    color: var(--bg-primary, #11111a);
+    font-weight: 600;
+}
+.batchStop {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--accent-danger, #e05c5c);
+}
+.batchApply:disabled, .batchStop:disabled { opacity: 0.4; cursor: not-allowed; }
+.batchStop:not(:disabled):hover { border-color: var(--accent-danger, #e05c5c); }
+
+.taskItemSelected { background-color: var(--accent-warning-alpha); }
+
+/* Inline recurrence picker revealed beneath a task row. */
+.recurPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 4px 6px 32px; /* indent under the checkbox to align with the title */
+}
+.recurStop {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--accent-danger, #e05c5c);
+    border-radius: 6px;
+    padding: 5px 11px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.recurStop:hover { border-color: var(--accent-danger, #e05c5c); }
+
+/* Pending deletion indicator */
+.pendingDelete {
+    opacity: 0.5;
+    background-color: rgba(255, 68, 68, 0.06);
+}
+
+.pendingDelete .taskTitle {
+    text-decoration: line-through;
+    color: var(--accent-danger, #ff4444);
+}
+
+.pendingDelete .deleteBtn {
+    opacity: 1;
+    color: var(--accent-danger, #ff4444);
+}
+
+.undoBtn {
+    opacity: 1 !important;
+    color: var(--accent-danger, #ff4444) !important;
+}
+
+/* Pending toggle indicator */
+.pendingToggle {
+    border-left: 3px solid var(--accent-warning);
+}
+
+/* Pending hint text */
+.pendingHint {
+    font-size: 10px;
+    color: var(--accent-danger, #ff4444);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Empty state */
+.emptyState {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 40px 20px;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+    .columnsContainer {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .column {
+        border-right: none;
+        border-bottom: 1px solid var(--border-default);
+    }
+    .column:last-child {
+        border-bottom: none;
+    }
+    .modal {
+        max-height: 90vh;
+    }
+}
+
+/* ===== Project modal additions ===== */
+
+/* Editable title input on tinted header */
+.titleInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    outline: none;
+    min-width: 0;
+}
+
+.titleInput:focus {
+    background: var(--bg-elevated);
+}
+
+.titleInput::placeholder {
+    color: var(--text-muted);
+}
+
+/* Project modal: header save / close buttons override (tinted bg variant) */
+.header.bundleHeader .saveBtn,
+.bundleHeader .saveBtn {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+}
+
+.bundleHeader .closeBtn {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.bundleHeader .closeBtn:hover {
+    background: var(--border-default);
+}
+
+/* Delete project button in header (distinct from per-task delete) */
+.deleteBundleBtn {
+    background: var(--bg-elevated);
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.deleteBundleBtn:hover {
+    background: rgba(255, 68, 68, 0.18);
+    color: var(--accent-danger, #ff4444);
+}
+
+/* Progress row that holds the hue slider on the right */
+.progressWithSlider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.progressWithSlider .progressBar {
+    margin-bottom: 6px;
+}
+
+.sliderGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Hue slider (rainbow gradient) */
+.hueSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 120px;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right,
+        hsl(0, 70%, 50%), hsl(60, 70%, 50%), hsl(120, 70%, 50%),
+        hsl(180, 70%, 50%), hsl(240, 70%, 50%), hsl(300, 70%, 50%), hsl(360, 70%, 50%));
+    outline: none;
+    cursor: pointer;
+}
+
+.hueSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 2px solid #fff;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.hueSlider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 2px solid #fff;
+    cursor: pointer;
+}
+
+.colorSwatch {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    flex-shrink: 0;
+}

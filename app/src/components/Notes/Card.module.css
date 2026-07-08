@@ -1,0 +1,443 @@
+/* Grid Card */
+.card {
+  font-family: var(--font-body);
+  background-color: var(--bg-surface-alt);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background-color 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+  position: relative;
+  justify-content: space-between;
+}
+
+.card:hover {
+  border-color: var(--text-faint);
+  background-color: var(--bg-elevated);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  text-align: center;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  text-align: center;
+}
+
+.preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.tags {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin: 0;
+}
+
+.footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footerDate {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.footerActions {
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.card:hover .footerActions {
+  opacity: 1;
+}
+
+.deleteBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteBtn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
+}
+
+.readModeBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.readModeBtn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+/* Menu Button and Dropdown */
+.menuContainer {
+  position: relative;
+}
+
+.menuBtn {
+  background-color: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.2s, opacity 0.2s;
+  opacity: 0;
+}
+
+.card:hover .menuBtn,
+.horizontalCard:hover .menuBtn {
+  opacity: 1;
+}
+
+.menuBtn:hover {
+  color: var(--text-primary);
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 200px;
+  z-index: 100;
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.menuAbove {
+  bottom: calc(100% + 4px);
+}
+
+.menuBelow {
+  top: calc(100% + 4px);
+}
+
+.menuItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.menuItem:hover {
+  background-color: var(--bg-hover);
+}
+
+.colorPicker {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-strong);
+  margin-top: 4px;
+}
+
+.colorLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.colorOptions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.colorBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid var(--text-faint);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.colorBtn:hover {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+/* Horizontal Card (List View) */
+.horizontalCard {
+  font-family: var(--font-body);
+  background-color: var(--bg-surface-alt);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background-color 0.2s, border-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+}
+
+.horizontalCard:hover {
+  border-color: var(--text-faint);
+  background-color: var(--bg-elevated);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.horizontalCardContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.horizontalCard h4 {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.horizontalCard p {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.horizontalTags {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.meta .deleteBtn,
+.meta .readModeBtn {
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.horizontalCard:hover .meta .deleteBtn,
+.horizontalCard:hover .meta .readModeBtn {
+  opacity: 1;
+}
+
+.meta .deleteBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meta .deleteBtn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
+}
+
+/* Add Card (Grid) — mirrors the SandBoxes "New Sandbox" tile */
+.addCard {
+  background-color: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, transform 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 200px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.addCard:hover {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+  transform: translateY(-2px);
+}
+
+.addCard h2 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0;
+  color: inherit;
+}
+
+.addCardIcon {
+  font-size: 32px;
+  line-height: 1;
+  font-family: var(--font-heading);
+  color: inherit;
+}
+
+/* Add Card (List) — mirrors the SandBoxes "New Sandbox" row */
+.addCardList {
+  background-color: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.addCardList:hover {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+}
+
+.addCardList h4 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0;
+  color: inherit;
+}
+
+.addCardListIcon {
+  font-size: 24px;
+  line-height: 1;
+  font-family: var(--font-heading);
+  color: inherit;
+}
+
+
+/* Selection mode styles */
+.card.selected,
+.card.isSelected {
+  border: 2px solid var(--accent-warning);
+  background-color: var(--accent-warning-alpha);
+}
+
+.horizontalCard.selected {
+  border-left: 4px solid var(--accent-warning);
+  background-color: var(--accent-warning-alpha);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin-right: 10px;
+  accent-color: var(--accent-warning);
+}
+
+/* For horizontal card checkbox */
+.horizontalCard .checkbox {
+  margin-right: 15px;
+  margin-bottom: 0;
+}
+
+/* Hover for colored cards */
+.card.hasColor:hover,
+.horizontalCard.hasColor:hover {
+  filter: brightness(1.15);
+}

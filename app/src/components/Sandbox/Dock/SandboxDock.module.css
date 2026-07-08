@@ -1,0 +1,117 @@
+.dock {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 220px;
+    height: 156px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+    z-index: 998;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dock:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+    border-color: var(--accent-warning);
+}
+
+@keyframes slideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+.dockHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.dockTitle {
+    flex: 1;
+    font-family: var(--font-heading);
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dockBadge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--accent-warning);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.closeBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 3px;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.closeBtn:hover {
+    color: var(--accent-danger);
+    background-color: rgba(224, 92, 92, 0.12);
+}
+
+.preview {
+    position: relative;
+    height: calc(100% - 28px);
+    background-color: var(--bg-primary);
+    background-image:
+        radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1.2px),
+        radial-gradient(circle, rgba(255, 255, 255, 0.07) 1.2px, transparent 1.5px);
+    background-size: 12px 12px, 60px 60px;
+    overflow: hidden;
+}
+
+.previewEmpty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+}
+
+.previewEmpty small {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0;
+}
+
+.previewEmpty .gold {
+    color: var(--accent-warning);
+    font-family: var(--font-heading);
+    font-size: 22px;
+    opacity: 0.6;
+}
+
+.half {
+    height: 100%;
+    background-color: var(--bg-primary);
+    border-left: 1px solid var(--border-default);
+    overflow: hidden;
+}

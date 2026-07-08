@@ -1,0 +1,144 @@
+/* Compact vertical brush popup, floated beside the whole toolbar/dock with a
+ * small gap (toolbar's left edge sits at right:64px; +14px reads as a sibling
+ * panel rather than glued to the pen button). */
+.panel {
+    position: absolute;
+    top: 16px;
+    right: 78px;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 6px 10px;
+    width: 40px;
+    background-color: rgba(18, 18, 30, 0.92);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 28px var(--shadow-color);
+}
+
+.collapseBtn {
+    width: 24px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    border-radius: 6px;
+}
+.collapseBtn:hover { color: var(--text-primary); background-color: var(--bg-hover); }
+
+.value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent-warning);
+    letter-spacing: 0.04em;
+}
+
+.label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.groupDivider {
+    width: 22px;
+    height: 1px;
+    background-color: var(--border-default);
+    margin: 4px 0;
+}
+
+.dotWrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+}
+.dot {
+    display: block;
+    border-radius: 50%;
+    background-color: var(--text-primary);
+}
+
+/* Vertical range slider. */
+.slider {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 22px;
+    height: 120px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+.slider::-webkit-slider-runnable-track {
+    width: 3px;
+    background-color: var(--border-strong);
+    border-radius: 2px;
+}
+.slider::-moz-range-track {
+    width: 3px;
+    background-color: var(--border-strong);
+    border-radius: 2px;
+}
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-left: -5.5px;
+    border-radius: 50%;
+    background-color: var(--accent-warning);
+    cursor: grab;
+}
+.slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 50%;
+    background-color: var(--accent-warning);
+    cursor: grab;
+}
+
+.resetBtn {
+    width: 24px;
+    height: 22px;
+    background-color: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.resetBtn:hover { color: var(--accent-warning); border-color: var(--accent-warning); }
+
+/* Collapsed pill. */
+.pill {
+    position: absolute;
+    top: 16px;
+    right: 78px;
+    z-index: 11;
+    min-width: 34px;
+    height: 30px;
+    padding: 0 8px;
+    background-color: rgba(18, 18, 30, 0.92);
+    border: 1px solid var(--border-default);
+    border-radius: 15px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 28px var(--shadow-color);
+    color: var(--accent-warning);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+}
+.pill:hover { border-color: var(--border-strong); }

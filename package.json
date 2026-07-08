@@ -1,0 +1,17 @@
+{
+  "name": "siddran-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Siddran desktop app (Tauri shell + the Cinder frontend).",
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "app:install": "npm --prefix app install",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

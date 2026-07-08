@@ -1,0 +1,177 @@
+/* Hover zone: sits at the bottom of the editor flow, always present but the
+   dock inside is hidden until hovered (or pinned). sticky keeps it anchored
+   to the bottom of the viewport while scrolling within the note. */
+.dockZone {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+  pointer-events: none;
+}
+
+/* Auto-hide: the dock fades in when the zone is hovered */
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px var(--shadow-color);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dockZone:hover .dock,
+.dockZone.pinned .dock {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Also show when a dropdown inside is open */
+.dock:focus-within {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn.active {
+  color: var(--accent-blue);
+}
+
+.sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Dropdown (opens upward) ── */
+
+.dropdownAnchor {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 150px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 -4px 16px var(--shadow-color);
+  padding: 4px;
+  z-index: 60;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.dropdownItem:hover {
+  background: var(--bg-hover);
+}
+
+.dropdownClose {
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-default);
+  margin-top: 2px;
+  padding-top: 8px;
+  border-radius: 0 0 5px 5px;
+}
+
+.dropdownEmpty {
+  padding: 8px 10px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* ── Markdown tips popover ── */
+.tipPopover {
+  /* Right-aligned to the button (it sits near the dock's right edge, so a
+     centered popover would overflow the viewport). */
+  left: auto;
+  right: 0;
+  transform: none;
+  min-width: 244px;
+  max-width: 284px;
+  padding: 10px 12px;
+  white-space: normal;
+  cursor: default;
+}
+
+.tipTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 8px 0 4px;
+}
+.tipTitle:first-child { margin-top: 0 }
+
+.tipLine {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.tipList {
+  margin: 0 0 6px;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.tipPopover code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  background: var(--bg-hover);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--accent-warning);
+}

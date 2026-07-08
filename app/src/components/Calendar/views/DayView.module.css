@@ -1,0 +1,16 @@
+.shell {
+  display: grid;
+  /* Shelf scales with the (resizable) pane instead of staying a fixed 300px, so it visibly
+     participates when the half-split is dragged. */
+  grid-template-columns: minmax(0, 1fr) clamp(200px, 30%, 320px);
+  gap: 18px;
+  align-items: start;
+}
+.grid { min-width: 0; }
+/* Tall mode: fill the view area so the timeline column consumes the full height. */
+.shell.fill { align-items: stretch; flex: 1; min-height: 0; }
+.shell.fill .grid { min-height: 0; display: flex; flex-direction: column; }
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+}

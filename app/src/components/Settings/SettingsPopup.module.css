@@ -1,0 +1,472 @@
+/* Backdrop */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal */
+.modal {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 650px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px var(--shadow-color);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.closeBtn:hover {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Body: sidebar + content */
+.body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Tab sidebar */
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-default);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.tab:hover {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.tabActive {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Content area */
+.content {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.placeholder {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* Tab content */
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Setting row */
+.settingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.settingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settingLabel {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settingDesc {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settingControl {
+  flex-shrink: 0;
+}
+
+/* Segmented control */
+.segmented {
+  display: flex;
+  background-color: var(--bg-elevated);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segmentBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.segmentBtn:hover {
+  color: var(--text-primary);
+}
+
+.segmentActive {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background-color: var(--bg-elevated);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  padding: 0;
+}
+
+.toggleOn {
+  background-color: var(--accent-blue);
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: white;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggleOn .toggleThumb {
+  transform: translateX(18px);
+}
+
+/* Stacked setting block (label on top, full-width content below) */
+.settingBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settingBlock .themeGrid {
+  margin-top: 8px;
+}
+
+/* Theme grid */
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.themeSwatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.themeSwatch:hover {
+  background-color: var(--bg-elevated);
+}
+
+.themeSelected {
+  border-color: var(--accent-blue);
+  background-color: var(--bg-elevated);
+}
+
+.swatchColor {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+}
+
+.swatchLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.themeSelected .swatchLabel {
+  color: var(--accent-blue);
+}
+
+/* ── Star tuning block ───────────────────────────────────────── */
+.starBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+
+.starBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.starBlockTitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Info "?" button + tooltip */
+.infoWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.infoBtn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  user-select: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.infoWrap:hover .infoBtn {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.infoTooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  z-index: 200;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.infoWrap:hover .infoTooltip {
+  display: flex;
+}
+
+.infoRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.infoKey {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.infoDesc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* Sliders */
+.starSliders {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.starSliderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.starSliderMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.starSliderLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.starSliderValue {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.starSlider {
+  width: 100%;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+  height: 4px;
+}
+
+/* Direction picker */
+.starDirLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: -4px;
+}
+
+.starDirGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.starDirRow {
+  display: flex;
+  gap: 4px;
+}
+
+.dirBtn {
+  flex: 1;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dirBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dirBtnActive {
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}

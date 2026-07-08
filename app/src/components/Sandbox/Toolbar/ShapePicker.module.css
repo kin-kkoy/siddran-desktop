@@ -1,0 +1,140 @@
+/* Shape picker flyout — portalled to body like ColorPalette.
+ * Two-level: quick menu (4 shapes + "More") → grid showing all ~16. */
+.panel {
+    position: fixed;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    background-color: rgba(18, 18, 30, 0.96);
+    border: 1px solid var(--border-default);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 32px var(--shadow-color);
+    padding: 6px;
+    animation: shapePickerFadeIn 0.15s ease both;
+}
+
+@keyframes shapePickerFadeIn {
+    from { opacity: 0; transform: translateX(6px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Quick menu item ── */
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: background-color 0.12s, color 0.12s;
+    width: 100%;
+    text-align: left;
+}
+.menuItem:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+.menuItemActive {
+    composes: menuItem;
+    background-color: var(--bg-elevated);
+    color: var(--accent-warning);
+}
+
+.menuKey {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.divider {
+    height: 1px;
+    background-color: var(--border-default);
+    margin: 4px 6px;
+}
+
+/* ── "More shapes" grid ── */
+.gridHeader {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px 2px;
+}
+.gridBackBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.12s, background-color 0.12s;
+}
+.gridBackBtn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+.gridTitle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-left: 8px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    padding: 4px 6px 6px;
+}
+
+.gridCell {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.12s, color 0.12s, transform 0.1s;
+    padding: 0;
+}
+.gridCell:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+    transform: scale(1.08);
+}
+.gridCellActive {
+    composes: gridCell;
+    background-color: var(--bg-elevated);
+    color: var(--accent-warning);
+}
+
+.gridCellLabel {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 2px;
+}

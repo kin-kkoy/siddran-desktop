@@ -1,0 +1,154 @@
+.card {
+    position: absolute;
+    pointer-events: auto;
+    box-sizing: border-box;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--accent-success);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+    color: var(--text-primary);
+    cursor: grab;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    user-select: none;
+}
+
+.card:active { cursor: grabbing; }
+
+.card:hover { border-color: var(--border-strong); }
+
+.done { opacity: 0.62; }
+
+.removeBtn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.card:hover .removeBtn { opacity: 1; }
+
+.removeBtn:hover {
+    color: var(--accent-danger);
+    background-color: rgba(224, 92, 92, 0.12);
+}
+
+.label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.check {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border-strong);
+    background: transparent;
+    color: var(--bg-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.checked {
+    background-color: var(--accent-success);
+    border-color: var(--accent-success);
+}
+
+.title {
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.done .title { text-decoration: line-through; }
+
+.meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.priority {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+}
+
+.p_high { color: var(--accent-danger); }
+.p_medium { color: var(--accent-warning); }
+.p_low { color: var(--accent-blue); }
+
+.due {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.deleted {
+    position: absolute;
+    pointer-events: auto;
+    box-sizing: border-box;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--accent-danger);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+    color: var(--text-primary);
+    cursor: grab;
+    opacity: 0.7;
+    user-select: none;
+}
+
+.deletedNote {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+}

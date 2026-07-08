@@ -1,0 +1,10 @@
+.skeleton {
+    background-color: var(--bg-elevated);
+    animation: skeletonPulse 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes skeletonPulse {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.65; }
+}

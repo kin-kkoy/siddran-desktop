@@ -1,0 +1,230 @@
+/* Rendered reading-view styling. Tag rules are scoped under .reading; the
+   dynamically-added helper classes (rv-*) live in a :global block. Code-block
+   colours come from the imported highlight.js atom-one-dark theme. */
+.reading {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  word-wrap: break-word;
+  padding: 4px 0 40px;
+}
+
+.reading h1, .reading h2, .reading h3, .reading h4, .reading h5, .reading h6 {
+  position: relative;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin: 1.4em 0 0.6em;
+  color: var(--text-primary);
+}
+.reading h1 { font-size: 1.9em }
+.reading h2 { font-size: 1.55em }
+.reading h3 { font-size: 1.3em }
+.reading h4 { font-size: 1.12em }
+.reading h5 { font-size: 1em }
+.reading h6 { font-size: 0.9em; color: var(--text-muted) }
+
+.reading p { margin: 0.7em 0 }
+.reading a { color: var(--accent-blue); text-decoration: none }
+.reading a:hover { text-decoration: underline }
+
+.reading ul, .reading ol { margin: 0.6em 0; padding-left: 1.6em }
+/* Force the same disc bullet at every nesting depth (browsers default nested
+   <ul>s to circle/square). Mirrors the editor, which renders the same • for
+   child/grandchild via BulletWidget. */
+.reading ul { list-style-type: disc }
+.reading li { margin: 0.2em 0 }
+/* "Loose" list items (those with children, or blank-line-separated) wrap their
+   text in <p> and add a nested <ul>/<ol>; the default paragraph + list margins
+   then open a big gap between a parent item and its first child. Tighten both so
+   a parent sits close to its children. */
+.reading li p { margin: 0.2em 0 }
+.reading li > ul, .reading li > ol { margin: 0.2em 0 }
+/* Match the editor's blue bullets / ordered numbers. */
+.reading li::marker { color: var(--accent-blue) }
+/* Structural selectors (not the .task-list-item class) so CSS Modules can't
+   scope-rename them away from remark's global DOM class. */
+.reading li:has(> input[type='checkbox']),
+.reading li:has(> p > input[type='checkbox']) { list-style: none }
+/* Pull the checkbox into the marker gutter so it lines up with sibling bullets
+   instead of sitting where the bullet's TEXT would start. Covers both tight
+   (li > input) and loose (li > p > input) task items remark can emit. NOTE: the
+   fold decoration prepends a chevron <span> to parent <li>s, so the <p> is no
+   longer :first-child — match any direct-child <p> rather than :first-child, or
+   parent items with children lose the pull and sit too far right. */
+.reading li:has(> input[type='checkbox']) > input[type='checkbox'],
+.reading li:has(> p > input[type='checkbox']) > p > input[type='checkbox'] {
+  margin-left: -1.35em;
+  margin-right: 6px;
+  vertical-align: middle;
+  accent-color: var(--accent-blue);
+}
+/* Completed task: grey the label text. Reset nested lists back to the default
+   colour so an unchecked child under a checked parent keeps its normal weight
+   (mirrors the editor, which greys per-line). */
+.reading li:has(> input[type='checkbox']:checked),
+.reading li:has(> p > input[type='checkbox']:checked) { color: var(--text-muted) }
+.reading li:has(> input[type='checkbox']:checked) :is(ul, ol),
+.reading li:has(> p > input[type='checkbox']:checked) :is(ul, ol) { color: var(--text-primary) }
+
+.reading blockquote {
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.reading code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  background: var(--bg-hover);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--accent-warning);
+}
+.reading pre {
+  position: relative;
+  margin: 0.8em 0;
+  background: #282c34; /* matches atom-one-dark */
+  border-radius: 8px;
+  overflow: auto;
+}
+.reading pre code {
+  display: block;
+  padding: 14px 16px;
+  background: transparent;
+  color: inherit;
+  font-size: 13.5px;
+  border-radius: 0;
+}
+
+.reading img { max-width: 100%; border-radius: 6px; display: block; margin: 0.4em 0 }
+.reading hr { border: none; border-top: 1px solid var(--border-strong); margin: 0.8em 0 }
+
+.reading table { border-collapse: collapse; margin: 0.8em 0 }
+.reading th, .reading td { border: 1px solid var(--border-default); padding: 6px 12px }
+.reading th { background: var(--bg-surface-alt); font-weight: 600 }
+
+.reading u { text-decoration: underline }
+.reading mark { background: rgba(240, 184, 64, 0.22); color: inherit; border-radius: 3px; padding: 0 2px }
+
+:global(.rv-blank) { margin: 0 }
+
+:global(.rv-hashtag) {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.15);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+}
+:global(.rv-hashtag):hover { background: rgba(192, 132, 252, 0.28) }
+
+/* Wikilinks / typed cross-links in the reading view. */
+:global(.rv-link) { cursor: pointer; text-decoration: none }
+:global(.rv-link):hover { text-decoration: underline }
+:global(.rv-link-note) { color: var(--accent-blue) }
+:global(.rv-link-task) { color: var(--src-task) }
+:global(.rv-link-task)::before { content: '◷ '; opacity: 0.85 }
+:global(.rv-link-sandbox) { color: var(--src-sandbox) }
+:global(.rv-link-sandbox)::before { content: '▦ '; opacity: 0.85 }
+:global(.rv-link-bundle) { color: var(--src-bundle) }
+:global(.rv-link-bundle)::before { content: '⊞ '; opacity: 0.85 }
+
+/* Callouts (scoped under .reading so they beat the base blockquote rule). */
+.reading :global(.rv-callout) {
+  border-left: 3px solid var(--accent-blue);
+  background: rgba(90, 156, 240, 0.07);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0.8em 0;
+  color: var(--text-primary);
+}
+.reading :global(.rv-callout) > p:first-child { font-weight: 600; margin-top: 0 }
+.reading :global(.rv-callout-warning), .reading :global(.rv-callout-question), .reading :global(.rv-callout-caution) {
+  border-left-color: var(--accent-warning); background: rgba(240, 184, 64, 0.07);
+}
+.reading :global(.rv-callout-danger), .reading :global(.rv-callout-error), .reading :global(.rv-callout-bug), .reading :global(.rv-callout-failure) {
+  border-left-color: var(--accent-danger); background: rgba(224, 92, 92, 0.07);
+}
+.reading :global(.rv-callout-tip), .reading :global(.rv-callout-success), .reading :global(.rv-callout-hint), .reading :global(.rv-callout-done) {
+  border-left-color: var(--accent-success); background: rgba(82, 196, 122, 0.07);
+}
+
+/* Fold chevrons — heading section collapse in reading view. */
+:global(.rv-fold-chevron) {
+  position: absolute;
+  left: -24px;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+:global(.rv-fold-chevron) svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+  transform: rotate(90deg);
+  transform-origin: 50% 50%;
+  transition: transform 0.12s ease;
+}
+:global(.rv-fold-chevron.is-folded) svg { transform: rotate(0deg) }
+:global(.rv-fold-h1) { top: 11px }
+:global(.rv-fold-h2) { top: 7px }
+:global(.rv-fold-h3) { top: 5px }
+:global(.rv-fold-h4) { top: 3px }
+:global(.rv-fold-h5) { top: 1px }
+:global(.rv-fold-chevron):hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  opacity: 1;
+}
+:global(.rv-fold-list) {
+  left: -38px;
+  top: 6px;
+  width: 16px;
+  height: 16px;
+}
+:global(.rv-fold-list) svg {
+  width: 10px;
+  height: 10px;
+}
+:global(.rv-folded) { display: none !important }
+
+:global(.rv-spoiler) {
+  background: var(--text-faint);
+  color: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+:global(.rv-spoiler):hover { background: var(--bg-hover); color: var(--text-primary) }
+
+:global(.rv-pre) :global(.rv-copy-btn) {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+:global(.rv-pre):hover :global(.rv-copy-btn) { opacity: 1 }
+:global(.rv-copy-btn):hover { color: var(--text-primary) }

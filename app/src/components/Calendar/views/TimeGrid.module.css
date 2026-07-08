@@ -1,0 +1,375 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+/* Tall mode: fill the view area; the timeline body scrolls internally. */
+.wrap.fill { flex: 1; min-height: 0; }
+
+/* Horizontal scroller wrapping header + all-day + timeline together, so day columns can keep a
+   real minimum width (expandable / roomy) and all three rows stay column-aligned while scrolling
+   sideways. Vertical scroll lives on .body. */
+.hscroll {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Fit/overview mode: cap to the viewport so the page itself doesn't grow tall. */
+  max-height: calc(100vh - 200px);
+}
+/* Tall mode: fill .wrap instead of the fixed cap. */
+.wrap.fill .hscroll { max-height: none; flex: 1; min-height: 0; }
+.headRow, .allDayRow { flex: 0 0 auto; }
+
+/* ── Day header ── */
+.headRow {
+  display: grid;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+.gutterCorner { border-right: 1px solid var(--border-default); display: grid; place-items: center; padding: 2px; }
+.dayHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-left: 1px solid var(--border-default);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dayDate { font-family: var(--font-mono); font-size: 15px; color: var(--text-secondary); }
+.todayHead .dayName, .todayHead .dayDate { color: var(--accent-warning); }
+
+/* ── All-day row ── */
+.allDayRow {
+  display: grid;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  min-height: 34px;
+}
+.gutterLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 8px 6px;
+  text-align: right;
+  border-right: 1px solid var(--border-default);
+}
+.allDayCell {
+  border-left: 1px solid var(--border-default);
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+}
+.allDayCell:hover { background: var(--bg-hover); }
+/* Drop indicator while dragging a block/task over the all-day row (mirrors .preview). */
+.allDayCellOver { background: var(--accent-warning-alpha); box-shadow: inset 0 0 0 1px var(--accent-warning); }
+.allDayPreview {
+  border: 1px dashed var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-warning);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* All-day chip — same bold-capsule fill as timed blocks (no time pill: all-day has no start time). */
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  --src: var(--accent-warning);
+  background: color-mix(in srgb, var(--src) 20%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--src) 42%, transparent);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.chip:hover { background: color-mix(in srgb, var(--src) 28%, var(--bg-surface)); }
+.chipTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Scrollable timeline ── */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  /* Shrink-wrap to the timeline's full width (56px gutter + N day columns) instead of stretching
+     to the viewport. Without this, on a narrow screen .body clipped its grid at the viewport edge,
+     so day columns revealed by the horizontal scroll rendered blank while the header/all-day rows
+     (which size to content) showed fine. */
+  min-width: max-content;
+}
+.grid { display: grid; background: var(--bg-primary); }
+
+/* Hour gutter (left) */
+.gutter { position: relative; border-right: 1px solid var(--border-default); }
+.hourLabel {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  /* Time on top, the hide button stacked just below it. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.hourLabel:first-child { transform: none; } /* 12 AM sits at the very top, not clipped */
+/* Per-hour hide (eye-off) button, below the hour label — appears on gutter hover. */
+.hideHourBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 1px 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.gutter:hover .hideHourBtn { opacity: 0.5; }
+.hideHourBtn:hover { opacity: 1; color: var(--accent-warning); }
+
+/* "Show all hours" in the gutter corner (only when some are hidden). */
+.showAllBtn {
+  background: var(--accent-warning-alpha);
+  border: 1px solid var(--accent-warning);
+  color: var(--accent-warning);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Hidden-hours pill bar (under the all-day row). */
+.hiddenBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  flex: 0 0 auto;
+}
+.hiddenPill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.hiddenPill:hover { border-color: var(--accent-warning); color: var(--accent-warning); }
+
+/* Day column */
+.col { position: relative; border-left: 1px solid var(--border-default); cursor: pointer; }
+.colToday { background: var(--accent-warning-alpha); }
+.hourLine {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px solid var(--border-default);
+  pointer-events: none;
+}
+
+/* Now-line — "fade thread": a gradient that marks the present without slicing the whole column.
+   The current time is read out in the gutter (.nowLabel), all in the reserved --cal-now hue. */
+.nowLine {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cal-now), color-mix(in srgb, var(--cal-now) 55%, transparent) 42%, transparent 100%);
+  z-index: 6;
+  pointer-events: none;
+}
+.nowDot {
+  position: absolute;
+  left: -3px; top: -3px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--cal-now);
+}
+/* Current-time read-out, pinned in the hour gutter at the now-line's height. */
+.nowLabel {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--cal-now);
+  background: color-mix(in srgb, var(--cal-now) 15%, var(--bg-primary));
+  border-radius: 4px;
+  padding: 1px 4px;
+  z-index: 7;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Positioned event block — "bold capsule": the source colour (--src, set by .srcXxx or inline) tints
+   the whole fill so categories read at a glance, and the start time sits in a solid colour pill.
+   No drop-shadow; hover lifts via transform only (cheap — keeps dense weeks smooth, no paint thrash). */
+.block {
+  position: absolute;
+  --src: var(--accent-warning);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--src) 20%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--src) 42%, transparent);
+  padding: 4px 7px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  z-index: 4;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.block:hover { background: color-mix(in srgb, var(--src) 28%, var(--bg-surface)); transform: translateY(-1px); z-index: 5; }
+.blockBody { display: flex; align-items: flex-start; gap: 6px; overflow: hidden; }
+.bTime {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  background: var(--src); color: #0b0b12;
+  padding: 0 5px; border-radius: 4px;
+  line-height: 1.5; flex-shrink: 0;
+}
+/* Word-wrap (not letter-wrap): titles wrap on spaces, only breaking a word if it can't fit. */
+.bTitle { flex: 1; min-width: 0; font-size: 12px; line-height: 1.35; white-space: normal; overflow-wrap: break-word; word-break: normal; }
+/* Short blocks (≲ half-hour): collapse to one tight row so the pill + title never clip mid-wrap. */
+.short { padding: 1px 6px; }
+.short .blockBody { align-items: center; gap: 5px; }
+.short .bTime { font-size: 9px; padding: 0 4px; line-height: 1.45; }
+.short .bTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+.dim { opacity: 0.4; }
+
+.draggable { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.draggable:active { cursor: grabbing; }
+
+/* Bottom resize handle (blocks only) */
+.resizeHandle {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+.resizeHandle::after {
+  content: "";
+  position: absolute;
+  left: 50%; bottom: 2px;
+  transform: translateX(-50%);
+  width: 18px; height: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.block:hover .resizeHandle::after { opacity: 1; }
+
+/* Live drag/resize preview */
+.preview {
+  position: absolute;
+  left: 1px; right: 1px;
+  border: 1px dashed var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  border-radius: 5px;
+  z-index: 8;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-warning);
+  padding: 2px 5px;
+}
+
+/* Source-colour token — drives the capsule fill, border + time-pill on blocks and all-day chips. */
+.srcNote    { --src: var(--src-note); }
+.srcTask    { --src: var(--src-task); }
+.srcDaily   { --src: var(--src-daily); }
+.srcBundle  { --src: var(--src-bundle); }
+.srcSandbox { --src: var(--src-sandbox); }
+.srcEvent   { --src: var(--accent-warning); }
+
+/* Done: dim the block/chip but strike ONLY the title text, not the daily checkbox. */
+.done { color: var(--text-muted); }
+.done .bTitle, .done .chipTitle { text-decoration: line-through; }
+
+/* Plan-mode tentative states: a NEW (ghost) block is dashed + translucent; an EDITED existing block
+   gets a blue inset outline. (Both only appear during a plan session; Apply/Discard resolve them.) */
+.draft { border-style: dashed; opacity: 0.78; }
+.modified { box-shadow: inset 0 0 0 1px var(--accent-blue), 0 1px 4px rgba(0, 0, 0, 0.3); }
+
+/* Designer conflict flag (timed overlap on the same weekday) — red ring + a dismissible "!" badge. */
+.conflict { box-shadow: inset 0 0 0 1.5px var(--accent-danger), 0 1px 4px rgba(0, 0, 0, 0.3); }
+.conflictBadge {
+  position: absolute; top: 2px; right: 3px; z-index: 6;
+  width: 15px; height: 15px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%;
+  background: var(--accent-danger); color: #fff;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; line-height: 1;
+  cursor: pointer;
+}
+.conflictBadge:hover { filter: brightness(1.1); }
+
+/* Ephemeral ("today's") dailies — SOLID (dashed is reserved for plan-mode drafts, so these mustn't
+   read as temporary). The small ⏳ marker + amber daily accent are the only cue. */
+.volatile { border-style: solid; }
+.volatileMark { flex: 0 0 auto; font-size: 9px; line-height: 1; opacity: 0.75; }
+
+/* Week/Month count badge for a day's ephemeral dailies (Day view renders them individually). */
+.ephBadge {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  border: 1px dashed var(--accent-warning);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.ephBadge:hover { background: var(--bg-hover); }
+
+/* Per-day check-off for recurring daily items */
+.dailyCheck {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 15px; height: 15px;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--text-muted);   /* visibly reads as a checkbox on the dark surface */
+  border-radius: 3px;
+  background: var(--bg-surface);
+  color: var(--accent-warning);
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+}
+.dailyCheck:hover { border-color: var(--accent-warning); }
+.dailyCheckOn { background: var(--accent-warning-alpha); border-color: var(--accent-warning); }

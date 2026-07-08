@@ -1,0 +1,205 @@
+.page {
+  /* No fixed cap — fill the available width so the calendar scales up on big monitors
+     (wider cells/columns → room for more). */
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+/* Tall/"generous" mode: fill the viewport height so the views grow to consume the space. */
+.page.fill { min-height: 100vh; }
+
+/* Height-mode toggle (fill ↔ fit). */
+.heightBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.heightBtn:hover { color: var(--accent-warning); border-color: var(--accent-warning); }
+
+/* Rendered inside the half-split pane — tighter padding, no max-width. */
+.pageHalf {
+  max-width: none;
+  padding: 0 16px 16px;
+}
+
+/* Holds the active view and stretches to fill everything below the sticky header. */
+.viewArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.collapseBtn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--accent-warning);
+  font-size: 14px;
+}
+.collapseBtn:hover { border-color: var(--accent-warning); }
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg-primary);
+  padding: 24px 20px 16px;
+  margin: 0 -20px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-default);
+  animation: topIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes topIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.title {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.accent { color: var(--accent-warning); }
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.navBtn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+.navBtn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.todayBtn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  padding: 0 12px;
+  height: 30px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.todayBtn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.monthLabel {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-left: 6px;
+}
+
+.spacer { flex: 1; }
+
+.seg {
+  display: inline-flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 7px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seg button:hover { color: var(--text-secondary); }
+.segOn { background: var(--bg-surface); color: var(--accent-warning) !important; }
+
+/* ── Plan mode ── */
+.planControls { display: inline-flex; align-items: center; gap: 8px; margin-right: 8px; }
+.planBtn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  height: 30px;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.planBtn:hover { color: var(--accent-warning); border-color: var(--accent-warning); }
+.planPill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent-warning);
+  border: 1px solid var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+.planDot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-warning); animation: planpulse 1.4s ease-in-out infinite; }
+@keyframes planpulse { 50% { opacity: 0.3; } }
+.applyBtn {
+  background: var(--accent-warning); border: none; color: var(--bg-primary);
+  border-radius: 6px; height: 30px; padding: 0 12px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+  cursor: pointer;
+}
+.applyBtn:hover { filter: brightness(1.08); }
+.applyBtn:disabled { opacity: 0.45; cursor: default; }
+.discardBtn {
+  background: var(--bg-elevated); border: 1px solid var(--border-default);
+  border-radius: 6px; color: var(--text-secondary); height: 30px; padding: 0 12px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer;
+}
+.discardBtn:hover { color: var(--accent-danger); border-color: var(--accent-danger); }
+
+/* Amber ring around the WHOLE calendar while a plan/designer session is active. Drawn as an
+   outset ring (not inset) so the sticky, full-bleed header — which has an opaque background —
+   can't paint over the top/side of it; this wraps the header + grid as one box. */
+.planning { box-shadow: 0 0 0 1px var(--accent-warning); border-radius: 10px; }
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 360px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  border: 1px dashed var(--border-default);
+  border-radius: 8px;
+}
+.placeholder small { color: var(--text-faint); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; }
+.placeholderIcon { font-size: 24px; color: var(--accent-warning); opacity: 0.6; }

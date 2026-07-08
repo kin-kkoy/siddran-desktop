@@ -1,0 +1,13 @@
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Node
+node_modules/
+app/node_modules/
+app/dist/
+
+# Env / local
+app/.env
+*.log
+.DS_Store

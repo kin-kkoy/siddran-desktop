@@ -1,0 +1,81 @@
+/* Upper-right vertical column. Inspired by inkpad.html's side dock.
+ * Sits above the canvas; backdrop-blur over the dark slate for a glassy feel. */
+.toolbar {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background-color: rgba(18, 18, 30, 0.92);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 6px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 28px var(--shadow-color);
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.btn:disabled {
+    opacity: 0.32;
+    cursor: default;
+}
+
+.btn:disabled:hover {
+    background-color: transparent;
+    color: var(--text-secondary);
+}
+
+.btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btnActive {
+    composes: btn;
+    background-color: var(--bg-elevated);
+    color: var(--accent-warning);
+}
+
+/* Horizontal divider for the vertical column. */
+.divider {
+    width: 24px;
+    height: 1px;
+    background-color: var(--border-default);
+    margin: 4px 0;
+}
+
+/* Single swatch showing the current colour; click to reveal the full palette. */
+.swatchCurrent {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    padding: 0;
+    border: 2px solid transparent;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.swatchCurrent:hover { transform: scale(1.1); }
+.swatchCurrentOpen {
+    box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 3px var(--accent-warning);
+}
+

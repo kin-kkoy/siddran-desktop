@@ -1,0 +1,365 @@
+.cardLink {
+  text-decoration: none;
+  color: inherit;
+}
+
+.card {
+  --spine-bg: var(--bg-surface-alt);
+  --spine-border: var(--border-default);
+  --spine-dot-color: var(--spine-color, var(--text-faint));
+
+  font-family: var(--font-body);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background-color 0.2s;
+  position: relative;
+  min-height: 200px;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* Spine for the vertical/grid card */
+.cardSpine {
+  width: 36px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  background-color: var(--spine-bg);
+  border-right: 1px solid var(--spine-border);
+  transition: background-color 0.2s;
+}
+
+.cardSpine .spineDot {
+  width: 11px;
+  height: 11px;
+}
+
+.card:hover .cardSpine {
+  background-color: var(--bg-elevated);
+}
+
+.card:hover .spineDot {
+  opacity: 0.7;
+}
+
+/* Inner wrapper for card content (sits beside the spine) */
+.cardInner {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card:hover {
+  background-color: var(--bg-elevated);
+  box-shadow: 0 6px 20px var(--spine-glow, rgba(74, 158, 255, 0.15));
+}
+
+.card:hover .title {
+  color: var(--spine-color, var(--accent-blue));
+}
+
+.card:hover .divider {
+  opacity: 1;
+}
+
+
+.card:hover .menuBtn {
+  opacity: 1;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.title {
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  text-align: center;
+  word-break: break-word;
+  transition: color 0.2s;
+}
+
+.tags {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin: 0;
+}
+
+.divider {
+  width: 60px;
+  height: 1px;
+  background-color: var(--border-strong);
+  opacity: 0.6;
+  margin-top: 8px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.noteCount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.deleteBtn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 18px;
+  transition: color 0.2s, background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteBtn:hover {
+  color: var(--accent-danger);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Horizontal Notebook Card (List View) */
+.horizontalCard {
+  --spine-bg: var(--bg-surface-alt);
+  --spine-border: var(--border-default);
+  --spine-dot-color: var(--spine-color, var(--text-faint));
+
+  font-family: var(--font-body);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background-color 0.2s;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* Spine — narrow vertical strip with 5 centered dots */
+.spine {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 0;
+  background-color: var(--spine-bg);
+  border-right: 1px solid var(--spine-border);
+  transition: background-color 0.2s;
+}
+
+.spineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--spine-dot-color);
+  opacity: 0.45;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.horizontalCard:hover .spine {
+  background-color: var(--bg-elevated);
+}
+
+.horizontalCard:hover .spineDot {
+  opacity: 0.7;
+}
+
+.horizontalCard:hover {
+  background-color: var(--bg-elevated);
+  box-shadow: 0 4px 12px var(--spine-glow, rgba(74, 158, 255, 0.15));
+}
+
+.horizontalCard:hover .horizontalTitle {
+  color: var(--spine-color, var(--accent-blue));
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 0 16px 16px;
+}
+
+.horizontalTitle {
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  transition: color 0.2s;
+}
+
+.horizontalTags {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.horizontalNoteCount {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  padding: 16px 0;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 16px 20px 16px 0;
+}
+
+/* Menu Container */
+.menuContainer {
+  position: relative;
+}
+
+.menuBtn {
+  background-color: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.2s, opacity 0.2s;
+  opacity: 0;
+}
+
+.card:hover .menuBtn,
+.horizontalCard:hover .menuBtn {
+  opacity: 1;
+}
+
+.menuBtn:hover {
+  color: var(--text-primary);
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 200px;
+  z-index: 100;
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.menuAbove {
+  bottom: calc(100% + 4px);
+}
+
+.menuBelow {
+  top: calc(100% + 4px);
+}
+
+.menuItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.menuItem:hover {
+  background-color: var(--bg-hover);
+}
+
+.colorPicker {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-strong);
+  margin-top: 4px;
+}
+
+.colorLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.colorOptions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.colorBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid var(--text-faint);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.colorBtn:hover {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+}

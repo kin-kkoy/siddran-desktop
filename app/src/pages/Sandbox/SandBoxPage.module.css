@@ -1,0 +1,132 @@
+/* Full-bleed: SandBoxPage breaks out of App's padded main column and locks
+ * to the right edge of the (collapsed-or-not) sidebar. --cinder-sidebar-w is
+ * set on the App root. z-index sits above the StarCanvas layer (z:5). */
+.page {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: var(--cinder-sidebar-w, 0px);
+    right: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background: var(--bg-primary);
+    overflow: hidden;
+    color: var(--text-primary);
+    z-index: 6;
+}
+
+/* Half-mode is rendered INSIDE NotePage's grid column — stays in-flow. */
+.pageHalf {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background: var(--bg-primary);
+    overflow: hidden;
+    color: var(--text-primary);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 22px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    z-index: 2;
+}
+
+.titleGroup { display: flex; align-items: baseline; gap: 10px; }
+
+.title {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.005em;
+    background: transparent;
+    border: none;
+    outline: none;
+    min-width: 60px;
+}
+
+.title:focus { color: var(--accent-warning); }
+
+.titleSep { color: var(--accent-warning); }
+
+.titleId {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.canvasShell {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+}
+
+.footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 18px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-default);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.footerDot { color: var(--text-faint); }
+
+.headerActions { display: flex; gap: 8px; align-items: center; }
+
+.headerBtn {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.headerBtn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background-color: var(--bg-hover);
+}
+
+.notFound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-muted);
+}
+
+.notFound .mark {
+    font-family: var(--font-heading);
+    font-size: 40px;
+    color: var(--accent-warning);
+    opacity: 0.5;
+}
+
+.notFound .label {
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}

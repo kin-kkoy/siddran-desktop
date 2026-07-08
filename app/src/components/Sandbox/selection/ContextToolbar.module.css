@@ -1,0 +1,154 @@
+/* Context toolbar — floating bar above selected shapes.
+ * Positioned via JS (top/left) within the canvas container. */
+.bar {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 6px;
+    background-color: rgba(18, 18, 30, 0.94);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px var(--shadow-color);
+    pointer-events: auto;
+    animation: ctxFadeIn 0.12s ease both;
+    white-space: nowrap;
+}
+
+@keyframes ctxFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Compact button ── */
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+    padding: 0;
+    flex-shrink: 0;
+}
+.btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+.btnActive {
+    composes: btn;
+    background-color: var(--bg-elevated);
+    color: var(--accent-warning);
+}
+
+/* ── Small divider ── */
+.sep {
+    width: 1px;
+    height: 18px;
+    background-color: var(--border-default);
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+
+/* ── Font size select ── */
+.fontSelect {
+    appearance: none;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    height: 26px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.1s, color 0.1s;
+}
+.fontSelect:hover,
+.fontSelect:focus-visible {
+    border-color: var(--accent-warning);
+    color: var(--text-primary);
+}
+
+/* ── Colour swatch ── */
+.swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border-default);
+    cursor: pointer;
+    transition: border-color 0.1s, transform 0.1s;
+    flex-shrink: 0;
+    padding: 0;
+    background: none;
+}
+.swatch:hover {
+    border-color: var(--accent-warning);
+    transform: scale(1.12);
+}
+
+/* ── Align/distribute grid (multi-select) — 4×2 compact buttons ── */
+.alignGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 20px);
+    grid-auto-rows: 20px;
+    gap: 1px;
+    flex-shrink: 0;
+}
+.miniBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.1s, color 0.1s;
+}
+.miniBtn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+.miniBtn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+.miniBtn:disabled:hover {
+    background-color: transparent;
+    color: var(--text-secondary);
+}
+
+/* ── Radius slider (compact) ── */
+.radiusGroup {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.radiusSlider {
+    width: 48px;
+    height: 4px;
+    accent-color: var(--accent-warning);
+    cursor: pointer;
+}
+.radiusValue {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    min-width: 18px;
+    text-align: right;
+}

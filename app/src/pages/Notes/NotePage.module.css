@@ -1,0 +1,365 @@
+/* Obsidian-style centered editor */
+.container {
+    /* max-width: min(900px, 90vw);  */
+    max-width: var(--note-editor-width, 1200px);
+    margin: 0 auto;
+    /* Tighter top padding so the header row sits near the top instead of leaving
+       a large unused gap; keeps comfortable bottom room for scrolling. */
+    padding: 24px 20px 48px;
+    min-height: 100vh;
+}
+
+/* Header row with back button, tags, and menu */
+.headerRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.viewToggleWrapper {
+    position: sticky;
+    top: 12px;
+    z-index: 20;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -40px;
+    pointer-events: none;
+}
+
+.viewToggleHidden {
+    visibility: hidden;
+}
+
+.viewToggleFloating {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: color 0.2s;
+}
+
+.viewToggleFloating:hover {
+    color: var(--text-primary);
+}
+
+.backBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--bg-elevated);
+    border: none;
+    color: var(--text-primary);
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.backBtn:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Semi-transparent writing surface */
+.editorSurface {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 32px 40px;
+    margin-bottom: 20px;
+    min-height: calc(100vh - 200px);
+    /* NOTE: no `will-change: transform` here. Promoting this element to its own
+       compositing layer breaks CodeMirror 6's coordinate-based vertical caret
+       motion (Arrow-Up/Down maps screen coords back to doc positions via
+       caretRangeFromPoint, which a transformed/promoted ancestor shifts). The
+       Lexical editor was unaffected because contenteditable arrow keys are
+       handled natively by the browser. */
+}
+
+/* Less-distraction mode — drop the paper look entirely. Background goes
+   transparent so the page bg shows through, removing the visible box.
+   Padding is preserved so the text doesn't shift position. */
+.editorSurface.lessDistraction {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+/* Title input */
+.titleInput {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 42px;
+    font-weight: 700;
+    padding: 0;
+    margin-bottom: 16px;
+    outline: none;
+    font-family: inherit;
+}
+
+.titleInput::placeholder {
+    color: var(--text-faint);
+}
+
+/* Tags input in header row */
+.tagsInput {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.tagsInput:focus {
+    border-color: var(--text-faint);
+}
+
+.tagsInput::placeholder {
+    color: var(--text-faint);
+}
+
+/* Menu Container */
+.menuContainer {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.menuBtn {
+    background-color: var(--bg-elevated);
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.menuBtn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
+.menu {
+    position: absolute;
+    right: 0;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 8px;
+    min-width: 200px;
+    z-index: 100;
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.menuAbove {
+    bottom: calc(100% + 4px);
+}
+
+.menuBelow {
+    top: calc(100% + 4px);
+}
+
+.menuItem {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    text-align: left;
+}
+
+.menuItem:hover {
+    background-color: var(--bg-hover);
+}
+
+.colorPicker {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-strong);
+    margin-top: 4px;
+}
+
+.colorLabel {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.colorOptions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.colorBtn {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 2px solid var(--text-faint);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.colorBtn:hover {
+    border-color: var(--text-primary);
+    transform: scale(1.1);
+}
+
+.colorBtn.selected {
+    border-color: var(--accent-blue, #3b82f6);
+    box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--accent-blue, #3b82f6);
+    transform: scale(1.1);
+    position: relative;
+}
+
+.colorBtn.selected::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'><path d='M13.485 4.515a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414 0l-3-3a1 1 0 1 1 1.414-1.414L6.778 9.808l5.293-5.293a1 1 0 0 1 1.414 0z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+    filter: drop-shadow(0 0 1px rgba(0,0,0,0.6));
+    pointer-events: none;
+}
+
+.colorBtn.selected:hover {
+    transform: scale(1.15);
+}
+
+/* Body textarea */
+.bodyTextarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1.7;
+    padding: 0;
+    outline: none;
+    resize: none;
+    min-height: calc(100vh - 300px);
+    font-family: inherit;
+}
+
+.bodyTextarea::placeholder {
+    color: var(--text-faint);
+}
+
+/* Debug section */
+.debugSection {
+    margin-bottom: 30px;
+    padding: 15px;
+    background-color: #1a1a1a;
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+}
+
+.debugSection h1 {
+    font-size: 18px;
+    color: var(--text-muted);
+    margin: 0 0 8px 0;
+}
+
+.debugSection p {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin: 4px 0;
+}
+
+
+
+
+
+/* ── EXPERIMENTAL split view ─────────────────────────────────────────────
+   Two note panes side by side. Each scrolls independently; the focused pane
+   gets a subtle inset ring. */
+.splitRow {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.pane {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-y: auto;
+    /* Reserve the ring's width so focusing a pane doesn't nudge layout. */
+    box-shadow: inset 0 0 0 2px transparent;
+    transition: box-shadow 0.2s ease;
+}
+
+.pane:first-child {
+    border-right: 1px solid var(--border-default);
+}
+
+.paneFocused {
+    box-shadow: inset 0 0 0 2px var(--accent-blue);
+}
+
+/* Right pane before a note is chosen. */
+.splitEmpty {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 24px;
+}
+
+.splitEmptyText {
+    color: var(--text-muted);
+    font-size: 15px;
+    text-align: center;
+    max-width: 260px;
+}
+
+.splitEmptyClose {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    border-radius: 6px;
+    transition: color 0.2s, background 0.2s;
+}
+
+.splitEmptyClose:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}

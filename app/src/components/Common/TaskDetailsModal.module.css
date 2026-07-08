@@ -1,0 +1,329 @@
+/* Backdrop */
+.backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Modal */
+.modal {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 540px;
+    box-shadow: 0 8px 32px var(--shadow-color);
+    animation: slideUp 0.3s ease;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 24px 24px 0 24px;
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+/* Header action group — keeps the optional "open in hub" button beside close.
+   margin-left spaces the hover box off the title input. */
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.hubBtn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.hubBtn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--accent-blue);
+}
+
+/* Title input */
+.titleInput {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 22px;
+    font-weight: 600;
+    padding: 6px 10px;
+    width: 100%;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.titleInput:hover {
+    border-color: var(--border-strong);
+}
+
+.titleInput:focus {
+    border-color: var(--accent-blue);
+    background: var(--bg-elevated);
+}
+
+.titleInput::placeholder {
+    color: var(--text-faint);
+}
+
+/* Body */
+.body {
+    padding: 20px 24px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Field group */
+.fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fieldLabel {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* Description textarea */
+.descriptionInput {
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 12px;
+    min-height: 100px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.descriptionInput:focus {
+    border-color: var(--accent-warning);
+}
+
+.descriptionInput::placeholder {
+    color: var(--text-faint);
+}
+
+/* Metadata row */
+.metaRow {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.metaItem {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 140px;
+}
+
+/* Priority select */
+.prioritySelect {
+    padding: 10px 12px;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.prioritySelect:focus {
+    border-color: var(--accent-warning);
+}
+
+/* Priority is compact; Deadline takes the remaining width and its input shrinks (no overflow). */
+.priorityItem { flex: 0 1 150px; min-width: 0; }
+.deadlineItem { flex: 1 1 auto; min-width: 0; }
+.deadlineRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.dateInput {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.dateInput:focus { border-color: var(--accent-warning); }
+
+.clearDeadlineBtn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+.clearDeadlineBtn:hover {
+    border-color: var(--accent-danger, #e05c5c);
+    color: var(--accent-danger, #e05c5c);
+}
+
+/* Status toggle */
+.statusBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    background-color: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: fit-content;
+}
+
+.statusBtn:hover {
+    border-color: var(--border-strong);
+}
+
+.statusBtn.completed {
+    background-color: rgba(74, 222, 128, 0.1);
+    border-color: var(--accent-success);
+    color: var(--accent-success);
+}
+
+.statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-muted);
+}
+
+.statusBtn.completed .statusDot {
+    background-color: var(--accent-success);
+}
+
+/* Deadline display */
+.deadline {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 10px 12px;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+}
+
+.deadline.noDate {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+/* Divider */
+.divider {
+    height: 1px;
+    background-color: var(--border-default);
+    margin: 4px 0;
+}
+
+@media (max-width: 600px) {
+    .modal {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .metaRow {
+        flex-direction: column;
+    }
+}

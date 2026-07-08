@@ -1,0 +1,207 @@
+/* Auth.module.css - CSS Modules for Login and Register pages */
+
+.authContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.authCard {
+  background: var(--bg-surface);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-default);
+}
+
+.authHeader {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.authTitle {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formLabel {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.formInput {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-default);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.formInput:focus {
+  border-color: var(--accent-warning);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 3px var(--accent-warning-alpha);
+}
+
+.formInput::placeholder {
+  color: var(--text-muted);
+}
+
+/* Edge renders a native password-reveal eye (::-ms-reveal) inside password fields; on the dark
+   input it's a near-black glyph that blends into the background, so lighten it to stay visible. */
+.formInput::-ms-reveal,
+.formInput::-ms-clear {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.authButton {
+  background: linear-gradient(135deg, var(--accent-warning) 0%, #d4a030 100%);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 8px;
+}
+
+.authButton:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(240, 184, 64, 0.3);
+}
+
+.authButton:disabled {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* "or" divider between the login form and the try-it-free CTA */
+.demoDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 4px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.demoDivider::before,
+.demoDivider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
+
+/* Ghost/secondary button — explore the app with no account */
+.demoButton {
+  width: 100%;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 13px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-top: 12px;
+}
+.demoButton:hover {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+  box-shadow: 0 0 0 3px var(--accent-warning-alpha);
+}
+
+.demoHint {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.authError {
+  background: rgba(224, 92, 92, 0.1);
+  border: 1px solid rgba(224, 92, 92, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--accent-danger);
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.authFooter {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-default);
+}
+
+.authFooterText {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.authLink {
+  color: var(--accent-warning);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.authLink:hover {
+  color: #d4a030;
+  text-decoration: underline;
+}
+
+/* Debug info - remove in production */
+.debugInfo {
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+}
+
+.debugInfo p {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 4px 0;
+  font-family: monospace;
+}

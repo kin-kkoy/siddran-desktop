@@ -1,0 +1,242 @@
+/* Main sidebar container */
+.sidebar {
+    width: 220px;
+    height: 100vh;
+    background: rgba(11, 11, 18, 0.98);
+    border-right: 1px solid var(--border-default);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    margin: 0;
+    transition: width 0.3s ease, padding 0.3s ease;
+    z-index: 1000;
+    animation: sideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sideIn {
+    from { transform: translateX(-16px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+}
+
+/* Collapsed state */
+.sidebar.collapsed {
+    width: 70px;
+}
+
+/* Scrollbar styling for sidebar */
+.sidebar::-webkit-scrollbar {
+    width: 3px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+}
+
+/* Top section */
+.topSection {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Brand section */
+.brand {
+    padding: 1.4rem 1.25rem 1.2rem;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    user-select: none;
+    overflow: hidden;
+}
+
+/* Logo → home */
+.brandLink {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+/* Collapse / expand toggle button */
+.collapseBtn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.18s, background 0.18s;
+}
+
+.collapseBtn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.brandName {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.brandSub {
+    font-size: 0.58rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 3px;
+}
+
+/* When collapsed, hide the logo and centre the toggle (which now shows the expand icon) */
+.sidebar.collapsed .brand {
+    justify-content: center;
+}
+
+.sidebar.collapsed .brandLink {
+    display: none;
+}
+
+/* Navigation section */
+.navSection {
+    padding: 1rem 0.9rem 0.3rem;
+}
+
+/* Menu buttons (nav items) */
+.menuBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    letter-spacing: 0.04em;
+    transition: color 0.18s, background 0.18s, border-color 0.18s;
+    user-select: none;
+    overflow: hidden;
+    white-space: nowrap;
+    min-height: 2.2rem;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+    text-decoration: none;
+    width: 100%;
+}
+
+
+.sidebar.collapsed .menuBtn.active {
+    background: transparent;
+    border-color: transparent;
+}
+
+.sidebar.collapsed .menuBtn.active .navIcon {
+    color: var(--accent-warning);
+    filter: drop-shadow(0 0 6px var(--accent-warning));
+}
+
+.menuBtn:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.menuBtn:hover .navIcon {
+    color: var(--text-muted);
+}
+
+.menuBtn.active {
+    color: var(--accent-warning);
+    background: var(--accent-warning-alpha);
+    border-color: rgba(240, 184, 64, 0.13);
+}
+
+.menuBtn.active .navIcon {
+    color: var(--accent-warning);
+    filter: drop-shadow(0 0 5px var(--accent-warning));
+}
+
+/* Nav icon */
+.navIcon {
+    color: var(--text-faint);
+    flex-shrink: 0;
+    transition: color 0.2s, filter 0.2s;
+}
+
+/* Nav label — fades during collapse */
+.navLabel {
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.2s ease 0.15s;
+}
+
+.sidebar.collapsed .navLabel {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+/* Nav count */
+.navCount {
+    margin-left: auto;
+    font-size: 0.58rem;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+}
+
+/* Divider */
+.divider {
+    height: 1px;
+    background: var(--border-default);
+    margin: 0.5rem 0;
+}
+
+/* Section labels */
+.sectionLabel {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: 10px 0 5px 0;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.sidebar.collapsed .sectionLabel {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+/* Middle section (notes list container) */
+.menuSection {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Bottom section */
+.bottomSection {
+    margin-top: auto;
+    border-top: 1px solid var(--border-default);
+}

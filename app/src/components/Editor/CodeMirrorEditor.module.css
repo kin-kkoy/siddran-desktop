@@ -1,0 +1,8 @@
+/* Host for the CodeMirror live-preview editor. The editor grows with its
+   content (page scroll); the text cursor invites a click-to-focus on the empty
+   area below the content. */
+.editorRoot {
+  width: 100%;
+  min-height: 320px;
+  cursor: text;
+}

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="trail" x1="53" y1="17" x2="42" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#f0b840" stop-opacity="0.1"/>
+      <stop offset="55%"  stop-color="#f0b840" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#f0b840" stop-opacity="0.9"/>
+    </linearGradient>
+    <clipPath id="rounded">
+      <rect width="64" height="64" rx="14" ry="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- Dark background with rounded corners — visible on any browser chrome -->
+  <rect width="64" height="64" rx="14" ry="14" fill="#09090f"/>
+
+  <!-- Icon contents clipped to rounded rect -->
+  <g clip-path="url(#rounded)">
+
+    <!-- Large 4-point star -->
+    <polygon points="26,10 28.8,25.2 44,28 28.8,30.8 26,46 23.2,30.8 8,28 23.2,25.2"
+      fill="#f0b840"/>
+    <polygon points="26,15 28,25.8 38,28 28,30.2 26,41 24,30.2 14,28 24,25.8"
+      fill="white" fill-opacity="0.22"/>
+
+    <!-- Medium 4-point star (destination) -->
+    <polygon points="53,3 55.2,8.8 61,11 55.2,13.2 53,19 50.8,13.2 45,11 50.8,8.8"
+      fill="#f0b840" fill-opacity="0.75"/>
+
+    <!-- Trail from destination star down to spaceship -->
+    <path d="M 53 19 Q 56 36 43 52"
+      fill="none" stroke="url(#trail)" stroke-width="1.6" stroke-linecap="round"/>
+
+    <!-- Spaceship (nose aimed at destination star) -->
+    <g transform="translate(44, 48) rotate(-76)">
+      <ellipse cx="0" cy="0" rx="7" ry="2.8"
+        fill="#1a1a2e" stroke="#f0b840" stroke-width="1" stroke-opacity="0.95"/>
+      <ellipse cx="2.5" cy="-0.6" rx="2.2" ry="1.1"
+        fill="#f0b840" fill-opacity="0.25" stroke="#f0b840" stroke-width="0.5" stroke-opacity="0.6"/>
+      <circle cx="-6" cy="0" r="2.4" fill="#f0b840" fill-opacity="0.85"/>
+      <circle cx="-6" cy="0" r="4.2" fill="#f0b840" fill-opacity="0.2"/>
+    </g>
+
+    <!-- Ambient stars -->
+    <circle cx="8"  cy="52" r="0.9" fill="white"   fill-opacity="0.2"/>
+    <circle cx="58" cy="48" r="0.8" fill="#a07af0" fill-opacity="0.4"/>
+    <circle cx="14" cy="10" r="0.7" fill="white"   fill-opacity="0.2"/>
+
+  </g>
+</svg>

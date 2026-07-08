@@ -1,0 +1,210 @@
+/* No backdrop-filter: a full-viewport blur over the animated StarCanvas recomposites every
+   frame and makes the whole app lag while the peek is open. A plain dim overlay is cheap.
+   Opacity transitions so closing fades out (reverse of opening). */
+.shadow {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 980;
+  opacity: 0;
+  pointer-events: none; /* always mounted; only intercept clicks while open */
+  transition: opacity 220ms ease;
+}
+.shadowOn { opacity: 1; pointer-events: auto; }
+
+/* transform-transition (not a one-shot keyframe) so it slides both in AND out. */
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 981;
+  transform: translateX(100%);
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.open { transform: translateX(0); }
+
+@media (max-width: 1100px) { .drawer { width: 320px; } }
+@media (max-width: 720px) {
+  .drawer {
+    width: 100%;
+    top: auto;
+    height: 82vh;
+    border-left: none;
+    border-top: 1px solid var(--border-strong);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+  }
+  .open { transform: translateY(0); }
+}
+
+/* ── Head ── */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+}
+.headTitle { font-family: var(--font-mono); font-size: 16px; font-weight: 500; color: var(--text-primary); margin: 0; }
+.accent { color: var(--accent-warning); }
+.badge { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; color: var(--accent-warning); }
+.grow { flex: 1; }
+.iconBtn {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  display: grid; place-items: center;
+  font-size: 13px;
+}
+.iconBtn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+.body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Accordion ── */
+/* flex-shrink:0 so open sections take their FULL natural height instead of being compressed to
+   share the body's height (which clipped them, since .section is overflow:hidden). The body
+   (flex:1; overflow-y:auto) scrolls when the sections together exceed it. */
+.section { flex-shrink: 0; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); overflow: hidden; }
+.sectionHead {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  width: 100%; border: none; background: var(--bg-elevated); color: inherit;
+  user-select: none;
+}
+.sectionHead:hover { background: var(--bg-hover); }
+.chev { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; width: 12px; display: inline-block; transition: transform 0.18s ease; }
+.collapsed .chev { transform: rotate(-90deg); }
+.sectionLabel { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); letter-spacing: 0.14em; text-transform: uppercase; flex: 1; text-align: left; }
+.sectionMeta { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); letter-spacing: 0.1em; text-transform: uppercase; }
+/* Measured max-height animation (driven by AccordionSection) — smoother than grid-template-rows
+   with heavy content. overflow:hidden clips during the transition. */
+.sectionBody { overflow: hidden; transition: max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+.sectionInner { border-top: 1px solid var(--border-default); padding: 12px; }
+
+/* ── Mini calendar ── */
+.miniHead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.miniMonth { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); font-weight: 500; }
+.miniNav { display: flex; gap: 4px; }
+.miniNav button {
+  width: 24px; height: 22px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 5px;
+  display: grid; place-items: center;
+  font-size: 13px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.miniNav button:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.miniTodayDot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-warning); display: block; }
+.miniGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.miniWeekday { display: grid; place-items: center; font-family: var(--font-mono); font-size: 8px; color: var(--text-faint); }
+.miniCell {
+  aspect-ratio: 1; display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  border-radius: 4px; border: none; background: transparent; position: relative; cursor: pointer;
+}
+.miniCell:hover { background: var(--bg-hover); }
+.miniDim { color: var(--text-faint); }
+.miniHas { color: var(--text-primary); }
+.miniToday { background: var(--accent-warning); color: var(--bg-primary); font-weight: 600; }
+.miniFocused { outline: 1px solid var(--accent-warning); outline-offset: -1px; }
+.miniHas::after {
+  content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  width: 3px; height: 3px; border-radius: 50%; background: var(--accent-warning);
+}
+.miniToday.miniHas::after { background: var(--bg-primary); }
+
+/* ── Event list ── */
+.evtList { display: flex; flex-direction: column; gap: 5px; }
+.evt {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-surface); border-left: 2px solid var(--accent-warning); border-radius: 5px;
+  padding: 7px 10px; font-family: var(--font-mono); font-size: 13px; color: var(--text-primary);
+}
+.evtBody { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evtTime { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); letter-spacing: 0.08em; }
+.evtDone { color: var(--text-muted); }
+.evtDone .evtBody { text-decoration: line-through; }
+
+/* Per-day check-off for recurring daily items. */
+.dailyCheck {
+  flex: 0 0 auto;
+  width: 16px; height: 16px;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--text-muted);
+  border-radius: 3px;
+  background: var(--bg-surface);
+  color: var(--accent-warning);
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+}
+.dailyCheck:hover { border-color: var(--accent-warning); }
+.dailyCheckOn { background: var(--accent-warning-alpha); border-color: var(--accent-warning); }
+.srcNote { border-left-color: var(--src-note); }
+.srcTask { border-left-color: var(--src-task); }
+.srcDaily { border-left-color: var(--src-daily); }
+.srcBundle { border-left-color: var(--src-bundle); }
+.srcSandbox { border-left-color: var(--src-sandbox); }
+.srcEvent { border-left-color: var(--accent-warning); }
+.empty { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); padding: 10px; text-align: center; font-style: italic; }
+
+/* ── Quick add ── */
+.quick { display: flex; flex-direction: column; gap: 8px; }
+.quickTypes { display: flex; gap: 6px; }
+.quickType {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 6px 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.quickType:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.quickTypeOn { background: var(--accent-warning-alpha); border-color: var(--accent-warning); color: var(--text-primary); }
+.quickInput {
+  width: 100%;
+  background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 6px;
+  color: var(--text-primary); padding: 9px 11px; font-family: var(--font-mono); font-size: 14px; outline: none;
+  transition: border-color 0.15s;
+}
+.quickInput::placeholder { color: var(--text-faint); }
+.quickInput:focus { border-color: var(--accent-warning); }
+.quickFoot { display: flex; align-items: center; gap: 8px; }
+.quickTime {
+  background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 6px;
+  color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; padding: 6px 8px;
+  outline: none; color-scheme: dark; transition: border-color 0.15s;
+}
+.quickTime:focus { border-color: var(--accent-warning); }
+.quickDate { flex: 1; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.quickCreate {
+  background: var(--accent-warning); color: var(--bg-primary); border: none; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; padding: 6px 14px; font-weight: 600;
+}
+.quickCreate:hover { filter: brightness(1.08); }
+
+/* ── Foot ── */
+.foot {
+  border-top: 1px solid var(--border-default); padding: 8px 14px; background: var(--bg-elevated);
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em;
+}
+.kbd { font-family: var(--font-mono); font-size: 9px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 3px; padding: 2px 5px; color: var(--text-secondary); }
+.pinLink { background: transparent; border: none; color: var(--accent-warning); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }

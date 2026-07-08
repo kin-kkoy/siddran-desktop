@@ -1,0 +1,173 @@
+/* Backdrop */
+.backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Modal */
+.modal {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px var(--shadow-color);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.header h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 28px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+/* Content */
+.content {
+    padding: 24px;
+}
+
+.content p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+/* Actions */
+.actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 16px 24px 24px 24px;
+}
+
+.cancelBtn {
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+    background-color: var(--border-default);
+}
+
+.confirmBtn {
+    background-color: var(--accent-danger);
+    border: none;
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.confirmBtn:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+/* Constructive (non-delete) confirm — e.g. "Create & open". */
+.confirmPrimary {
+    background-color: var(--accent-blue);
+}
+
+/* Soft danger glow on the modal edges (e.g. "sandbox not found"). */
+.glowDanger {
+    border-color: var(--accent-danger);
+    box-shadow: 0 8px 32px var(--shadow-color), 0 0 16px rgba(224, 92, 92, 0.4);
+}
+
+/* Busy state: disabled buttons + inline spinner. */
+.confirmBtn:disabled,
+.closeBtn:disabled {
+    cursor: default;
+    opacity: 0.75;
+    filter: none;
+    box-shadow: none;
+}
+
+.confirmBtn:disabled {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

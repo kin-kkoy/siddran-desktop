@@ -1,0 +1,81 @@
+:root {
+  --bg-primary: #09090f;
+  --bg-surface: #12121e;
+  --bg-surface-alt: #181826;
+  --bg-elevated: #1e1e2e;
+  --bg-hover: #252538;
+  --border-default: #252538;
+  --border-strong: #333350;
+  --text-primary: #e2ddf5;
+  --text-secondary: #b8b3d0;
+  --text-muted: #635f80;
+  --text-dim: #635f80;
+  --text-faint: #363550;
+  --accent-blue: #5a9cf0;
+  --accent-danger: #e05c5c;
+  --accent-warning: #f0b840;
+  --accent-warning-alpha: rgba(240, 184, 64, 0.07);
+  --accent-success: #52c47a;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  /* Calendar source colours — left-border accent per item kind (see Calendar feature). */
+  --src-note: var(--accent-blue);
+  --src-task: var(--accent-success);
+  --src-daily: var(--accent-warning);
+  --src-bundle: #c084fc;
+  --src-sandbox: var(--accent-danger);
+  --cal-now: #34d8c0;            /* Calendar "now"-line — reserved hue, distinct from every source colour */
+  --font-display: 'Syne', sans-serif;
+  --font-heading: 'Fraunces', serif;
+  --font-body: 'Crimson Pro', serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+html, body, #root {
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Global scrollbar styling */
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
