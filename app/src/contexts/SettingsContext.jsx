@@ -20,7 +20,7 @@ const DEFAULTS = {
   matchMode: true,
   contrast: 'low',
   showStars: true,
-  showStarsOnNotePage: true,
+  showStarsOnNotePage: false,
   reduceStars: false,
   starSize: 1.40,
   starDriftSpeed: 3.90,

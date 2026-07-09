@@ -1,11 +1,12 @@
 import { markdownToHtml } from './markdownToHtml'
-import { toast } from '../../../utils/toast'
 
 // Export a note to PDF the dependency-free, can't-really-break way: render the note
-// to the SAME HTML the reading view uses, drop it into an isolated print window with
-// a self-contained light document stylesheet, then trigger the browser's native
-// print dialog (the user picks "Save as PDF"). No jsPDF/html2canvas, so nothing to
-// mis-render. Images are awaited (with a timeout) so they land in the PDF.
+// to the SAME HTML the reading view uses, drop it into an isolated, hidden IFRAME
+// with a self-contained light document stylesheet, then trigger the browser's
+// native print dialog (the user picks "Save as PDF"). An iframe (rather than a
+// popup window) works inside the desktop webview, where window.open is blocked.
+// No jsPDF/html2canvas, so nothing to mis-render. Images are awaited (with a
+// timeout) so they land in the PDF.
 
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -52,26 +53,36 @@ export const PRINT_CSS = `
 
 export function printNoteToPdf(note) {
   if (!note) return
-  const w = window.open('', '_blank')
-  if (!w) { toast.error('Allow pop-ups for this site to export as PDF'); return }
 
   const title = note.title || 'Untitled'
   const bodyHtml = markdownToHtml(note.body || '') // already try/catch-guarded
-  w.document.write(
+  const html =
     `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>` +
     `<style>${PRINT_CSS}</style></head><body>` +
     `<h1 class="doc-title">${escapeHtml(title)}</h1><div class="doc-body">${bodyHtml}</div></body></html>`
-  )
-  w.document.close()
+
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
+  document.body.appendChild(iframe)
+
+  const win = iframe.contentWindow
+  const doc = win.document
+  doc.open(); doc.write(html); doc.close()
+
+  let cleaned = false
+  const cleanup = () => { if (cleaned) return; cleaned = true; setTimeout(() => iframe.remove(), 500) }
 
   // Wait for images to load (so they appear in the PDF), but never hang on a broken
   // or slow one — print after at most 4s regardless.
-  const imgs = Array.from(w.document.images)
+  const imgs = Array.from(doc.images)
   const loaded = Promise.all(imgs.map(img => img.complete
     ? Promise.resolve()
     : new Promise(res => { img.onload = res; img.onerror = res })))
-  Promise.race([loaded, new Promise(res => w.setTimeout(res, 4000))]).then(() => {
-    w.focus()
-    w.print()
+  Promise.race([loaded, new Promise(res => setTimeout(res, 4000))]).then(() => {
+    win.focus()
+    win.onafterprint = cleanup
+    win.print()
+    setTimeout(cleanup, 60000) // fallback if onafterprint never fires
   })
 }

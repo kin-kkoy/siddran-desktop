@@ -17,6 +17,9 @@
   letter-spacing: -0.01em;
   margin: 1.4em 0 0.6em;
   color: var(--text-primary);
+  /* Outline jumps use scrollIntoView(block:'start'); this keeps the heading clear
+     of the sticky full-width toolbar so the clicked heading itself lands on top. */
+  scroll-margin-top: 64px;
 }
 .reading h1 { font-size: 1.9em }
 .reading h2 { font-size: 1.55em }

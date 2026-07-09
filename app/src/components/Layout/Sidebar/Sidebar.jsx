@@ -2,8 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from './Sidebar.module.css'
 import SidebarList from "./SidebarList";
 import ProfileDropdown from "../ProfileDropdown/ProfileDropdown";
-import logger from "../../../utils/logger";
-import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuBlocks, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu";
+import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu";
 
 
 function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed }) {
@@ -13,30 +12,12 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
 
     const onNotePage = location.pathname.startsWith('/notes/') && location.pathname !== '/notes';
 
-    // logout
+    // Close the current Bag. Desktop has no auth session, so this just flushes the
+    // Bag to disk (via setIsAuthed → closeBag) and returns to the Bag picker.
     const handleLogout = async () => {
-        // calling logout endpoint/route to revoke the refresh token
-        try {
-            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/auth/logout`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json'},
-                credentials: 'include'
-            })
-        } catch (error) {
-            logger.error('Logout error:', error)
-        }
-
-        // clear tokens and cached data then redirect
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('username')
-        localStorage.removeItem('cinder_settings')
         sessionStorage.clear()
-
-        if (setIsAuthed) {
-            setIsAuthed(false)
-        }
-
-        navigate('/login')
+        if (setIsAuthed) setIsAuthed(false)   // App wires this to closeBag()
+        navigate('/')
     }
 
 
@@ -90,14 +71,6 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                             <span className={styles.navLabel}>Calendar</span>
                     </Link>
 
-                    <div className={styles.divider} />
-
-                    <Link to="/mods"
-                        className={`${styles.menuBtn} ${location.pathname === '/mods' ? styles.active : ''}`}
-                        title="Mods">
-                            <LuBlocks className={styles.navIcon} size={18} />
-                            <span className={styles.navLabel}>Mods</span>
-                    </Link>
                 </div>
 
             </div>

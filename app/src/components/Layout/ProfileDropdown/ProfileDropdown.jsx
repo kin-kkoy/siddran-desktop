@@ -33,10 +33,6 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
         openSettings()
     }
 
-    const navigateProfile = () => {
-        setIsOpen(false)
-    }
-
     const Logout = () => {
         setIsOpen(false)
         handleLogout()
@@ -93,10 +89,6 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
                     className={styles.dropdownMenu}
                     style={getDropdownStyle()}  // ← Position dynamically
                 >
-                    <button onClick={navigateProfile} className={styles.dropdownItem}>
-                        <span className={styles.itemIcon}>👤</span>
-                        <span>Profile</span>
-                    </button>
                     <button onClick={navigateSettings} className={styles.dropdownItem}>
                         <span className={styles.itemIcon}><IoMdSettings /></span>
                         <span>Settings</span>
@@ -104,7 +96,7 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
                     <div className={styles.divider}></div>
                     <button onClick={Logout} className={`${styles.dropdownItem} ${styles.danger}`}>
                         <span className={styles.itemIcon}><TbLogout2 /></span>
-                        <span>Logout</span>
+                        <span>Close Bag</span>
                     </button>
                 </div>,
                 document.body  // ← Render directly into body

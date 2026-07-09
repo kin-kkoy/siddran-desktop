@@ -1,0 +1,98 @@
+/* Sticky right rail beside the note. `top` clears the sticky full-width toolbar
+   in single-note view; in split view each pane scrolls independently so it sits
+   a touch lower — acceptable. */
+.outline {
+  flex: 0 0 232px;
+  align-self: flex-start;
+  position: sticky;
+  top: 52px;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  margin: 24px 8px 0 4px;
+  padding: 10px 8px 14px;
+  border-left: 1px solid var(--border-default);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px;
+}
+.title {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 5px;
+}
+.closeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1.3;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bullet {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+/* Level hierarchy — top headings read big/bold/bright, deeper ones step down in
+   size, weight and colour so the structure is obvious at a glance. */
+.item[data-depth="0"] { font-size: 0.92rem; font-weight: 700; color: var(--text-primary);   margin-top: 9px; }
+.item[data-depth="1"] { font-size: 0.84rem; font-weight: 600; color: var(--text-secondary); }
+.item[data-depth="2"] { font-size: 0.80rem; font-weight: 500; color: var(--text-muted); }
+.item[data-depth="3"] { font-size: 0.77rem; font-weight: 450; color: var(--text-muted); }
+.item[data-depth="4"] { font-size: 0.75rem; font-weight: 400; color: var(--text-dim); }
+/* Top-level marker: an accent square instead of a faint dot. */
+.item[data-depth="0"] .bullet { width: 7px; height: 7px; border-radius: 2px; opacity: 0.95; background: var(--accent-blue); }
+/* No leading gap before the very first heading. */
+.list li:first-child .item[data-depth="0"] { margin-top: 0; }
+
+.item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.empty {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 6px 8px;
+}

@@ -1,5 +1,4 @@
 import logger from '../utils/logger'
-import { toast } from '../utils/toast'
 import { readItems, writeItems, newItemId } from './sandboxCache'
 import { applyServerCount, ensureCreated } from './sandboxStore'
 
@@ -283,7 +282,6 @@ async function flush(id) {
         // Re-queue the snapshot WITHOUT clobbering ids changed during the flight.
         for (const i of dirtyIds) if (!rec.deleted.has(i)) rec.dirty.add(i)
         for (const i of deleteIds) if (!rec.dirty.has(i)) rec.deleted.add(i)
-        if (rec.failures === 0) toast.error('Sandbox changes saved locally — will retry.')
         rec.failures += 1
         rec.inFlight = false
 

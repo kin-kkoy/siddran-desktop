@@ -1,42 +1,95 @@
-/* Hover zone: sits at the bottom of the editor flow, always present but the
-   dock inside is hidden until hovered (or pinned). sticky keeps it anchored
-   to the bottom of the viewport while scrolling within the note. */
+/* Bottom editor dock: fixed to the note content lane so it recenters when the
+   sidebar is shown/hidden, matching the note page's available space. */
 .dockZone {
-  position: sticky;
+  position: fixed;
+  left: var(--dock-sidebar-offset, 0px);
+  right: 0;
   bottom: 0;
-  z-index: 50;
+  z-index: 70;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 12px 0;
+  pointer-events: none;
+  transition: left 0.3s ease;
+}
+
+.dockToggle {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 28px;
+  margin-bottom: -1px;
+  background: var(--bg-primary);
+  border: none;
+  border-radius: 9px 9px 0 0;
+  color: var(--accent-warning);
+  font-size: 17px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 -6px 18px var(--shadow-color);
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+/* Same tab-shape ears as .dock — when open they merge into the dock below; when
+   closed they curve into the bottom of the screen. */
+.dockToggle::before,
+.dockToggle::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
   pointer-events: none;
 }
+.dockToggle::before {
+  left: -9px;
+  background: radial-gradient(circle at top left, transparent 9px, var(--bg-primary) 9px);
+}
+.dockToggle::after {
+  right: -9px;
+  background: radial-gradient(circle at top right, transparent 9px, var(--bg-primary) 9px);
+}
 
-/* Auto-hide: the dock fades in when the zone is hovered */
+.dockToggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.dockToggle:hover::before {
+  background: radial-gradient(circle at top left, transparent 9px, var(--bg-hover) 9px);
+}
+.dockToggle:hover::after {
+  background: radial-gradient(circle at top right, transparent 9px, var(--bg-hover) 9px);
+}
+
+.dockToggle:focus-visible {
+  outline: 2px solid var(--accent-warning);
+  outline-offset: 2px;
+}
+
 .dock {
+  position: relative;
   display: flex;
   align-items: center;
+  max-width: min(1120px, calc(100vw - var(--dock-sidebar-offset, 0px) - 56px));
+  overflow: visible;
   gap: 2px;
-  padding: 6px 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px var(--shadow-color);
+  padding: 8px 12px 10px;
+  background: var(--bg-primary);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -8px 28px var(--shadow-color);
   pointer-events: auto;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
-.dockZone:hover .dock,
-.dockZone.pinned .dock {
-  opacity: 1;
-  transform: translateY(0);
+.closed .dock {
+  display: none;
 }
 
-/* Also show when a dropdown inside is open */
-.dock:focus-within {
-  opacity: 1;
-  transform: translateY(0);
+.closed .dockToggle {
+  margin-bottom: 0;
 }
 
 .btn {

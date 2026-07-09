@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import styles from './SidebarList.module.css'
-import { compareByFavorite } from '../../../utils/noteSorting'
+import { compareByOrder } from '../../../utils/noteSorting'
 import { HiChevronDown } from 'react-icons/hi'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 
@@ -52,15 +52,15 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
         })
 
         const notebookGroups = Array.from(grouped.values())
-            .sort((a, b) => compareByFavorite(a.notebook, b.notebook))
+            .sort((a, b) => compareByOrder(a.notebook, b.notebook))
             .map(group => ({
                 ...group,
-                notes: group.notes.slice().sort(compareByFavorite)
+                notes: group.notes.slice().sort(compareByOrder)
             }))
 
         return {
             notebookGroups,
-            standaloneNotes: standalone.slice().sort(compareByFavorite)
+            standaloneNotes: standalone.slice().sort(compareByOrder)
         }
     }, [notes, notebooks])
 

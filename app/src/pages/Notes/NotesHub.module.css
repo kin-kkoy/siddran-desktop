@@ -145,6 +145,33 @@
 }
 
 /* Grid view */
+/* Drag-to-reorder wrapper: the card fills it, so grid/list layout is unchanged.
+   Reorder is pointer-based (see hooks/useDragReorder.js); surrounding items reflow
+   live as you drag, and the grabbed card lifts. */
+.dragCell {
+    display: flex;
+    min-width: 0;
+    touch-action: none; /* let pointer-drag work without the page scrolling/panning */
+    cursor: grab;
+    will-change: transform;
+    transition: transform 0.16s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.dragCell > * {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.dragCell:active {
+    cursor: grabbing;
+}
+.dragCell[data-dragging] {
+    opacity: 0.85;
+    transform: scale(1.02);
+    z-index: 3;
+    box-shadow: 0 12px 30px var(--shadow-color);
+    border-radius: 12px;
+    cursor: grabbing;
+}
+
 .gridView {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

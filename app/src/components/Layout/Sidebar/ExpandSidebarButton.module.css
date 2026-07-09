@@ -1,0 +1,25 @@
+.expandBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.expandBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Floating placement for Hubs/Calendar: far left, padded off the window edge. */
+.floating {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 1002;
+}

@@ -126,8 +126,6 @@ async function pushCreate(sandbox, attempt = 0) {
         logger.error('sandboxStore — create sync failed', err)
         if (attempt < MAX_RETRIES - 1) {
             setTimeout(() => pushCreate(sandbox, attempt + 1), BACKOFF[attempt])
-        } else {
-            toast.error('Sandbox saved locally — will sync when back online.')
         }
     }
 }
@@ -170,8 +168,7 @@ async function pushRename(id, title) {
         })
         if (!res.ok) throw new Error(`PUT /sandboxes/${id} ${res.status}`)
     } catch (err) {
-        logger.error('sandboxStore — rename sync failed', err)
-        toast.error('Could not save the new name to the cloud.')
+        logger.error('sandboxStore — rename save failed', err)
     }
 }
 
@@ -188,9 +185,8 @@ async function pushDelete(id, prevList) {
         const res = await request(`/sandboxes/${id}`, { method: 'DELETE' })
         if (!res.ok && res.status !== 404) throw new Error(`DELETE /sandboxes/${id} ${res.status}`)
     } catch (err) {
-        logger.error('sandboxStore — delete sync failed', err)
+        logger.error('sandboxStore — delete save failed', err)
         setList(prevList) // roll back the optimistic removal
-        toast.error('Could not delete the sandbox from the cloud.')
     }
 }
 

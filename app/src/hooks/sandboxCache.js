@@ -1,5 +1,4 @@
 import logger from '../utils/logger'
-import { toast } from '../utils/toast'
 
 // localStorage cache layer for sandboxes. No React here — both sandboxStore and
 // sandboxItemsStore read/write through these helpers so the cache stays the single
@@ -11,15 +10,6 @@ const ITEM_PREFIX = 'cinder_sandbox_'
 const SIZE_WARN_THRESHOLD = 3 * 1024 * 1024 // 3MB — warn before localStorage's ~5MB cap
 
 const itemKey = (id) => `${ITEM_PREFIX}${id}`
-
-// localStorage is a shared ~5MB pool; a huge board (or many cached boards) can exhaust it.
-// Detect the quota error across browsers so we can warn once per board instead of silently
-// failing. The board still syncs to the backend — only the offline cache misses out.
-const isQuotaError = (err) => !!err && (
-    err.name === 'QuotaExceededError' ||
-    err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-    err.code === 22 || err.code === 1014
-)
 const quotaWarned = new Set() // board ids we've already toasted (avoid spamming on every write)
 
 const uuidish = (prefix) => (typeof crypto !== 'undefined' && crypto.randomUUID
@@ -75,10 +65,6 @@ export const writeItems = (id, items) => {
         quotaWarned.delete(id) // write succeeded — re-arm the warning if it fills up again
     } catch (err) {
         logger.error('sandboxCache — failed to write items', err)
-        if (isQuotaError(err) && !quotaWarned.has(id)) {
-            quotaWarned.add(id)
-            toast.warning("This board is too large to keep offline — it still syncs to the cloud.")
-        }
     }
 }
 

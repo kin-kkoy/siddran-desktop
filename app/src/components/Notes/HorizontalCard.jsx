@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import styles from './Card.module.css'
-import { FaStar, FaRegStar, FaEllipsisV } from 'react-icons/fa'
+import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
 import { HiOutlineTrash } from 'react-icons/hi'
 import { useState, useRef, useEffect, memo } from 'react'
 import ConfirmModal from '../Common/ConfirmModal'
@@ -123,8 +123,8 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
               {menuOpen && (
                 <div className={`${styles.menu} ${menuPosition === 'above' ? styles.menuAbove : styles.menuBelow}`}>
                   <button onClick={handleFavoriteToggle} className={styles.menuItem}>
-                    {note.is_favorite ? <FaStar color="#fbbf24" /> : <FaRegStar />}
-                    <span>{note.is_favorite ? 'Unfavorite' : 'Favorite'}</span>
+                    {note.is_favorite ? <FaThumbtack color="#fbbf24" /> : <FaThumbtack style={{ opacity: 0.45 }} />}
+                    <span>{note.is_favorite ? 'Unpin' : 'Pin'}</span>
                   </button>
 
                   <div className={styles.colorPicker}>

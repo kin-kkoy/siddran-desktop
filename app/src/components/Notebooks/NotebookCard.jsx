@@ -1,5 +1,5 @@
 import { LuFileText } from 'react-icons/lu';
-import { FaStar, FaRegStar, FaEllipsisV } from "react-icons/fa";
+import { FaThumbtack, FaEllipsisV } from "react-icons/fa";
 import { HiOutlineTrash } from "react-icons/hi";
 import styles from './NotebookCard.module.css'
 import { useState, useRef, useEffect } from 'react'
@@ -111,8 +111,8 @@ function NotebookCard({ notebook, noteCount, deleteNotebook, onOpen, toggleFavor
                                 {menuOpen && (
                                     <div className={`${styles.menu} ${menuPosition === 'above' ? styles.menuAbove : styles.menuBelow}`}>
                                         <button onClick={handleFavoriteToggle} className={styles.menuItem}>
-                                            {notebook.is_favorite ? <FaStar color="#fbbf24" /> : <FaRegStar />}
-                                            <span>{notebook.is_favorite ? 'Unfavorite' : 'Favorite'}</span>
+                                            {notebook.is_favorite ? <FaThumbtack color="#fbbf24" /> : <FaThumbtack style={{ opacity: 0.45 }} />}
+                                            <span>{notebook.is_favorite ? 'Unpin' : 'Pin'}</span>
                                         </button>
 
                                         <div className={styles.colorPicker}>

@@ -57,8 +57,10 @@ function CodeMirrorEditor({
   tasks = [],
   bundles = [],
   sandboxes = [],
+  scrollApiRef,
 }) {
   const hostRef = useRef(null)
+  const rootRef = useRef(null)
   const viewRef = useRef(null)
   const editableRef = useRef(new Compartment())
 
@@ -327,6 +329,27 @@ function CodeMirrorEditor({
     }
   }, [readMode, noteId])
 
+  // Expose a scroll-to-line function to the parent (used by the outline panel).
+  // Works in both modes: the CM view when editing, the reading view's data-line
+  // elements when reading.
+  useEffect(() => {
+    if (!scrollApiRef) return
+    scrollApiRef.current = (line) => {
+      if (readMode) {
+        const el = rootRef.current?.querySelector(`[data-line="${line}"]`)
+        if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        return
+      }
+      const view = viewRef.current
+      if (!view) return
+      const n = Math.max(1, Math.min(line, view.state.doc.lines))
+      const pos = view.state.doc.line(n).from
+      view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 64 }) })
+      view.focus()
+    }
+    return () => { if (scrollApiRef) scrollApiRef.current = null }
+  }, [readMode, scrollApiRef])
+
   const handleCheckboxToggle = (index) => {
     const view = viewRef.current
     if (!view) return
@@ -353,11 +376,11 @@ function CodeMirrorEditor({
   }
 
   return (
-    <>
+    <div ref={rootRef} style={{ display: 'contents' }}>
       <div ref={hostRef} className={styles.editorRoot} style={readMode ? { display: 'none' } : undefined} />
       {readMode && <ReadingView markdown={readSnapshot} noteId={noteId} rememberFolds={rememberFolds} onSearchTag={onSearchTag} onOpenLink={onOpenLink} onCheckboxToggle={handleCheckboxToggle} />}
       {!readMode && !interfaceMode && <EditorDock viewRef={viewRef} sandboxes={sandboxes} />}
-    </>
+    </div>
   )
 }
 

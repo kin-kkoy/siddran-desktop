@@ -299,7 +299,7 @@ export const useNotes = (authFetch, API, isAuthed) => {
             }
         }
 
-        toast.error('Failed to save note. Your changes are backed up locally.')
+        logger.error('Failed to save note body after retries')
         return false
     }, [authFetch, API, updateNoteInNotebookCache])
 
@@ -635,6 +635,26 @@ export const useNotes = (authFetch, API, isAuthed) => {
         toast.success(`Exported "${note.title || 'Untitled'}"`)
     }, [notes])
 
+    // Manual drag-sort. `orderedIds` is the group's new full order; we stamp each
+    // with its index as `order` (optimistically + persisted) so compareByOrder
+    // reproduces the arrangement everywhere (NotesHub + sidebar).
+    const reorderNotes = useCallback((orderedIds) => {
+        const pos = new Map(orderedIds.map((id, i) => [String(id), i]))
+        setNotes(prev => prev.map(n => pos.has(String(n.id)) ? { ...n, order: pos.get(String(n.id)) } : n))
+        orderedIds.forEach((id, i) => {
+            updateNoteInNotebookCache(id, (n) => ({ ...n, order: i }))
+            authFetch(`${API}/notes/${id}`, { method: 'PUT', body: JSON.stringify({ order: i }) }).catch(err => logger.error(err))
+        })
+    }, [authFetch, API, updateNoteInNotebookCache])
+
+    const reorderNotebooks = useCallback((orderedIds) => {
+        const pos = new Map(orderedIds.map((id, i) => [String(id), i]))
+        setNotebooks(prev => prev.map(nb => pos.has(String(nb.id)) ? { ...nb, order: pos.get(String(nb.id)) } : nb))
+        orderedIds.forEach((id, i) => {
+            authFetch(`${API}/notebooks/${id}`, { method: 'PUT', body: JSON.stringify({ order: i }) }).catch(err => logger.error(err))
+        })
+    }, [authFetch, API])
+
 
     return {
         notes,
@@ -662,6 +682,8 @@ export const useNotes = (authFetch, API, isAuthed) => {
         removeNoteFromNotebook,
         addNotesToNotebook,
         importMarkdownFiles,
-        exportNote
+        exportNote,
+        reorderNotes,
+        reorderNotebooks
     }
 }

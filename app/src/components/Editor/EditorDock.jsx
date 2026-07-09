@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import {
   FaBold, FaItalic, FaUnderline, FaStrikethrough, FaHeading, FaCode,
   FaLink, FaListUl, FaListOl, FaQuoteLeft, FaQuestion,
 } from 'react-icons/fa'
 import { MdCheckBox, MdHorizontalRule } from 'react-icons/md'
-import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuEyeOff, LuHighlighter } from 'react-icons/lu'
+import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuEyeOff, LuHighlighter, LuPaperclip, LuImage, LuFileText, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { TbBracketsContain } from 'react-icons/tb'
-import { BsPin, BsPinFill } from 'react-icons/bs'
 import { useCalendarView } from '../../contexts/CalendarViewContext'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
+import { usePdfView } from '../../contexts/PdfViewContext'
+import { useSidebar } from '../../contexts/SidebarContext'
+import { attachImageViaPicker, attachPdfViaPicker } from '../../desktop/media'
 import styles from './EditorDock.module.css'
 
 // ── Formatting helpers ──
@@ -106,35 +108,64 @@ const WIKILINK_TYPES = [
 function EditorDock({ viewRef, sandboxes = [] }) {
   const calView = useCalendarView()
   const sandboxView = useSandboxView()
-  const [pinned, setPinned] = useState(() => {
-    try { return localStorage.getItem('cinder_dock_pinned') === 'true' } catch { return false }
+  const pdfView = usePdfView()
+  const { collapsed: sidebarCollapsed } = useSidebar()
+  const [dockVisible, setDockVisible] = useState(() => {
+    try { return localStorage.getItem('cinder_dock_visible') !== 'false' } catch { return true }
   })
   const [wikilinkOpen, setWikilinkOpen] = useState(false)
   const [sandboxMenuOpen, setSandboxMenuOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [mediaOpen, setMediaOpen] = useState(false)
   const wikilinkRef = useRef(null)
   const sandboxMenuRef = useRef(null)
   const helpRef = useRef(null)
+  const mediaRef = useRef(null)
 
-  const togglePin = useCallback(() => {
-    setPinned(prev => {
+  const handleAttachImage = useCallback(async () => {
+    setMediaOpen(false)
+    const r = await attachImageViaPicker()
+    const view = viewRef.current
+    if (r && view) {
+      const { from, to } = view.state.selection.main
+      const insert = r.markdown + '\n'
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } })
+      view.focus()
+    }
+  }, [viewRef])
+
+  const handleAttachPdf = useCallback(async () => {
+    setMediaOpen(false)
+    const r = await attachPdfViaPicker()
+    if (r) pdfView.requestOpen(r.path, r.name)
+  }, [pdfView])
+
+  const toggleDock = useCallback(() => {
+    setDockVisible(prev => {
       const next = !prev
-      try { localStorage.setItem('cinder_dock_pinned', String(next)) } catch { /* ignore */ }
+      try { localStorage.setItem('cinder_dock_visible', String(next)) } catch { /* ignore */ }
+      if (!next) {
+        setWikilinkOpen(false)
+        setSandboxMenuOpen(false)
+        setHelpOpen(false)
+        setMediaOpen(false)
+      }
       return next
     })
   }, [])
 
   // Close dropdowns on outside click
   useEffect(() => {
-    if (!wikilinkOpen && !sandboxMenuOpen && !helpOpen) return
+    if (!wikilinkOpen && !sandboxMenuOpen && !helpOpen && !mediaOpen) return
     const handler = (e) => {
       if (wikilinkOpen && wikilinkRef.current && !wikilinkRef.current.contains(e.target)) setWikilinkOpen(false)
       if (sandboxMenuOpen && sandboxMenuRef.current && !sandboxMenuRef.current.contains(e.target)) setSandboxMenuOpen(false)
       if (helpOpen && helpRef.current && !helpRef.current.contains(e.target)) setHelpOpen(false)
+      if (mediaOpen && mediaRef.current && !mediaRef.current.contains(e.target)) setMediaOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [wikilinkOpen, sandboxMenuOpen, helpOpen])
+  }, [wikilinkOpen, sandboxMenuOpen, helpOpen, mediaOpen])
 
   const handleAction = useCallback((action) => {
     const view = viewRef.current
@@ -143,8 +174,20 @@ function EditorDock({ viewRef, sandboxes = [] }) {
   }, [viewRef])
 
   return (
-    <div className={`${styles.dockZone} ${pinned ? styles.pinned : ''}`}>
-      <div className={styles.dock}>
+    <div
+      className={`${styles.dockZone} ${dockVisible ? styles.open : styles.closed}`}
+      style={{ '--dock-sidebar-offset': sidebarCollapsed ? '0px' : '220px' }}
+    >
+      <button
+        className={styles.dockToggle}
+        title={dockVisible ? 'Hide editor dock' : 'Show editor dock'}
+        aria-label={dockVisible ? 'Hide editor dock' : 'Show editor dock'}
+        aria-expanded={dockVisible}
+        onMouseDown={e => { e.preventDefault(); toggleDock() }}
+      >
+        {dockVisible ? <LuChevronDown /> : <LuChevronUp />}
+      </button>
+      <div className={styles.dock} aria-hidden={!dockVisible}>
         {/* Formatting buttons */}
         {ACTIONS.map(({ key, icon: Icon, title, action }) => (
           <button
@@ -154,7 +197,7 @@ function EditorDock({ viewRef, sandboxes = [] }) {
             aria-label={title}
             onMouseDown={e => { e.preventDefault(); handleAction(action) }}
           >
-            <Icon />
+            {createElement(Icon)}
           </button>
         ))}
 
@@ -181,9 +224,31 @@ function EditorDock({ viewRef, sandboxes = [] }) {
                     handleAction(v => insertWikilink(v, prefix))
                   }}
                 >
-                  <Icon size={14} /> {label}
+                  {createElement(Icon, { size: 14 })} {label}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Attach media (image / PDF) */}
+        <div className={styles.dropdownAnchor} ref={mediaRef}>
+          <button
+            className={`${styles.btn} ${mediaOpen ? styles.active : ''}`}
+            title="Attach media"
+            aria-label="Attach media"
+            onMouseDown={e => { e.preventDefault(); setMediaOpen(p => !p); setWikilinkOpen(false); setSandboxMenuOpen(false); setHelpOpen(false) }}
+          >
+            <LuPaperclip />
+          </button>
+          {mediaOpen && (
+            <div className={styles.dropdown}>
+              <button className={styles.dropdownItem} onMouseDown={e => { e.preventDefault(); handleAttachImage() }}>
+                <LuImage size={14} /> Image
+              </button>
+              <button className={styles.dropdownItem} onMouseDown={e => { e.preventDefault(); handleAttachPdf() }}>
+                <LuFileText size={14} /> PDF
+              </button>
             </div>
           )}
         </div>
@@ -248,7 +313,7 @@ function EditorDock({ viewRef, sandboxes = [] }) {
           )}
         </div>
 
-        {/* Markdown tips (escaping + underline) — right side, beside the pin */}
+        {/* Markdown tips (escaping + underline) */}
         <span className={styles.sep} />
         <div className={styles.dropdownAnchor} ref={helpRef}>
           <button
@@ -279,16 +344,6 @@ function EditorDock({ viewRef, sandboxes = [] }) {
             </div>
           )}
         </div>
-
-        {/* Pin toggle — shares the section with the tips button (no separator) */}
-        <button
-          className={`${styles.btn} ${pinned ? styles.active : ''}`}
-          title={pinned ? 'Unpin dock (auto-hide)' : 'Pin dock (always visible)'}
-          aria-label={pinned ? 'Unpin dock' : 'Pin dock'}
-          onMouseDown={e => { e.preventDefault(); togglePin() }}
-        >
-          {pinned ? <BsPinFill /> : <BsPin />}
-        </button>
       </div>
     </div>
   )

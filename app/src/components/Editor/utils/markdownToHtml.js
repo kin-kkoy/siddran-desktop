@@ -49,17 +49,20 @@ const handlers = {
   },
 }
 
-// Resolve image src through the R2 helper and lift `#w=NNN` into a width style.
+// Resolve image src through the R2 helper and lift the `#w=NNN` (+ optional
+// `#h=NNN`) fragment into width/height styles.
 function rehypeCinderImages() {
   return (tree) => {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'img' || !node.properties) return
       let src = String(node.properties.src || '')
-      const wm = /#w=(\d+)$/.exec(src)
-      if (wm) {
-        src = src.slice(0, wm.index)
-        const w = `width:${wm[1]}px`
-        node.properties.style = node.properties.style ? `${node.properties.style};${w}` : w
+      const fm = /#w=(\d+)(?:#h=(\d+))?$/.exec(src)
+      if (fm) {
+        src = src.slice(0, fm.index)
+        const dims = [`width:${fm[1]}px`]
+        if (fm[2]) dims.push(`height:${fm[2]}px`)
+        const style = dims.join(';')
+        node.properties.style = node.properties.style ? `${node.properties.style};${style}` : style
       }
       node.properties.src = resolveImageUrl(src)
       node.properties.loading = 'lazy'

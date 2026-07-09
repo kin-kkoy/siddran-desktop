@@ -105,23 +105,43 @@ export const cinderTheme = EditorView.theme({
   },
   '.cm-code-copy-btn:hover': { opacity: '1', color: 'var(--text-primary)' },
 
-  // Inline images (cm/widgets.js ImageWidget) + drag-resize handle.
+  // Inline images (cm/widgets.js ImageWidget) + Google-Docs-style bounding box:
+  // an outline plus 8 drag handles (4 corners aspect-lock, 4 edges resize one
+  // axis). Drag logic lives in cm/widgets.js. Box + handles reveal only once the
+  // image is selected (.cm-img-selected) or mid-drag (.cm-img-dragging).
   '.cm-img-wrap': { position: 'relative', display: 'inline-block', maxWidth: '100%', margin: '0.2em 0' },
-  '.cm-img': { maxWidth: '100%', borderRadius: '6px', display: 'block' },
-  '.cm-img-resize': {
+  '.cm-img': { maxWidth: '100%', borderRadius: '6px', display: 'block', cursor: 'pointer' },
+  '.cm-img-box': {
     position: 'absolute',
-    right: '6px',
-    bottom: '8px',
-    width: '12px',
-    height: '12px',
-    borderRadius: '50%',
-    background: 'var(--accent-blue)',
-    border: '2px solid var(--bg-primary)',
-    cursor: 'ew-resize',
+    inset: '-2px',
+    border: '1.5px solid var(--accent-blue)',
+    borderRadius: '5px',
+    pointerEvents: 'none',
     opacity: '0',
     transition: 'opacity 120ms ease',
   },
-  '.cm-img-wrap:hover .cm-img-resize': { opacity: '1' },
+  '.cm-img-handle': {
+    position: 'absolute',
+    width: '10px',
+    height: '10px',
+    background: 'var(--bg-primary)',
+    border: '1.5px solid var(--accent-blue)',
+    borderRadius: '2px',
+    opacity: '0',
+    transition: 'opacity 120ms ease',
+    zIndex: '2',
+  },
+  '.cm-img-wrap.cm-img-selected .cm-img-box, .cm-img-wrap.cm-img-dragging .cm-img-box': { opacity: '1' },
+  '.cm-img-wrap.cm-img-selected .cm-img-handle, .cm-img-wrap.cm-img-dragging .cm-img-handle': { opacity: '1' },
+  // Corner + edge positions (center each handle on the image edge) and cursors.
+  '.cm-img-handle-nw': { top: '-5px', left: '-5px', cursor: 'nwse-resize' },
+  '.cm-img-handle-n': { top: '-5px', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
+  '.cm-img-handle-ne': { top: '-5px', right: '-5px', cursor: 'nesw-resize' },
+  '.cm-img-handle-e': { top: '50%', right: '-5px', transform: 'translateY(-50%)', cursor: 'ew-resize' },
+  '.cm-img-handle-se': { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' },
+  '.cm-img-handle-s': { bottom: '-5px', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
+  '.cm-img-handle-sw': { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' },
+  '.cm-img-handle-w': { top: '50%', left: '-5px', transform: 'translateY(-50%)', cursor: 'ew-resize' },
   '.cm-line.cm-codeblock-top': {
     borderTopLeftRadius: '8px',
     borderTopRightRadius: '8px',

@@ -1,20 +1,103 @@
-/* Obsidian-style centered editor */
+/* Tab bar above the editor area, then the note body fills the rest. leftPane is
+   the scroll container (shared by the sticky toolbar + note). */
+.tabbedPage {
+    min-height: 100%;
+}
+.tabbedBody {
+    /* plain flow */
+}
+
+/* NotePane root: the editor column + an optional right-rail outline sit side by
+   side (align-items:flex-start so the sticky outline anchors to the top). */
+.paneRoot {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    width: 100%;
+}
+.mainCol {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Obsidian-style editor column, centered within the content pane (so it sits
+   centered in the space to the right of the sidebar). */
 .container {
-    /* max-width: min(900px, 90vw);  */
     max-width: var(--note-editor-width, 1200px);
     margin: 0 auto;
-    /* Tighter top padding so the header row sits near the top instead of leaving
-       a large unused gap; keeps comfortable bottom room for scrolling. */
+    /* Breathing room below the full-width toolbar. */
     padding: 24px 20px 48px;
-    min-height: 100vh;
+    /* Fill the scrolling body so a short note doesn't create a phantom scrollbar. */
+    min-height: 100%;
 }
 
 /* Header row with back button, tags, and menu */
 .headerRow {
     display: flex;
     align-items: center;
+    justify-content: flex-end; /* quiet control cluster on the right */
+    gap: 8px;
+    margin-bottom: 12px;
+    background: transparent;
+}
+/* when portaled into the tab bar's right slot: no extra spacing */
+.headerRowSlotted {
+    margin-bottom: 0;
+    gap: 6px;
+}
+
+/* Edit-tags modal (opened from the kebab) */
+.tagsBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 24px;
+}
+.tagsModal {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    margin-bottom: 20px;
+    box-shadow: 0 16px 48px var(--shadow-color);
+}
+.tagsModalLabel {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.tagsModalInput {
+    width: 100%;
+    padding: 11px 13px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 9px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+.tagsModalInput:focus {
+    outline: none;
+    border-color: var(--accent-warning);
+}
+.tagsModalDone {
+    align-self: flex-end;
+    padding: 8px 18px;
+    border-radius: 9px;
+    background: var(--accent-warning);
+    color: var(--bg-primary);
+    font-weight: 600;
+    cursor: pointer;
 }
 
 .viewToggleWrapper {
@@ -53,27 +136,31 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background-color: var(--bg-elevated);
+    background-color: transparent; /* quiet icon controls — no resting box/fill */
     border: none;
-    color: var(--text-primary);
-    padding: 8px 16px;
-    border-radius: 4px;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, color 0.2s;
     flex-shrink: 0;
 }
 
 .backBtn:hover {
     background-color: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 /* Semi-transparent writing surface */
+/* No "paper" box (ZenNotes/Obsidian style): the text sits directly on the page
+   background. Horizontal padding is kept for reading comfort; the centred
+   .container max-width still gives the column its margins. */
 .editorSurface {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-default);
-    border-radius: 12px;
-    padding: 32px 40px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 8px 20px;
     margin-bottom: 20px;
     min-height: calc(100vh - 200px);
     /* NOTE: no `will-change: transform` here. Promoting this element to its own
@@ -84,14 +171,6 @@
        handled natively by the browser. */
 }
 
-/* Less-distraction mode — drop the paper look entirely. Background goes
-   transparent so the page bg shows through, removing the visible box.
-   Padding is preserved so the text doesn't shift position. */
-.editorSurface.lessDistraction {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-}
 
 /* Title input */
 .titleInput {
@@ -140,14 +219,14 @@
 }
 
 .menuBtn {
-    background-color: var(--bg-elevated);
+    background-color: transparent; /* quiet icon control — no resting box/fill */
     border: none;
-    color: var(--text-muted);
-    padding: 8px 12px;
+    color: var(--text-secondary);
+    padding: 8px 10px;
     cursor: pointer;
     font-size: 14px;
-    transition: all 0.2s;
-    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;

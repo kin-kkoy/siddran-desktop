@@ -53,19 +53,18 @@ function makeStar(radiusRange, radiusBase) {
   }
 }
 
-function StarCanvas({ lessDistraction = false }) {
+function StarCanvas() {
   const canvasRef = useRef(null)
   const { settings } = useSettings()
   const location = useLocation()
-  // Note-page-specific gate: when on /notes/:id, also honor showStarsOnNotePage.
-  // Acts as a gate on top of global showStars (both must be true).
-  // Less-distraction mode (NotePage focus mode) forces stars off regardless.
+  // Stars are never shown on a note page (the paper look was dropped, so there's
+  // no backdrop to decorate). Everywhere else follows the global showStars.
   const onNotePage = /^\/notes\/[^/]+/.test(location.pathname)
-  const notePageStarsAllowed = onNotePage ? settings.showStarsOnNotePage !== false : true
+  const notePageStarsAllowed = !onNotePage
   // Sandbox editor occupies the whole viewport (and stars would be hidden
   // behind its dark surface anyway) — skip the rAF loop entirely on this route.
   const onSandboxEditor = /^\/sandboxes\/[^/]+/.test(location.pathname)
-  const showStars   = settings.showStars !== false && notePageStarsAllowed && !lessDistraction && !onSandboxEditor
+  const showStars   = settings.showStars !== false && notePageStarsAllowed && !onSandboxEditor
   const reduceStars = settings.reduceStars === true
 
   // Pause the animation while any modal is open — the stars are hidden behind the backdrop, and

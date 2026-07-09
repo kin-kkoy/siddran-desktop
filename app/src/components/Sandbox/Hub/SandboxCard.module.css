@@ -98,6 +98,9 @@
     position: absolute;
     top: 12px;
     right: 12px;
+    /* Above .preview (position:relative, later in DOM) — without this the preview
+       paints over the button and it's unclickable/invisible. */
+    z-index: 2;
     background: transparent;
     border: none;
     color: var(--text-muted);
@@ -107,7 +110,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
+    opacity: 0.5; /* always visible (was hover-only, hard to discover) */
     transition: opacity 0.2s, color 0.2s, background-color 0.2s;
     cursor: pointer;
 }

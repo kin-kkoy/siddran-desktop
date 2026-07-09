@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import ExpandSidebarButton from '../../components/Layout/Sidebar/ExpandSidebarButton'
 import styles from './SandBoxPage.module.css'
 import { useSandboxes } from '../../hooks/useSandboxes'
 import { useSandbox } from '../../hooks/useSandbox'
@@ -453,6 +454,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     return (
         <div className={mode === 'half' ? styles.pageHalf : styles.page}>
             <header className={styles.header}>
+                <ExpandSidebarButton />
                 <div className={styles.titleGroup}>
                     <input
                         className={styles.title}

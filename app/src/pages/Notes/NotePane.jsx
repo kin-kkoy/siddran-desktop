@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styles from './NotePage.module.css'
-import { IoMdArrowRoundBack } from "react-icons/io"
-import { FaStar, FaRegStar, FaEllipsisV } from 'react-icons/fa'
+import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
 import { MdChromeReaderMode } from "react-icons/md";
 import { HiPencilSquare } from "react-icons/hi2";
 import { HiOutlineDownload, HiOutlineCog, HiOutlineDocumentText } from "react-icons/hi";
-import { LuMaximize, LuMinimize, LuColumns2, LuX } from "react-icons/lu";
+import { LuColumns2, LuX, LuTag, LuMessageSquare, LuListTree } from "react-icons/lu";
 import CodeMirrorEditor from '../../components/Editor/CodeMirrorEditor'
+import NoteOutline from '../../components/Notes/NoteOutline'
+import { parseHeadings } from '../../utils/headings'
 import { printNoteToPdf } from '../../components/Editor/utils/exportPdf'
 import ConfirmModal from '../../components/Common/ConfirmModal'
 import TaskDetailsModal from '../../components/Common/TaskDetailsModal'
@@ -30,6 +32,7 @@ function NotePane({
   otherNoteId,
   onEnterSplit,
   onClose,
+  controlsSlot,
   notes,
   notesLoading,
   editTitle,
@@ -38,9 +41,6 @@ function NotePane({
   toggleFavorite,
   updateColor,
   exportNote,
-  setSidebarCollapsed,
-  lessDistraction = false,
-  setLessDistraction,
   tasks,
   addNote,
   updateTask,
@@ -95,6 +95,11 @@ function NotePane({
   const isDirtyRef = useRef(false)
   const headerObserverRef = useRef(null)
   const [headerVisible, setHeaderVisible] = useState(true)
+  // Document outline (right rail). Per-pane state so each split pane toggles its
+  // own. Headings are parsed from the saved body (updates on save).
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const scrollToLineRef = useRef(null)
+  const outlineHeadings = useMemo(() => parseHeadings(note?.body || ''), [note?.body])
   // Callback ref (not useRef + mount effect): on a hard refresh the page first
   // renders the skeleton, so a mount-time effect would run before the real header
   // exists and the observer would never attach (sticky toggle then never shows).
@@ -110,6 +115,7 @@ function NotePane({
     headerObserverRef.current = observer
   }, [])
   const [noteSettingsOpen, setNoteSettingsOpen] = useState(false)
+  const [tagsModalOpen, setTagsModalOpen] = useState(false)
   // Wikilink "create note?" confirm flow: holds the clicked unresolved title.
   const [linkModalTitle, setLinkModalTitle] = useState(null)
   const [creatingLink, setCreatingLink] = useState(false)
@@ -332,11 +338,6 @@ function NotePane({
     }
   }
 
-  // for back button (primary pane only)
-  const handleGoBackBtn = () =>{
-    navigate('/notes')
-  }
-
   const toggleViewMode = () => {
     // Always write an explicit value (never delete): an absent param means
     // "freshly opened, use the remembered mode", so toggling to write must be
@@ -380,17 +381,9 @@ function NotePane({
     updateColor(note.id, color)
   }
 
-  const toggleLessDistraction = () => {
-    setLessDistraction(prev => {
-      const next = !prev
-      // On enable, collapse the sidebar. On disable, leave it where the user
-      // put it — toggling off is just for getting the page styling back.
-      if (next && setSidebarCollapsed) setSidebarCollapsed(true)
-      return next
-    })
-  }
-
   return (
+    <div className={styles.paneRoot}>
+    <div className={styles.mainCol}>
     <div className={styles.container}>
 
       <div className={`${styles.viewToggleWrapper} ${headerVisible ? styles.viewToggleHidden : ''}`}>
@@ -403,27 +396,16 @@ function NotePane({
         </button>
       </div>
 
-      {/* Header row with back/close button, tags input, and menu */}
-      <div className={styles.headerRow} ref={headerRowRef}>
-        {isPrimary ? (
-          <button onClick={handleGoBackBtn} className={styles.backBtn}>
-            <IoMdArrowRoundBack /> Back to Notes
-          </button>
-        ) : (
+      {/* Header controls → portaled into the tab bar's right slot for the primary
+          note (tabs + controls share one row); rendered inline otherwise. */}
+      {(() => {
+        const headerContent = (
+          <div className={`${styles.headerRow} ${isPrimary && controlsSlot ? styles.headerRowSlotted : ''}`} ref={headerRowRef}>
+        {!isPrimary && (
           <button onClick={onClose} className={styles.backBtn} aria-label="Close split view">
             <LuX /> Close split
           </button>
         )}
-
-        <input
-          className={styles.tagsInput}
-          type='text'
-          value={newTags}
-          onChange={ e => setNewTags(e.target.value)}
-          onBlur={saveTags}
-          placeholder='Tags (e.g., personal, work, ideas...)'
-          readOnly={viewMode}
-        />
 
         <button onClick={toggleViewMode} className={styles.backBtn} aria-label={viewMode ? 'Switch to edit mode' : 'Switch to read mode'}>
           {viewMode ? <HiPencilSquare /> : <MdChromeReaderMode />}
@@ -442,15 +424,24 @@ function NotePane({
 
         {isPrimary && (
           <button
-            onClick={toggleLessDistraction}
+            onClick={() => toast.success('Comments — coming soon')}
             className={styles.backBtn}
-            aria-pressed={lessDistraction}
-            title={lessDistraction ? 'Exit less-distraction mode' : 'Less distraction mode'}
-            aria-label={lessDistraction ? 'Exit less-distraction mode' : 'Enter less-distraction mode'}
+            title="Comments"
+            aria-label="Comments"
           >
-            {lessDistraction ? <LuMinimize /> : <LuMaximize />}
+            <LuMessageSquare />
           </button>
         )}
+
+        <button
+          onClick={() => setOutlineOpen(o => !o)}
+          className={styles.backBtn}
+          aria-pressed={outlineOpen}
+          title="Document outline"
+          aria-label="Document outline"
+        >
+          <LuListTree />
+        </button>
 
         <div className={styles.menuContainer} ref={menuRef}>
           <button ref={buttonRef} onClick={toggleMenu} className={styles.menuBtn}>
@@ -460,9 +451,15 @@ function NotePane({
           {menuOpen && (
             <div className={`${styles.menu} ${menuPosition === 'above' ? styles.menuAbove : styles.menuBelow}`}>
               <button onClick={handleFavoriteToggle} className={styles.menuItem}>
-                {note.is_favorite ? <FaStar color="#fbbf24" /> : <FaRegStar />}
-                <span>{note.is_favorite ? 'Unfavorite' : 'Favorite'}</span>
+                {note.is_favorite ? <FaThumbtack color="#fbbf24" /> : <FaThumbtack style={{ opacity: 0.45 }} />}
+                <span>{note.is_favorite ? 'Unpin' : 'Pin'}</span>
               </button>
+
+              <button onClick={() => { setTagsModalOpen(true); setMenuOpen(false) }} className={styles.menuItem}>
+                <LuTag />
+                <span>Edit tags</span>
+              </button>
+
 
               <button
                 onClick={() => { exportNote?.(note.id); setMenuOpen(false) }}
@@ -510,9 +507,12 @@ function NotePane({
             </div>
           )}
         </div>
-      </div>
+          </div>
+        )
+        return isPrimary && controlsSlot ? createPortal(headerContent, controlsSlot) : headerContent
+      })()}
 
-      <div className={`${styles.editorSurface} ${lessDistraction ? styles.lessDistraction : ''}`}>
+      <div className={styles.editorSurface}>
         <input
           ref={titleInputReference}
           className={styles.titleInput}
@@ -547,8 +547,30 @@ function NotePane({
           tasks={tasks}
           bundles={bundles}
           sandboxes={sandboxes}
+          scrollApiRef={scrollToLineRef}
         />
       </div>
+
+      {tagsModalOpen && (
+        <div
+          className={styles.tagsBackdrop}
+          onClick={(e) => { if (e.target === e.currentTarget) { saveTags(); setTagsModalOpen(false) } }}
+        >
+          <div className={styles.tagsModal}>
+            <label className={styles.tagsModalLabel}>Tags</label>
+            <input
+              className={styles.tagsModalInput}
+              type="text"
+              value={newTags}
+              onChange={(e) => setNewTags(e.target.value)}
+              placeholder="personal, work, ideas..."
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { saveTags(); setTagsModalOpen(false) } }}
+            />
+            <button className={styles.tagsModalDone} onClick={() => { saveTags(); setTagsModalOpen(false) }}>Done</button>
+          </div>
+        </div>
+      )}
 
       <NoteSettingsPopup
         isOpen={noteSettingsOpen}
@@ -596,6 +618,15 @@ function NotePane({
         onConfirm={() => setSandboxNotFound(false)}
         onClose={() => setSandboxNotFound(false)}
       />
+    </div>
+    </div>
+    {outlineOpen && (
+      <NoteOutline
+        headings={outlineHeadings}
+        onJump={(line) => scrollToLineRef.current?.(line)}
+        onClose={() => setOutlineOpen(false)}
+      />
+    )}
     </div>
   )
 }

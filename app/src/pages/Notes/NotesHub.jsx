@@ -14,11 +14,12 @@ import ConfirmModal from '../../components/Common/ConfirmModal'
 import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineViewList, HiOutlineUpload } from 'react-icons/hi'
 import { LuNotebookPen } from 'react-icons/lu'
 import { toast } from '../../utils/toast'
-import { compareByFavorite } from '../../utils/noteSorting'
+import { compareByOrder } from '../../utils/noteSorting'
+import { useDragReorder } from '../../hooks/useDragReorder'
 import Skeleton from '../../components/Common/Skeleton'
 
 // obtains the notes and
-function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, authFetch, API }) {
+function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, reorderNotebooks, authFetch, API }) {
 
   // Persist view mode in localStorage
   const [viewMode, setViewMode] = useState(() => {
@@ -215,7 +216,7 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     if (tags.includes(searchTerm)) return true
 
     return false
-  }).sort(compareByFavorite), [notebooks, searchQuery])
+  }).sort(compareByOrder), [notebooks, searchQuery])
 
   // Filter notes that aren't a part of any notebook, then apply search filter, then sort by favorites first
   const loneNotes = useMemo(() => notes.filter(note =>
@@ -236,7 +237,17 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
 
       return false
     })
-    .sort(compareByFavorite), [notes, notebookIdSet, searchQuery])
+    .sort(compareByOrder), [notes, notebookIdSet, searchQuery])
+
+  // Drag-to-reorder (disabled while searching or selecting — you'd only be
+  // reordering the filtered subset). The sidebar mirrors the same `order`.
+  const canReorder = !searchQuery.trim() && !isSelectionMode
+  const notebookIds = useMemo(() => filteredNotebooks.map(n => n.id), [filteredNotebooks])
+  const loneNoteIds = useMemo(() => loneNotes.map(n => n.id), [loneNotes])
+  const notebookById = useMemo(() => new Map(filteredNotebooks.map(n => [String(n.id), n])), [filteredNotebooks])
+  const loneNoteById = useMemo(() => new Map(loneNotes.map(n => [String(n.id), n])), [loneNotes])
+  const nbDrag = useDragReorder(notebookIds, reorderNotebooks, canReorder, 'notebooks')
+  const noteDrag = useDragReorder(loneNoteIds, reorderNotes, canReorder, 'notes')
 
 
   if (notesLoading && notes.length === 0 && notebooks.length === 0) {
@@ -272,7 +283,7 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
 
 
       <div className={styles.header}>
-        <h1>Notes<span className={styles.accent}>Hub</span></h1>
+        <h1>Notes</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
           {filteredNotebooks.length} {filteredNotebooks.length === 1 ? 'notebook · ' : 'notebooks · '}
           {loneNotes.length} {loneNotes.length === 1 ? 'note' : 'notes'}
@@ -356,64 +367,66 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
         
         {/* display NOTEBOOKS FIRST */}
         {!isSelectionMode && (
-          viewMode === "list" ?
-            filteredNotebooks.map(notebook => {
-              const noteCount = countByNotebook.get(notebook.id) || 0
-              return (
-                <HorizontalNotebookCard
-                  key={notebook.id}
-                  notebook={notebook}
-                  noteCount={noteCount}
-                  deleteNotebook={deleteNotebook}
-                  onOpen={handleOpenNotebook}
-                  toggleFavoriteNotebook={toggleFavoriteNotebook}
-                  updateNotebookColor={updateNotebookColor}
-                />
-              )
-            })
-            :
-            filteredNotebooks.map(notebook => {
-              const noteCount = countByNotebook.get(notebook.id) || 0
-              return (
-                <NotebookCard
-                  key={notebook.id}
-                  notebook={notebook}
-                  noteCount={noteCount}
-                  deleteNotebook={deleteNotebook}
-                  onOpen={handleOpenNotebook}
-                  toggleFavoriteNotebook={toggleFavoriteNotebook}
-                  updateNotebookColor={updateNotebookColor}
-                />
-              )
-            })
+          nbDrag.order.map(nbId => {
+            const notebook = notebookById.get(String(nbId))
+            if (!notebook) return null
+            const noteCount = countByNotebook.get(notebook.id) || 0
+            return (
+              <div key={notebook.id} className={styles.dragCell} {...nbDrag.dragProps(notebook.id)}>
+                {viewMode === "list" ? (
+                  <HorizontalNotebookCard
+                    notebook={notebook}
+                    noteCount={noteCount}
+                    deleteNotebook={deleteNotebook}
+                    onOpen={handleOpenNotebook}
+                    toggleFavoriteNotebook={toggleFavoriteNotebook}
+                    updateNotebookColor={updateNotebookColor}
+                  />
+                ) : (
+                  <NotebookCard
+                    notebook={notebook}
+                    noteCount={noteCount}
+                    deleteNotebook={deleteNotebook}
+                    onOpen={handleOpenNotebook}
+                    toggleFavoriteNotebook={toggleFavoriteNotebook}
+                    updateNotebookColor={updateNotebookColor}
+                  />
+                )}
+              </div>
+            )
+          })
         )}
 
         {/* afterwards display the LONE NOTES (notes that aren't part of a notebook) */}
-        {viewMode === "list" ?
-          loneNotes.map( note => (
-            <HorizontalCard key={note.id}
-              note={note}
-              deleteNote={deleteNote}
-              toggleFavorite={toggleFavorite}
-              updateColor={updateColor}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedNotes.includes(note.id)}
-              onToggleSelect={toggleNoteSelection}
-            />
-          ))
-          :
-          loneNotes.map( note => (
-            <Card key={note.id}
-              note={note}
-              deleteNote={deleteNote}
-              toggleFavorite={toggleFavorite}
-              updateColor={updateColor}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedNotes.includes(note.id)}
-              onToggleSelect={toggleNoteSelection}
-            />
-          ))
-        }
+        {noteDrag.order.map(nId => {
+          const note = loneNoteById.get(String(nId))
+          if (!note) return null
+          return (
+            <div key={note.id} className={styles.dragCell} {...noteDrag.dragProps(note.id)}>
+              {viewMode === "list" ? (
+                <HorizontalCard
+                  note={note}
+                  deleteNote={deleteNote}
+                  toggleFavorite={toggleFavorite}
+                  updateColor={updateColor}
+                  isSelectionMode={isSelectionMode}
+                  isSelected={selectedNotes.includes(note.id)}
+                  onToggleSelect={toggleNoteSelection}
+                />
+              ) : (
+                <Card
+                  note={note}
+                  deleteNote={deleteNote}
+                  toggleFavorite={toggleFavorite}
+                  updateColor={updateColor}
+                  isSelectionMode={isSelectionMode}
+                  isSelected={selectedNotes.includes(note.id)}
+                  onToggleSelect={toggleNoteSelection}
+                />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Infinite scroll sentinels */}

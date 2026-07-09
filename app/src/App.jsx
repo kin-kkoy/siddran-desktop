@@ -1,19 +1,18 @@
 import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom'
 import Sidebar from "./components/Layout/Sidebar/Sidebar.jsx"
+import { SidebarContext } from "./contexts/SidebarContext.jsx"
+import { GlobalExpandButton } from "./components/Layout/Sidebar/ExpandSidebarButton.jsx"
 import StarCanvas from "./components/Layout/StarCanvas/StarCanvas.jsx"
 
 import NotePage from "./pages/Notes/NotePage.jsx"
 import NotesHub from "./pages/Notes/NotesHub.jsx"
-import LoginPage from "./pages/Auth/LoginPage.jsx"
-import RegisterPage from "./pages/Auth/RegisterPage.jsx"
 import TasksHub from "./pages/Tasks/TasksHub.jsx"
 // Sandbox routes are code-split — Konva + perfect-freehand stay out of the
 // main bundle until the user actually navigates to /sandboxes.
 const SandBoxes   = lazy(() => import("./pages/Sandbox/SandBoxes.jsx"))
 const SandBoxPage = lazy(() => import("./pages/Sandbox/SandBoxPage.jsx"))
 import Calendar from "./pages/Calendar/Calendar.jsx"
-import ModsHub from "./pages/Mods/ModsHub.jsx"
 import NotFoundPage from "./pages/NotFoundPage.jsx"
 import { useNotes } from "./hooks/useNotes.js"
 import { useTasks } from "./hooks/useTasks.js"
@@ -28,14 +27,18 @@ import { SettingsProvider } from "./contexts/SettingsContext.jsx"
 import { ApiProvider } from "./contexts/ApiContext.jsx"
 import { SandboxViewProvider } from "./contexts/SandboxViewContext.jsx"
 import { NoteSplitProvider } from "./contexts/NoteSplitContext.jsx"
+import { PdfViewProvider } from "./contexts/PdfViewContext.jsx"
+import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
-import DemoBanner from "./components/Common/DemoBanner.jsx"
 import logger from "./utils/logger.js"
-// Guest ("try it free") demo mode — an ephemeral in-memory backend. See src/guest/.
-import { guestFetch, resetGuestData } from "./guest/guestApi.js"
-import { isGuestActive, setGuestActive } from "./guest/guestState.js"
-import { installMemStorage, restoreRealStorage } from "./guest/memStorage.js"
+import BagPicker from "./pages/Bag/BagPicker.jsx"
+import { pickExistingBag, createBag, getRecentBags, addRecentBag, isTauri } from "./desktop/bag.js"
+// Desktop data layer: the file-backed LocalProvider. authFetch routes to
+// localFetch while a Bag is open; data reads/writes the Bag folder on disk.
+import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote } from "./desktop/localStore.js"
+import { createTauriFs } from "./desktop/fs/tauriFs.js"
+import { createMemFs } from "./desktop/fs/memFs.js"
 import { resetForGuest as resetSandboxStore } from "./hooks/sandboxStore.js"
 import { resetForGuest as resetSandboxItems } from "./hooks/sandboxItemsStore.js"
 
@@ -66,24 +69,24 @@ function SandBoxPageWrapper({ notes, tasks, toggleTaskCompletion }) {
 }
 
 // Wrapper component to get the ID from route parameters
-function NotePageWrapper({ notes, notesLoading, editTitle, editBody, updateTags, toggleFavorite, updateColor, exportNote, onNoteChange, setSidebarCollapsed, lessDistraction, setLessDistraction, tasks, toggleTaskCompletion, addNote, updateTask, bundles}){
+function NotePageWrapper({ notes, notesLoading, editTitle, editBody, updateTags, toggleFavorite, updateColor, exportNote, onNoteChange, setSidebarCollapsed, tasks, toggleTaskCompletion, addNote, updateTask, bundles}){
   const { id } = useParams()
 
   useEffect(() => {
     onNoteChange(id)
   }, [id, onNoteChange])
 
-  return <NotePage notes={notes} notesLoading={notesLoading} editTitle={editTitle} editBody={editBody} updateTags={updateTags} toggleFavorite={toggleFavorite} updateColor={updateColor} exportNote={exportNote} setSidebarCollapsed={setSidebarCollapsed} lessDistraction={lessDistraction} setLessDistraction={setLessDistraction} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} addNote={addNote} updateTask={updateTask} bundles={bundles} />
+  return <NotePage notes={notes} notesLoading={notesLoading} editTitle={editTitle} editBody={editBody} updateTags={updateTags} toggleFavorite={toggleFavorite} updateColor={updateColor} exportNote={exportNote} setSidebarCollapsed={setSidebarCollapsed} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} addNote={addNote} updateTask={updateTask} bundles={bundles} />
 }
 
 function App() {
 
   const [isAuthed, setIsAuthed] = useState(false)
-  // Guest demo mode. Deliberately NOT persisted anywhere — a refresh reloads with
-  // isGuest=false, which drops the visitor back to the login page with all their
-  // in-memory demo data gone. `unlocked` (computed below) is what actually gates
-  // the app shell: a guest sees everything a logged-in user does.
-  const [isGuest, setIsGuest] = useState(false)
+  // The open Bag (vault). Desktop has no accounts — opening a Bag is what unlocks
+  // the app. `{ name, path }` or null. `unlocked` (computed below) gates the shell.
+  const [currentBag, setCurrentBag] = useState(null)
+  const [recentBags, setRecentBags] = useState(() => getRecentBags())
+  const [bagBusy, setBagBusy] = useState(false)
   // Gates the first render until the startup token check resolves, so we never
   // flash the login page (or fire protected requests) while a bootstrap refresh
   // is in flight.
@@ -93,11 +96,10 @@ function App() {
     return window.innerWidth < 1090 || window.innerHeight < 600
   })
   const [currentNoteID, setCurrentNoteID] = useState(null)
+  // Tell the local store which note is active so pasted images land in that
+  // note's attachments folder.
+  useEffect(() => { setActiveNote(currentNoteID) }, [currentNoteID])
   const [username, setUsername] = useState(null)
-  // Session-only "less distraction" mode. Set by NotePage; reset when NotePage
-  // unmounts. Lifted here so StarCanvas can react and force-disable stars
-  // while focus mode is active.
-  const [lessDistraction, setLessDistraction] = useState(false)
 
   // Auto-collapse sidebar on small viewports. One-way: shrink on small,
   // never auto-expand — once big again the user can toggle manually.
@@ -234,10 +236,9 @@ function App() {
 
   // helper function for AUTHENTICATED FETCH
   const authFetch = useCallback(async (URL, reqProps = {}) => {
-    // Guest demo mode: serve everything from the in-memory mock, never the network.
-    // Read the module flag (not React state) so this callback stays referentially
-    // stable and the data hooks don't tear down/re-run on unrelated renders.
-    if (isGuestActive()) return guestFetch(URL, reqProps)
+    // Desktop: serve everything from the file-backed LocalProvider (the Bag on
+    // disk), never the network. Module-flag check keeps this callback stable.
+    if (isLocalOpen()) return localFetch(URL, reqProps)
 
     let res = await fetch(URL, {
       ...reqProps,
@@ -277,41 +278,58 @@ function App() {
     return res
   }, [getAuthHeaders, refreshAuthToken])
 
-  // Effective "app is unlocked" flag: real auth OR guest demo. Gates the shell,
-  // the data hooks, and the providers — a guest experiences the full app.
-  const unlocked = isAuthed || isGuest
+  // The app shell is unlocked once a Bag is open.
+  const unlocked = !!currentBag
 
-  // Enter guest demo mode: swap in the ephemeral storage + backend, reseed the
-  // welcome-tour data, and wipe any singleton caches a prior session left behind.
-  const enterGuest = useCallback(() => {
-    installMemStorage()      // from here on, no write touches disk
-    resetGuestData()         // fresh welcome-tour seed
-    resetSandboxStore()      // drop any real cached board list
-    resetSandboxItems()      // drop any real cached board items
-    setGuestActive(true)     // module flag authFetch/imageUpload read
-    setUsername('Guest')
-    setIsGuest(true)
+  // Open a Bag: hydrate the file-backed store from the folder BEFORE unlocking
+  // (so the data hooks fetch against a loaded store), reset singleton caches, and
+  // show the Bag's name in the sidebar. Uses real disk under Tauri; an in-memory
+  // fs in a plain browser (dev only, non-persistent).
+  const openBag = useCallback(async (bag) => {
+    resetSandboxStore()      // drop any cached board list from a prior Bag
+    resetSandboxItems()      // drop any cached board items
+    const fs = isTauri() ? createTauriFs() : createMemFs()
+    await openBagStore(fs, bag.path)   // read the Bag folder into memory
+    setCurrentBag(bag)
+    setUsername(bag.name)
+    addRecentBag(bag)
+    setRecentBags(getRecentBags())
   }, [])
 
-  // Leave guest mode (on "Sign up" or logout): restore real storage + network.
-  const exitGuest = useCallback(() => {
-    setGuestActive(false)
-    restoreRealStorage()
+  const handleOpenBag = useCallback(async () => {
+    setBagBusy(true)
+    try { const bag = await pickExistingBag(); if (bag) await openBag(bag) }
+    catch (err) { logger.error('open bag failed', err) }
+    finally { setBagBusy(false) }
+  }, [openBag])
+
+  const handleCreateBag = useCallback(async () => {
+    setBagBusy(true)
+    try { const bag = await createBag(); if (bag) await openBag(bag) }
+    catch (err) { logger.error('create bag failed', err) }
+    finally { setBagBusy(false) }
+  }, [openBag])
+
+  // Open a Bag straight from the Recent list (no folder dialog).
+  const handleOpenRecent = useCallback(async (bag) => {
+    setBagBusy(true)
+    try { await openBag(bag) }
+    catch (err) { logger.error('open recent bag failed', err) }
+    finally { setBagBusy(false) }
+  }, [openBag])
+
+  // Close the current Bag → flush to disk, then back to the Bag picker. Threaded
+  // into the Sidebar in place of "logout".
+  const closeBag = useCallback(async () => {
+    try { await closeBagStore() } catch (err) { logger.error('close bag flush failed', err) }
+    setCurrentBag(null)
     setUsername(null)
-    setIsGuest(false)
   }, [])
-
-  // Logout handler threaded into the Sidebar: a guest's "logout" exits the demo
-  // (there's no real session to end); a real user logs out normally.
-  const handleSidebarLogout = useCallback((val) => {
-    if (isGuestActive()) exitGuest()
-    else setIsAuthed(val)
-  }, [exitGuest])
 
 
   // ------------- DATA LOGIC (Adding, deleting, etc. of Notes and Notebooks) ===================================
   const {
-    notes, notebooks, loading: notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, editTitle, editBody, toggleFavorite, updateColor, updateTags, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, exportNote
+    notes, notebooks, loading: notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, editTitle, editBody, toggleFavorite, updateColor, updateTags, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, exportNote, reorderNotes, reorderNotebooks
   } = useNotes(authFetch, API, unlocked)
 
   // ------------- TASKS DATA LOGIC ===================================
@@ -662,6 +680,8 @@ function App() {
     removeNoteFromNotebook={removeNoteFromNotebook}
     addNotesToNotebook={addNotesToNotebook}
     importMarkdownFiles={importMarkdownFiles}
+    reorderNotes={reorderNotes}
+    reorderNotebooks={reorderNotebooks}
     authFetch={authFetch}
     API={API}/>
   )
@@ -703,7 +723,7 @@ function App() {
   // --cinder-sidebar-w exposes the sidebar's current width so full-bleed pages
   // (e.g. SandBoxPage) can absolutely-position themselves flush against it
   // without re-implementing the collapse logic.
-  const sidebarW = unlocked ? (isCollapsed ? '70px' : '220px') : '0px'
+  const sidebarW = unlocked ? (isCollapsed ? '0px' : '220px') : '0px'
   const style = {
     backgroundColor: "var(--bg-primary)",
     color: "var(--text-primary)",
@@ -713,10 +733,22 @@ function App() {
     '--cinder-sidebar-w': sidebarW,
   };
 
-  // Hold the first paint until the startup token check resolves — prevents a
-  // login-page flash on reload while the bootstrap refresh is in flight.
+  // Hold the first paint until startup resolves.
   if (!authReady) {
     return <div style={{ ...style, minHeight: '100vh' }} />
+  }
+
+  // No Bag open → the desktop entry screen (no login, no accounts).
+  if (!currentBag) {
+    return (
+      <BagPicker
+        recentBags={recentBags}
+        onOpen={handleOpenBag}
+        onCreate={handleCreateBag}
+        onOpenRecent={handleOpenRecent}
+        busy={bagBusy}
+      />
+    )
   }
 
 
@@ -726,6 +758,7 @@ function App() {
     <ApiProvider authFetch={authFetch} API={API} isAuthed={unlocked}>
     <SandboxViewProvider>
     <NoteSplitProvider>
+    <PdfViewProvider>
     <div style={style}>
 
       {unlocked && (
@@ -742,8 +775,12 @@ function App() {
       )}
 
       <BrowserRouter>
+        <NoteTabsProvider>
+        <SidebarContext.Provider value={{ collapsed: isCollapsed, setCollapsed: setIsCollapsed }}>
         {/* Background effects — inside Router so StarCanvas can use useLocation() */}
-        <StarCanvas lessDistraction={lessDistraction} />
+        <StarCanvas />
+        {/* "Show sidebar" button for pages without their own toolbar (Hubs/Calendar) */}
+        {unlocked && <GlobalExpandButton />}
         <div style={{ display: "flex",
           flexDirection: "row",
           height: '100vh',
@@ -754,23 +791,24 @@ function App() {
           zIndex: 5,
         }}>
 
-          {/* Only show sidebar when logged in */}
-          {unlocked && (
+          {/* Sidebar is fully hidden when collapsed — expand via the contextual
+              "show sidebar" buttons (tab bar / sandbox header / floating). */}
+          {unlocked && !isCollapsed && (
             <Sidebar username={username}
               isCollapsed={isCollapsed}
               toggleSidebar={setIsCollapsed}
               notes={notes}
               notebooks={notebooks}
               currentNoteID={currentNoteID}
-              setIsAuthed={handleSidebarLogout}
+              setIsAuthed={closeBag}
             />
           )}
 
 
-          {/* blank space reserved for fixed sidebar */}
+          {/* blank space reserved for the fixed sidebar (0 when hidden) */}
           {unlocked && (
             <div style={{
-              width: isCollapsed ? '70px' : '220px',
+              width: isCollapsed ? '0px' : '220px',
               flexShrink: 0,  /* Prevents this from shrinking */
               transition: 'width 0.3s ease'
             }} />
@@ -797,11 +835,8 @@ function App() {
               minWidth: 0,
             }}>
 
+            {/* A Bag is always open here (else the BagPicker rendered instead). */}
             <Routes>
-              <Route path="/login" element={<LoginPage setIsAuthed={setIsAuthed} setAppUsername={setUsername} onTryDemo={enterGuest} />} />
-              <Route path="/register" element={<RegisterPage setIsAuthed={setIsAuthed} setAppUsername={setUsername} />} />
-              {unlocked ? (
-                <>
                   <Route path="/" element={notesHubElement} />
                   <Route path="/notes" element={notesHubElement} />
                   <Route path="/notes/:id" element={
@@ -818,8 +853,6 @@ function App() {
                       exportNote={exportNote}
                       onNoteChange={setCurrentNoteID}
                       setSidebarCollapsed={setIsCollapsed}
-                      lessDistraction={lessDistraction}
-                      setLessDistraction={setLessDistraction}
                       tasks={tasks}
                       toggleTaskCompletion={toggleTaskCompletion}
                       />
@@ -839,13 +872,7 @@ function App() {
                     </Suspense>
                   } />
                   <Route path="/calendar" element={<Calendar {...calendarProps} mode="full" />} />
-                  <Route path="/mods" element={<ModsHub />} />
                   <Route path="*" element={<NotFoundPage />} />
-                </>
-              ) : (
-                <Route path="*" element={<LoginPage setIsAuthed={setIsAuthed} setAppUsername={setUsername} onTryDemo={enterGuest} />} />
-              )}
-              {/* <Route path="add" element={}/> */}
             </Routes>
             </div>
 
@@ -888,14 +915,14 @@ function App() {
         {/* Settings popup (rendered at app level, controlled by context) */}
         {unlocked && <SettingsPopup />}
 
-        {/* Demo-mode banner — only while a guest is exploring */}
-        {isGuest && <DemoBanner onSignUp={exitGuest} />}
-
         {/* Toast notifications (always available) */}
         <ToastContainer />
 
+        </SidebarContext.Provider>
+        </NoteTabsProvider>
       </BrowserRouter>
     </div>
+    </PdfViewProvider>
     </NoteSplitProvider>
     </SandboxViewProvider>
     </ApiProvider>

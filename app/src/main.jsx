@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { CalendarViewProvider } from './contexts/CalendarViewContext.jsx'
+import { installDropGuard } from './desktop/dropGuard'
+import { installTauriFileDrop } from './desktop/fileDrop'
+
+// Prevent a dragged-in file from navigating the whole webview to it, and wire
+// Tauri's native OS file-drop → embed into the note editor.
+installDropGuard()
+installTauriFileDrop()
 
 createRoot(document.getElementById('root')).render(
     // CalendarViewProvider wraps App so the app shell itself can react to the peek/half state

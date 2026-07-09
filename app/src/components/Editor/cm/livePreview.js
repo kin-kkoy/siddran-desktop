@@ -48,8 +48,13 @@ function parseImage(doc, nf, nt) {
   if (!m) return null
   const fullUrl = m[2]
   if (fullUrl.startsWith('uploading:')) return null
-  const wm = /#w=(\d+)$/.exec(fullUrl)
-  return { width: wm ? parseInt(wm[1], 10) : null, src: wm ? fullUrl.slice(0, wm.index) : fullUrl }
+  // Size travels in the trailing fragment: `#w=NNN` and optionally `#h=NNN`.
+  const fm = /#w=(\d+)(?:#h=(\d+))?$/.exec(fullUrl)
+  return {
+    width: fm ? parseInt(fm[1], 10) : null,
+    height: fm && fm[2] ? parseInt(fm[2], 10) : null,
+    src: fm ? fullUrl.slice(0, fm.index) : fullUrl,
+  }
 }
 
 class InlineFoldWidget extends WidgetType {
@@ -243,7 +248,7 @@ function scanInline(state, ranges) {
         const line = doc.lineAt(nf)
         const whole = line.from === nf && line.to === nt
         if (whole ? lact(nf, nt) : over(nf, nt)) break
-        deco.push(Decoration.replace({ widget: new ImageWidget(info.src, info.width) }).range(nf, nt))
+        deco.push(Decoration.replace({ widget: new ImageWidget(info.src, info.width, info.height) }).range(nf, nt))
         return false
       }
       case 'Blockquote': {

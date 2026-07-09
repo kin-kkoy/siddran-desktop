@@ -8,7 +8,7 @@ import DailyTaskCard from "../../components/Tasks/DailyTaskCard"
 import ConfirmModal from "../../components/Common/ConfirmModal"
 import TaskDetailsModal from "../../components/Common/TaskDetailsModal"
 import DailyTaskModal from "../../components/Common/DailyTaskModal"
-import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineViewList, HiOutlineTemplate, HiOutlineViewBoards } from 'react-icons/hi'
+import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineTemplate, HiOutlineViewBoards } from 'react-icons/hi'
 import { LuCalendarDays } from 'react-icons/lu'
 import BundleCard from "../../components/Tasks/BundleCard"
 import BundleDetailModal from "../../components/Common/BundleDetailModal"
@@ -51,9 +51,10 @@ function TasksHub({
 
   const calendarView = useCalendarView()
 
-  // Persist view mode in localStorage
+  // Persist view mode in localStorage. Modes: 'card' | 'kanban' (old 'list' → kanban).
   const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('tasksViewMode') || 'card'
+    const m = localStorage.getItem('tasksViewMode')
+    return m === 'kanban' || m === 'list' ? 'kanban' : 'card'
   })
   const [layoutMode, setLayoutMode] = useState(() => {
     return localStorage.getItem('tasksLayoutMode') || 'packed'
@@ -280,9 +281,29 @@ function TasksHub({
   useRowMasonry(packedRef, [sortedTasks.length, sortBy, sortDir, showCompleted, deadlineFilter, deadlineRange, dailyTasks.length, bundles.length, isDailyCardOpen, layoutMode, viewMode])
 
   const changeView = () => {
-    const newMode = viewMode === "card" ? "list" : "card"
+    const newMode = viewMode === "card" ? "kanban" : "card"
     setViewMode(newMode)
     localStorage.setItem('tasksViewMode', newMode)
+  }
+
+  // Kanban: group the (already sorted/filtered) tasks into priority columns, and
+  // reprioritize on drop.
+  const KANBAN_COLS = [
+    { key: 'high', label: 'High priority' },
+    { key: 'normal', label: 'Normal' },
+    { key: 'low', label: 'Low priority' },
+  ]
+  const tasksByPriority = useMemo(() => {
+    const g = { high: [], normal: [], low: [] }
+    for (const t of sortedTasks) (g[t.priority] || g.normal).push(t)
+    return g
+  }, [sortedTasks])
+  const onKanbanDrop = (e, prio) => {
+    e.preventDefault()
+    const id = Number(e.dataTransfer.getData('text/plain'))
+    if (!id) return
+    const task = tasks.find(t => t.id === id)
+    if (task && task.priority !== prio) updateTask(id, { priority: prio })
   }
 
   const changeLayout = () => {
@@ -362,7 +383,7 @@ function TasksHub({
     <div className={styles.container}>
 
         <div className={styles.header}>
-          <h1>Tasks<span className={styles.accent}>Hub</span><span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '10px', fontSize: '14px', fontFamily: 'var(--font-body, inherit)' }}>{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}{isSelectionMode && ` (${selectedTasks.length} selected)`}</span></h1>
+          <h1>Tasks<span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '10px', fontSize: '14px', fontFamily: 'var(--font-body, inherit)' }}>{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}{isSelectionMode && ` (${selectedTasks.length} selected)`}</span></h1>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             {/* Filter options */}
             <button
@@ -436,8 +457,8 @@ function TasksHub({
                 {layoutMode === 'packed' ? <HiOutlineTemplate size={18} /> : <HiOutlineViewBoards size={18} />}
               </button>
             )}
-            <button onClick={changeView} className={styles.toggleBtn} title={viewMode === "list" ? "Card View" : "List View"}>
-              {viewMode === "list" ? <HiOutlineViewGrid size={18} /> : <HiOutlineViewList size={18} />}
+            <button onClick={changeView} className={styles.toggleBtn} title={viewMode === "kanban" ? "Card View" : "Kanban View"}>
+              {viewMode === "kanban" ? <HiOutlineViewGrid size={18} /> : <HiOutlineViewBoards size={18} />}
             </button>
           </div>
         </div>
@@ -445,32 +466,56 @@ function TasksHub({
         
         {/* BODY ================================================================ */}
 
-        {/* List mode */}
-        {viewMode === 'list' && (
-          <div className={styles.listView}>
-            <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode={viewMode} />
-            <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
-            {hasMoreDailyTasks && (
-              <div ref={dailyTasksSentinelRef} className={styles.sentinel}>
-                {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
-              </div>
-            )}
-            {bundles.length > 0 && bundles.map(bundle => (
-              <BundleCard key={bundle.id} bundle={bundle} toggleBundleTaskCompletion={toggleBundleTaskCompletion} deleteBundle={deleteBundle} onOpenDetail={setOpenBundle} />
-            ))}
-            {hasMoreBundles && (
-              <div ref={bundlesSentinelRef} className={styles.sentinel}>
-                {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
-              </div>
-            )}
+        {/* Kanban mode — priority columns; drag a task between columns to reprioritize */}
+        {viewMode === 'kanban' && (
+          <div className={styles.kanbanWrapper}>
+            {/* pinned strip: a slim full-width add-task row, then dailies + projects */}
+            <div className={styles.kanbanTop}>
+              <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode="list" />
+              {(dailyTasks.length > 0 || bundles.length > 0) && (
+                <div className={styles.kanbanExtras}>
+                  <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
+                  {bundles.map(bundle => (
+                    <BundleCard key={bundle.id} bundle={bundle} toggleBundleTaskCompletion={toggleBundleTaskCompletion} deleteBundle={deleteBundle} onOpenDetail={setOpenBundle} />
+                  ))}
+                </div>
+              )}
+            </div>
+
             {loading ? (
               <p>Loading tasks...</p>
-            ) : sortedTasks.length > 0 ? (
-              sortedTasks.map(task => (
-                <TaskCard key={task.id} task={task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode={viewMode} isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
-              ))
             ) : (
-              <div className={styles.emptyState}><p>No tasks yet. Create today's set of tasks or create a new task to do</p></div>
+              <div className={styles.kanbanBoard}>
+                {KANBAN_COLS.map(col => (
+                  <div
+                    key={col.key}
+                    className={styles.kanbanCol}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => onKanbanDrop(e, col.key)}
+                  >
+                    <div className={styles.kanbanColHead}>
+                      <span className={`${styles.kanbanDot} ${styles['dot_' + col.key]}`} />
+                      <span className={styles.kanbanColTitle}>{col.label}</span>
+                      <span className={styles.kanbanCount}>{tasksByPriority[col.key].length}</span>
+                    </div>
+                    <div className={styles.kanbanColBody}>
+                      {tasksByPriority[col.key].map(task => (
+                        <div
+                          key={task.id}
+                          className={styles.kanbanCardWrap}
+                          draggable
+                          onDragStart={e => e.dataTransfer.setData('text/plain', String(task.id))}
+                        >
+                          <TaskCard task={task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode="card" isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
+                        </div>
+                      ))}
+                      {tasksByPriority[col.key].length === 0 && (
+                        <div className={styles.kanbanEmpty}>Drop a task here</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
             {hasMoreTasks && (
               <div ref={tasksSentinelRef} className={styles.sentinel}>

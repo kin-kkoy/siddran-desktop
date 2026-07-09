@@ -63,16 +63,6 @@ function NoteSettingsPopup({ isOpen, onClose }) {
               </div>
             </SettingRow>
 
-            <SettingRow
-              label="Twinkling Stars Appear"
-              description="Show animated stars in the background while editing a note. Acts on top of the global stars setting — both must be on for stars to appear here."
-            >
-              <ToggleSwitch
-                checked={settings.showStarsOnNotePage !== false}
-                onChange={(v) => updateSetting('showStarsOnNotePage', v)}
-              />
-            </SettingRow>
-
           </div>
         </div>
       </div>
