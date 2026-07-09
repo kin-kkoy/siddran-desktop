@@ -13,6 +13,7 @@ import { remarkHashtag } from './remarkHashtag'
 import { remarkWikilinks } from './remarkWikilinks'
 import { normalizeCalloutWithMap } from './calloutBlocks'
 import { resolveImageUrl } from '../../../utils/imageUpload'
+import { isPdfHref } from '../../../utils/pdfLinks'
 import logger from '../../../utils/logger'
 
 // Markdown → HTML for the reading view. Reuses the same remark plugins the
@@ -66,6 +67,23 @@ function rehypeCinderImages() {
       }
       node.properties.src = resolveImageUrl(src)
       node.properties.loading = 'lazy'
+    })
+  }
+}
+
+// Route `.pdf` links to the side viewer instead of navigating the webview: tag the
+// anchor as an `rv-link` the reading view's click handler picks up, stash the
+// target in `data-href`, and drop the real `href` so a stray click can't navigate.
+function rehypeCinderPdfLinks() {
+  return (tree) => {
+    visit(tree, 'element', (node) => {
+      if (node.tagName !== 'a' || !node.properties) return
+      const href = String(node.properties.href || '')
+      if (!isPdfHref(href)) return
+      const cls = Array.isArray(node.properties.className) ? node.properties.className : []
+      node.properties.className = [...cls, 'rv-link', 'rv-link-pdf']
+      node.properties['data-href'] = href
+      delete node.properties.href
     })
   }
 }
@@ -181,6 +199,7 @@ const processor = unified()
   .use(rehypeLineNumbers)
   .use(rehypeCallouts)
   .use(rehypeCinderImages)
+  .use(rehypeCinderPdfLinks)
   .use(rehypeHighlight, { ignoreMissing: true })
   .use(rehypeStringify)
 

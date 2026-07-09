@@ -12,6 +12,8 @@ import BrushSettings from '../../components/Sandbox/Toolbar/BrushSettings'
 import AttachedNoteCard from '../../components/Sandbox/Cards/AttachedNoteCard'
 import AttachedTaskCard from '../../components/Sandbox/Cards/AttachedTaskCard'
 import TextBoxCard from '../../components/Sandbox/Cards/TextBoxCard'
+import SandboxPdfCard from '../../components/Sandbox/Cards/SandboxPdfCard'
+import { attachPdfViaPicker } from '../../desktop/media'
 import NoteAttachPicker from '../../components/Sandbox/Cards/NoteAttachPicker'
 import TaskAttachPicker from '../../components/Sandbox/Cards/TaskAttachPicker'
 import SelectionOverlay from '../../components/Sandbox/selection/SelectionOverlay'
@@ -27,7 +29,7 @@ import { useApi } from '../../contexts/ApiContext'
 import { uploadImageFile } from '../../utils/imageUpload'
 import { toast } from '../../utils/toast'
 
-const CARD_TYPES = new Set(['note', 'task', 'text'])
+const CARD_TYPES = new Set(['note', 'task', 'text', 'pdf'])
 
 const isEditable = (el) => {
     if (!el) return false
@@ -276,6 +278,16 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         e.target.value = ''
     }
 
+    // Attach a PDF → copied into the Bag, dropped as a scrollable preview card.
+    const onPickPdf = useCallback(async () => {
+        const r = await attachPdfViaPicker()
+        if (!r) return
+        const w = 360, h = 460
+        const at = centerWorld()
+        act.addItem({ type: 'pdf', x: at.x - w / 2, y: at.y - h / 2, w, h, rotation: 0, z_index: nextZ(), payload: { path: r.path, name: r.name } })
+        bump()
+    }, [act, nextZ, centerWorld, bump])
+
     // ---- color ----
     const onColorChange = useCallback((value) => {
         canvas.setStrokeColor(value)
@@ -448,6 +460,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         }
         if (item.type === 'note') return <AttachedNoteCard key={item.id} {...shared} notes={notes} />
         if (item.type === 'task') return <AttachedTaskCard key={item.id} {...shared} tasks={tasks} onToggleTask={toggleTaskCompletion} />
+        if (item.type === 'pdf') return <SandboxPdfCard key={item.id} {...shared} />
         return <TextBoxCard key={item.id} {...shared} />
     })
 
@@ -501,6 +514,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onAttachNoteClick={() => setNotePickerOpen(true)}
                     onAttachTaskClick={() => setTaskPickerOpen(true)}
                     onPickImage={onPickImageClick}
+                    onPickPdf={onPickPdf}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}

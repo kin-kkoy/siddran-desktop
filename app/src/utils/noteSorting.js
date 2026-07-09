@@ -16,3 +16,9 @@ export const compareByOrder = (a, b) => {
   if (bo !== null) return 1
   return 0
 }
+
+// Two-level sort: pinned (favorite) notes float to the top, and within each group
+// the manual drag order is preserved. Used wherever notes are listed so pins stay
+// on top without discarding the user's hand-sorted order.
+export const compareByFavoriteThenOrder = (a, b) =>
+  compareByFavorite(a, b) || compareByOrder(a, b)

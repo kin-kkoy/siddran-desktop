@@ -26,7 +26,10 @@ export async function attachPdfViaPicker() {
   if (!file) { toast.error('Could not read the PDF'); return null }
   const rel = await saveAttachment(file)
   if (!rel) { toast.error('Could not save the PDF'); return null }
-  return { path: rel, name: abs.split('/').pop() || 'document.pdf' }
+  const name = abs.split('/').pop() || 'document.pdf'
+  // A plain markdown link so the PDF persists in the note and can be reopened.
+  const markdown = `[${name.replace(/[[\]()\n\r]/g, '')}](${encodeMd(rel)})`
+  return { path: rel, name, markdown }
 }
 
 // Pick an image and copy it into the Bag → { markdown, name } to insert, or null.

@@ -21,11 +21,11 @@ let flushTimer = null
 const FLUSH_MS = 1500
 
 function emptyDb() {
-  return { notes: [], notebooks: [], tasks: [], dailies: [], completions: [], projects: [], events: [], schedules: [], sandboxes: [], sandboxItems: {}, settings: {} }
+  return { notes: [], notebooks: [], tasks: [], dailies: [], completions: [], projects: [], events: [], schedules: [], sandboxes: [], sandboxItems: {}, settings: {}, comments: {} }
 }
 
-const dirty = { tasks: false, calendar: false, settings: false, notesTouched: false, notes: new Set(), notebooks: new Set(), sandboxes: new Set(), rmSandbox: new Set() }
-function resetDirty() { dirty.tasks = dirty.calendar = dirty.settings = dirty.notesTouched = false; dirty.notes.clear(); dirty.notebooks.clear(); dirty.sandboxes.clear(); dirty.rmSandbox.clear() }
+const dirty = { tasks: false, calendar: false, settings: false, notesTouched: false, notes: new Set(), notebooks: new Set(), comments: new Set(), sandboxes: new Set(), rmSandbox: new Set() }
+function resetDirty() { dirty.tasks = dirty.calendar = dirty.settings = dirty.notesTouched = false; dirty.notes.clear(); dirty.notebooks.clear(); dirty.comments.clear(); dirty.sandboxes.clear(); dirty.rmSandbox.clear() }
 
 // ── (de)serialization ───────────────────────────────────────────────
 const RESERVED = /[\\/:*?"<>|]/g
@@ -80,6 +80,16 @@ async function readJson(fs, path, apply) {
   try { apply(JSON.parse(await fs.readText(path))) } catch { /* corrupt file — skip */ }
 }
 
+// Read a note's comment sidecar (`<note>.comments.json`, next to its `.md`).
+async function readCommentsSidecar(fs, mdPath, noteId) {
+  const p = mdPath.replace(/\.md$/, '.comments.json')
+  if (!(await fs.exists(p))) return
+  try {
+    const d = JSON.parse(await fs.readText(p))
+    if (d && Array.isArray(d.threads) && d.threads.length) db.comments[noteId] = { threads: d.threads }
+  } catch { /* corrupt sidecar — skip */ }
+}
+
 async function hydrate(fs, bag) {
   db = emptyDb()
   seq = 1000
@@ -102,12 +112,14 @@ async function hydrate(fs, bag) {
             const note = mdToNote(await fs.readText(`${p}/${f.name}`), f.name.replace(/\.md$/, ''))
             note.id = note.id ?? nextId(); note.notebook_id = nb.id; note._path = `${p}/${f.name}`
             db.notes.push(note)
+            await readCommentsSidecar(fs, `${p}/${f.name}`, note.id)
           }
         }
       } else if (entry.name.endsWith('.md')) {
         const note = mdToNote(await fs.readText(p), entry.name.replace(/\.md$/, ''))
         note.id = note.id ?? nextId(); note.notebook_id = null; note._path = p
         db.notes.push(note)
+        await readCommentsSidecar(fs, p, note.id)
       }
     }
   }
@@ -156,9 +168,19 @@ async function reconcileNotes(fs, bag) {
     used.add(fname)
     const path = `${folder}/${fname}`
     keep.add(path)
-    if (dirty.notes.has(note.id) || note._path !== path) {
+    const moved = note._path !== path
+    if (dirty.notes.has(note.id) || moved) {
       await fs.writeText(path, noteToMd(note))
       note._path = path
+    }
+    // Comment sidecar rides alongside the note file (written/moved/pruned with it).
+    const sidecar = path.replace(/\.md$/, '.comments.json')
+    const threads = db.comments[note.id]?.threads || []
+    if (threads.length) {
+      keep.add(sidecar)
+      if (dirty.comments.has(note.id) || dirty.notes.has(note.id) || moved || !(await fs.exists(sidecar))) {
+        await fs.writeText(sidecar, JSON.stringify({ version: 1, threads }, null, 2))
+      }
     }
   }
 
@@ -171,7 +193,7 @@ async function reconcileNotes(fs, bag) {
         const fp = `${p}/${f.name}`
         if (!f.isDir && !keep.has(fp)) await fs.remove(fp)
       }
-    } else if (entry.name.endsWith('.md') && !keep.has(p)) {
+    } else if ((entry.name.endsWith('.md') || entry.name.endsWith('.comments.json')) && !keep.has(p)) {
       await fs.remove(p)
     }
   }
@@ -313,7 +335,19 @@ function handleNotes(method, seg, q, body) {
     const n = db.notes.find((x) => x.id === id)
     if (!n) return notFound()
     if (method === 'PUT') { Object.assign(n, pick(body || {}, ['title', 'body', 'is_favorite', 'color', 'tags', 'order'])); touch(n); dirty.notesTouched = true; dirty.notes.add(id); return ok(n) }
-    if (method === 'DELETE') { db.notes = db.notes.filter((x) => x.id !== id); dirty.notesTouched = true; return ok({ message: 'deleted' }) }
+    if (method === 'DELETE') { db.notes = db.notes.filter((x) => x.id !== id); delete db.comments[id]; dirty.notesTouched = true; return ok({ message: 'deleted' }) }
+  }
+  // Per-note comment threads → sidecar `<note>.comments.json`.
+  if (seg.length === 3 && seg[2] === 'comments' && id != null) {
+    if (!db.notes.some((x) => x.id === id)) return notFound()
+    if (method === 'GET') return ok({ threads: db.comments[id]?.threads || [] })
+    if (method === 'PUT') {
+      const threads = Array.isArray(body?.threads) ? body.threads : []
+      if (threads.length) db.comments[id] = { threads }
+      else delete db.comments[id]
+      dirty.notesTouched = true; dirty.comments.add(id)
+      return ok({ threads })
+    }
   }
   return notFound()
 }

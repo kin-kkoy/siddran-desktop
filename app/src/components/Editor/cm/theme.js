@@ -67,6 +67,16 @@ export const cinderTheme = EditorView.theme({
   },
   '.cm-external-link:hover': { textDecoration: 'underline' },
 
+  // ── Comment highlights (Google-Docs style) ──
+  '.cm-comment': {
+    backgroundColor: 'rgba(240, 184, 64, 0.16)',
+    borderBottom: '2px solid rgba(240, 184, 64, 0.55)',
+    cursor: 'pointer',
+  },
+  '.cm-comment-active': {
+    backgroundColor: 'rgba(240, 184, 64, 0.34)',
+  },
+
   // ── Blockquote ──
   '.cm-line.cm-quote': {
     borderLeft: '3px solid var(--border-strong)',

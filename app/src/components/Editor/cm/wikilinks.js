@@ -121,6 +121,13 @@ const clickHandler = EditorView.domEventHandlers({
     const cfg = view.state.facet(wikilinkConfig)
     const tag = event.target?.closest?.('.cm-hashtag')
     if (tag) { event.preventDefault(); cfg.searchTag?.(tag.getAttribute('data-tag')); return true }
+    // A `.pdf` external link opens in the side viewer instead of doing nothing.
+    const ext = event.target?.closest?.('.cm-external-link')
+    if (ext) {
+      const href = ext.getAttribute('data-href') || ''
+      if (/\.pdf(\?|#|$)/i.test(href)) { event.preventDefault(); cfg.openPdf?.(href); return true }
+      return false
+    }
     const el = event.target?.closest?.('.cm-internal-link')
     if (!el) return false
     event.preventDefault()

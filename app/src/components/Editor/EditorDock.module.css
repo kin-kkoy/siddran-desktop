@@ -1,17 +1,30 @@
 /* Bottom editor dock: fixed to the note content lane so it recenters when the
    sidebar is shown/hidden, matching the note page's available space. */
 .dockZone {
-  position: fixed;
-  left: var(--dock-sidebar-offset, 0px);
+  position: sticky;
+  left: 0;
   right: 0;
   bottom: 0;
+  height: 0;
+  overflow: visible;
   z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   pointer-events: none;
   transition: left 0.3s ease;
+}
+
+/* Split view's single shared dock: pinned to the bottom-centre of the whole
+   screen (the sidebar is auto-collapsed in split, so it spans the full width)
+   rather than sticking inside one note column. */
+.dockZone.fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: auto;
 }
 
 .dockToggle {

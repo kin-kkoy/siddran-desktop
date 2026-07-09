@@ -12,6 +12,7 @@ import { imageExtensions } from './cm/imagePaste'
 import { wikilinks, wikilinkMarkdownExtension, resolveNote } from './cm/wikilinks'
 import { obsidianSyntax } from './cm/syntaxNodes'
 import { headingFold, foldedLineSet, applyFolds } from './cm/fold'
+import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, commentState } from './cm/comments'
 import { listEditingKeymap, listIndentNormalizer, enterIndent } from './cm/listEditing'
 import { cinderHighlightStyle } from './cm/highlight'
 import { cinderTheme } from './cm/theme'
@@ -22,11 +23,10 @@ import { useSettings } from '../../contexts/SettingsContext'
 import { readFolds, writeFolds } from '../../hooks/noteFoldsCache'
 import styles from './CodeMirrorEditor.module.css'
 
-// Autosave cadence — crash-safe like the rest of the app: a periodic backend save
-// plus a frequent localStorage draft that NotePage's recovery (cinder_draft_<id>)
-// reads back.
-const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000 // backend save
-const DRAFT_SAVE_INTERVAL_MS = 5 * 1000    // localStorage draft
+// Autosave cadence — a periodic save to the local Bag. In-session edits also live
+// in NotePage's doc cache (fed by onDocChange), so a layout remount never loses
+// text; this interval + save-on-blur/unmount handle durable persistence to disk.
+const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000
 
 // CodeMirror 6 live-preview note editor. The document IS the markdown (note.body),
 // so there is no serialize/deserialize layer: onSave just hands back the doc text.
@@ -41,6 +41,7 @@ const DRAFT_SAVE_INTERVAL_MS = 5 * 1000    // localStorage draft
 function CodeMirrorEditor({
   initialContent = '',
   onSave,
+  onDocChange,
   onDirtyChange,
   noteId,
   placeholder = 'Start typing here...',
@@ -54,10 +55,18 @@ function CodeMirrorEditor({
   onOpenBundle,
   onSearchTag,
   onOpenLink,
+  onOpenPdf,
   tasks = [],
   bundles = [],
   sandboxes = [],
   scrollApiRef,
+  showDock = true,
+  editorViewRef,
+  comments = [],
+  onCommentsRemap,
+  onCommentClick,
+  commentApiRef,
+  onComment,
 }) {
   const hostRef = useRef(null)
   const rootRef = useRef(null)
@@ -93,6 +102,9 @@ function CodeMirrorEditor({
   const onOpenSandboxRef = useRef(onOpenSandbox)
   const onOpenBundleRef = useRef(onOpenBundle)
   const onSearchTagRef = useRef(onSearchTag)
+  const onOpenPdfRef = useRef(onOpenPdf)
+  const onCommentsRemapRef = useRef(onCommentsRemap)
+  const onCommentClickRef = useRef(onCommentClick)
   const tasksRef = useRef(tasks)
   const bundlesRef = useRef(bundles)
   const sandboxesRef = useRef(sandboxes)
@@ -103,6 +115,9 @@ function CodeMirrorEditor({
   useEffect(() => { onOpenSandboxRef.current = onOpenSandbox }, [onOpenSandbox])
   useEffect(() => { onOpenBundleRef.current = onOpenBundle }, [onOpenBundle])
   useEffect(() => { onSearchTagRef.current = onSearchTag }, [onSearchTag])
+  useEffect(() => { onOpenPdfRef.current = onOpenPdf }, [onOpenPdf])
+  useEffect(() => { onCommentsRemapRef.current = onCommentsRemap }, [onCommentsRemap])
+  useEffect(() => { onCommentClickRef.current = onCommentClick }, [onCommentClick])
   useEffect(() => { tasksRef.current = tasks }, [tasks])
   useEffect(() => { bundlesRef.current = bundles }, [bundles])
   useEffect(() => { sandboxesRef.current = sandboxes }, [sandboxes])
@@ -111,49 +126,30 @@ function CodeMirrorEditor({
   // rebuilding it on every parent render.
   const onSaveRef = useRef(onSave)
   const onDirtyRef = useRef(onDirtyChange)
+  const onDocChangeRef = useRef(onDocChange)
   useEffect(() => { onSaveRef.current = onSave }, [onSave])
   useEffect(() => { onDirtyRef.current = onDirtyChange }, [onDirtyChange])
+  useEffect(() => { onDocChangeRef.current = onDocChange }, [onDocChange])
 
   // Save bookkeeping (refs so they survive across the view's lifetime).
-  const lastSavedRef = useRef(initialContent) // last content persisted to backend
-  const dirtyRef = useRef(false)              // differs from backend-saved content
-  const draftDirtyRef = useRef(false)         // differs from last localStorage draft
+  const lastSavedRef = useRef(initialContent) // last content persisted to the Bag
+  const dirtyRef = useRef(false)              // differs from saved content
 
   // Build the editor once on mount.
   useEffect(() => {
-    const draftKey = `cinder_draft_${noteId}`
     const editableExt = (ro) => [
       EditorView.editable.of(!ro),
       EditorState.readOnly.of(ro),
     ]
     const getDoc = () => (viewRef.current ? viewRef.current.state.doc.toString() : null)
 
-    // Refresh the localStorage crash-draft when content diverges from the last
-    // backend save; clear it (and dirty state) once they match again.
-    const saveDraft = () => {
-      if (!draftDirtyRef.current) return
-      const md = getDoc()
-      if (md == null) return
-      if (md === lastSavedRef.current) {
-        try { localStorage.removeItem(draftKey) } catch { /* ignore quota/parse */ }
-        draftDirtyRef.current = false
-        if (dirtyRef.current) { dirtyRef.current = false; onDirtyRef.current?.(false) }
-        return
-      }
-      try {
-        localStorage.setItem(draftKey, JSON.stringify({ content: md, savedAt: Date.now() }))
-      } catch { /* ignore quota */ }
-      draftDirtyRef.current = false
-    }
-
-    // Persist to the backend; on success clear dirty state and delete the draft.
+    // Persist to the local Bag; on success clear dirty state.
     const saveBackend = () => {
       if (!dirtyRef.current) return
       const md = getDoc()
       if (md == null) return
       if (md === lastSavedRef.current) {
         dirtyRef.current = false
-        draftDirtyRef.current = false
         onDirtyRef.current?.(false)
         return
       }
@@ -161,11 +157,9 @@ function CodeMirrorEditor({
         if (ok !== false) {
           lastSavedRef.current = md
           dirtyRef.current = false
-          draftDirtyRef.current = false
           onDirtyRef.current?.(false)
-          try { localStorage.removeItem(draftKey) } catch { /* ignore */ }
         }
-      }).catch(() => { /* keep dirty + draft for a later retry */ })
+      }).catch(() => { /* keep dirty for a later retry */ })
     }
 
     // Persist folds (per note) when the toggle is on. A fold/unfold lands as an
@@ -190,7 +184,11 @@ function CodeMirrorEditor({
         else if (u.docChanged) scheduleFoldPersist()
       }
       if (!u.docChanged) return
-      draftDirtyRef.current = true
+      // Hand the live text to NotePage's per-note cache so a layout remount reopens
+      // with the current content (this replaces the old localStorage crash-draft).
+      onDocChangeRef.current?.(u.state.doc.toString())
+      // Report remapped comment anchors (offsets + fresh quotes + orphan flags).
+      if (onCommentsRemapRef.current) onCommentsRemapRef.current(readAnchors(u.state))
       if (!dirtyRef.current) { dirtyRef.current = true; onDirtyRef.current?.(true) }
     })
 
@@ -256,9 +254,13 @@ function CodeMirrorEditor({
             openSandbox: (id) => onOpenSandboxRef.current?.(id),
             openBundle: (id) => onOpenBundleRef.current?.(id),
             searchTag: (tag) => onSearchTagRef.current?.(tag),
+            openPdf: (href) => onOpenPdfRef.current?.(href),
             tasks: () => tasksRef.current,
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,
+          }),
+          commentsExtension({
+            onClickComment: (id) => onCommentClickRef.current?.(id),
           }),
           cinderTheme,
           cmPlaceholder(placeholder),
@@ -269,6 +271,38 @@ function CodeMirrorEditor({
       }),
     })
     viewRef.current = view
+    // Publish the live view to an external ref (split view's shared dock targets
+    // whichever pane is focused, so NotePage needs a handle on each editor).
+    if (editorViewRef) editorViewRef.current = view
+
+    // Imperative comment controls for NotePane (positions live in the editor).
+    if (commentApiRef) {
+      commentApiRef.current = {
+        captureSelection: () => captureSelectionAnchor(view.state),
+        // Read mode: locate the plain text of a reading-view selection in the doc
+        // so a comment can be anchored (best-effort; null if not found verbatim).
+        locateSelectionText: (text) => {
+          const doc = view.state.doc.toString()
+          const i = text ? doc.indexOf(text) : -1
+          if (i < 0) return null
+          return anchorFromRange(view.state, i, i + text.length)
+        },
+        scrollTo: (id) => {
+          const v = view.state.field(commentState, false)
+          const a = v?.anchors.find((x) => x.id === id)
+          if (a && a.to > a.from) {
+            view.dispatch({ selection: { anchor: a.from, head: a.to }, effects: EditorView.scrollIntoView(a.from, { y: 'center' }) })
+            view.focus()
+          }
+        },
+        setActive: (id) => view.dispatch({ effects: setActiveCommentEffect.of(id ?? null) }),
+      }
+    }
+    // Seed the anchor field with whatever comments were already loaded at mount
+    // (re-anchoring by quote when stored offsets have drifted).
+    if (comments.length) {
+      view.dispatch({ effects: setCommentsEffect.of(comments.map((c) => resolveAnchor(view.state, c))) })
+    }
 
     // Restore this note's saved folds (no-op when the toggle is off / none saved).
     // KNOWN ISSUE: when a note opens with a LARGE folded section, the lines that fold
@@ -280,28 +314,38 @@ function CodeMirrorEditor({
     if (rememberRef.current) applyFolds(view, readFolds(noteId))
 
     const autosaveTimer = setInterval(saveBackend, AUTOSAVE_INTERVAL_MS)
-    const draftTimer = setInterval(saveDraft, DRAFT_SAVE_INTERVAL_MS)
 
     return () => {
       clearInterval(autosaveTimer)
-      clearInterval(draftTimer)
       if (foldSaveTimer) clearTimeout(foldSaveTimer)
-      // Final draft write on unmount so unsaved changes survive navigation/crash.
-      if (dirtyRef.current || draftDirtyRef.current) {
+      // Flush to the Bag on unmount so edits persist to disk across navigation.
+      // (In-session remounts are already covered by NotePage's doc cache.)
+      if (dirtyRef.current) {
         const md = view.state.doc.toString()
-        if (md !== lastSavedRef.current) {
-          try {
-            localStorage.setItem(draftKey, JSON.stringify({ content: md, savedAt: Date.now() }))
-          } catch { /* ignore quota */ }
-        }
+        if (md !== lastSavedRef.current) { try { onSaveRef.current?.(md) } catch { /* ignore */ } }
       }
       view.destroy()
       viewRef.current = null
+      if (editorViewRef) editorViewRef.current = null
+      if (commentApiRef) commentApiRef.current = null
     }
     // Mount-once: NotePage remounts this component per note via `key`, so the
     // doc never needs external syncing. Deps intentionally omitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-seed the comment anchors whenever the STRUCTURE changes (threads load,
+  // added/deleted/resolved) — keyed on a signature so position-only remaps (which
+  // flow editor → React) never bounce back here and cause a loop.
+  const commentsRef = useRef(comments)
+  useEffect(() => { commentsRef.current = comments })
+  const commentSig = comments.map((c) => `${c.id}:${c.resolved ? 1 : 0}`).join('|')
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({ effects: setCommentsEffect.of(commentsRef.current.map((c) => resolveAnchor(view.state, c))) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentSig])
 
   // Reconfigure read-only state when the view mode flips, without rebuilding.
   useEffect(() => {
@@ -378,8 +422,8 @@ function CodeMirrorEditor({
   return (
     <div ref={rootRef} style={{ display: 'contents' }}>
       <div ref={hostRef} className={styles.editorRoot} style={readMode ? { display: 'none' } : undefined} />
-      {readMode && <ReadingView markdown={readSnapshot} noteId={noteId} rememberFolds={rememberFolds} onSearchTag={onSearchTag} onOpenLink={onOpenLink} onCheckboxToggle={handleCheckboxToggle} />}
-      {!readMode && !interfaceMode && <EditorDock viewRef={viewRef} sandboxes={sandboxes} />}
+      {readMode && <ReadingView markdown={readSnapshot} noteId={noteId} rememberFolds={rememberFolds} onSearchTag={onSearchTag} onOpenLink={onOpenLink} onCheckboxToggle={handleCheckboxToggle} comments={comments} onCommentClick={(id) => onCommentClickRef.current?.(id)} />}
+      {!readMode && !interfaceMode && showDock && <EditorDock viewRef={viewRef} sandboxes={sandboxes} onComment={onComment} />}
     </div>
   )
 }

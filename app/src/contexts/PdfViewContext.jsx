@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useNoteSplit } from './NoteSplitContext'
 import { useSandboxView } from './SandboxViewContext'
 import ConfirmModal from '../components/Common/ConfirmModal'
@@ -28,12 +28,19 @@ export function PdfViewProvider({ children }) {
   }, [split, sandbox])
 
   const requestOpen = useCallback((path, name) => {
-    const occupied = (split.enabled && split.splitNoteId != null) || !sandbox.isHidden
+    const occupied = (split.enabled && split.splitTarget != null) || !sandbox.isHidden
     if (occupied) setPending({ path, name })
     else doOpen({ path, name })
-  }, [split.enabled, split.splitNoteId, sandbox.isHidden, doOpen])
+  }, [split.enabled, split.splitTarget, sandbox.isHidden, doOpen])
 
   const close = useCallback(() => setPdf(null), [])
+
+  // Bridge for the non-React OS file-drop handler (desktop/fileDrop.js): dropping
+  // a PDF onto a note opens it here.
+  useEffect(() => {
+    window.__siddranOpenPdf = (path, name) => requestOpen(path, name)
+    return () => { if (window.__siddranOpenPdf) delete window.__siddranOpenPdf }
+  }, [requestOpen])
 
   const value = useMemo(() => ({ pdf, isOpen: pdf != null, requestOpen, close }), [pdf, requestOpen, close])
 

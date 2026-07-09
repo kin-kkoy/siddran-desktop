@@ -1,0 +1,55 @@
+.container {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.pane {
+  height: 100%;
+  position: relative;
+  /* Reset flex to let width handle the sizing */
+  flex: 0 0 auto;
+}
+
+.divider {
+  width: 6px;
+  background-color: transparent;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+  margin: 0 -3px; /* Allow divider to overlap slightly for easier grabbing */
+}
+
+.divider:hover,
+.dividerDragging {
+  background-color: rgba(128, 128, 128, 0.15); /* subtle hover state */
+}
+
+.dividerHandle {
+  width: 2px;
+  height: 40px;
+  background-color: var(--border-strong, #555);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.divider:hover .dividerHandle,
+.dividerDragging .dividerHandle {
+  opacity: 1;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  cursor: col-resize;
+}

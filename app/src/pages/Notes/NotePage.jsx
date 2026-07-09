@@ -1,14 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react'
 import { useParams } from 'react-router-dom'
 import { LuX } from "react-icons/lu";
 import styles from './NotePage.module.css'
 import NotePane from './NotePane'
 import NoteTabBar from '../../components/Notes/NoteTabBar'
 import SandboxDock from '../../components/Sandbox/Dock/SandboxDock'
+import EditorDock from '../../components/Editor/EditorDock'
 import PdfPane from '../../components/Notes/PdfPane'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { usePdfView } from '../../contexts/PdfViewContext'
+import ResizablePanes from '../../components/Layout/ResizablePanes'
+import { useSandboxes } from '../../hooks/useSandboxes'
+import { compareByOrder } from '../../utils/noteSorting'
+import { getNoteBackground } from '../../components/Notes/noteColors'
+
+const SandBoxPage = lazy(() => import('../Sandbox/SandBoxPage'))
 
 // Thin shell around NotePane. Owns the page-level concerns: the sandbox dock /
 // half-split, and the EXPERIMENTAL split view (two NotePanes side by side). The
@@ -16,6 +23,7 @@ import { usePdfView } from '../../contexts/PdfViewContext'
 function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggleFavorite, updateColor, exportNote, setSidebarCollapsed, tasks, toggleTaskCompletion, addNote, updateTask, bundles }) {
 
   const sandboxView = useSandboxView()
+  const { sandboxes } = useSandboxes()
   const split = useNoteSplit()
   const pdfView = usePdfView()
   const { id } = useParams() //what note
@@ -48,76 +56,190 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
   // Clean up the dock + cancel split + PDF when navigating away from NotePage.
   useEffect(() => () => { sandboxView.close(); split.disable(); pdfView.close() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Live per-note editor content, keyed by note id. Switching layout modes
+  // (single ↔ PDF ↔ split) remounts the NotePane, so the editor would otherwise
+  // reopen from the last saved body and drop just-typed edits. This cache (owned
+  // by the stable NotePage, not the remounting pane) hands the editor back its
+  // current text — no localStorage drafts, no "recovered from backup" churn.
+  const docCacheRef = useRef(null)
+  if (docCacheRef.current === null) docCacheRef.current = new Map()
+
   // Shared props handed to every NotePane instance.
   const paneProps = {
     notes, notesLoading, editTitle, editBody, updateTags, toggleFavorite,
     updateColor, exportNote, tasks, addNote, updateTask, bundles, controlsSlot,
+    docCache: docCacheRef.current,
   }
 
-  // EXPERIMENTAL split view: route note on the left, `splitNoteId` on the right.
+  // Layout mode flags. A "filled" layout (split / PDF / half-sandbox) hands its
+  // body to ResizablePanes, whose panes need a definite page height to size
+  // against — so the page becomes a flex column that fills the content pane.
+  const isFilledLayout = split.enabled || pdfView.isOpen || sandboxView.isHalf
+  // In split view there is only ever ONE editor dock — it lives in whichever note
+  // pane is focused (its buttons target that pane's own editor). When the other
+  // side isn't an editable note (sandbox / empty picker), the lone note keeps its
+  // dock regardless of focus.
+  // With two notes side by side there's ONE shared dock (below), pinned to the
+  // screen and targeting the focused pane — so both panes' own docks are off.
+  // When the other side is a sandbox/empty picker, the lone note keeps its dock.
+  const bothNotes = split.enabled && split.splitTarget?.type === 'note'
+  const showDockLeft = !bothNotes
+
+  // Live handles on each split editor so the shared dock can act on the focused
+  // one. `activeSplitViewRef` is a stable ref-like whose getter reads the current
+  // focus, so the dock always operates on the right editor without re-rendering.
+  const leftViewRef = useRef(null)
+  const rightViewRef = useRef(null)
+  const leftCommentRef = useRef(null)
+  const rightCommentRef = useRef(null)
+  const focusedSideRef = useRef(split.focusedSide)
+  useEffect(() => { focusedSideRef.current = split.focusedSide }, [split.focusedSide])
+  const activeSplitViewRef = useMemo(() => ({
+    get current() {
+      return focusedSideRef.current === 'left' ? leftViewRef.current : rightViewRef.current
+    },
+  }), [])
+  // Shared-dock comment button → the focused pane's comment action.
+  const sharedOnComment = useCallback(() => {
+    const ref = focusedSideRef.current === 'left' ? leftCommentRef : rightCommentRef
+    ref.current?.()
+  }, [])
+
+  // Notes ordered to match the NotesHub list view (manual drag order), so the
+  // split-view picker reads the same as the list the user is used to.
+  const pickerNotes = [...notes].sort(compareByOrder)
+
+  // EXPERIMENTAL split view: route note on the left, `splitTarget` on the right.
   // Clicking a pane focuses it (subtle ring); the sandbox dock is suppressed here.
   const body = split.enabled ? (
-      <div className={styles.splitRow}>
-        <div
-          className={`${styles.pane} ${split.focusedSide === 'left' ? styles.paneFocused : ''}`}
-          onMouseDownCapture={() => split.setFocusedSide('left')}
-          onFocusCapture={() => split.setFocusedSide('left')}
-        >
-          <NotePane noteId={id} isPrimary otherNoteId={split.splitNoteId} onEnterSplit={split.enable} {...paneProps} />
-        </div>
-        <div
-          className={`${styles.pane} ${split.focusedSide === 'right' ? styles.paneFocused : ''}`}
-          onMouseDownCapture={() => split.setFocusedSide('right')}
-          onFocusCapture={() => split.setFocusedSide('right')}
-        >
-          {split.splitNoteId != null ? (
-            <NotePane
-              noteId={split.splitNoteId}
-              isPrimary={false}
-              otherNoteId={id}
-              onClose={split.disable}
-              {...paneProps}
-            />
-          ) : (
-            <div className={styles.splitEmpty}>
-              <button onClick={split.disable} className={styles.splitEmptyClose} aria-label="Close split view">
-                <LuX />
-              </button>
-              <p className={styles.splitEmptyText}>Expand the sidebar and pick a note to open it here.</p>
-            </div>
-          )}
-        </div>
-      </div>
+    <>
+      <ResizablePanes
+        left={
+          <div
+            className={`${styles.pane} ${split.focusedSide === 'left' ? styles.paneFocused : ''}`}
+            style={{ flex: 'none', width: '100%', height: '100%' }}
+            onMouseDownCapture={() => split.setFocusedSide('left')}
+            onFocusCapture={() => split.setFocusedSide('left')}
+          >
+            <NotePane noteId={id} isPrimary otherNoteId={split.splitTarget?.id} onEnterSplit={split.enable} showDock={showDockLeft} ownsControls={bothNotes ? split.focusedSide === 'left' : true} editorViewRef={leftViewRef} commentActionRef={leftCommentRef} {...paneProps} />
+          </div>
+        }
+        right={
+          <div
+            className={`${styles.pane} ${split.focusedSide === 'right' ? styles.paneFocused : ''}`}
+            style={{ flex: 'none', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+            onMouseDownCapture={() => split.setFocusedSide('right')}
+            onFocusCapture={() => split.setFocusedSide('right')}
+          >
+            {split.splitTarget != null ? (
+              split.splitTarget.type === 'sandbox' ? (
+                <div style={{ height: '100%', position: 'relative' }}>
+                  <button onClick={split.disable} className={styles.splitEmptyClose} style={{ zIndex: 100 }} aria-label="Close split view">
+                    <LuX />
+                  </button>
+                  <Suspense fallback={<div style={{padding: 24, color: 'var(--text-muted)'}}>Loading sandbox...</div>}>
+                    <SandBoxPage notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} mode="half" sandboxIdOverride={split.splitTarget.id} />
+                  </Suspense>
+                </div>
+              ) : (
+                <NotePane
+                  noteId={split.splitTarget.id}
+                  isPrimary={false}
+                  otherNoteId={id}
+                  onClose={split.disable}
+                  showDock={false}
+                  ownsControls={split.focusedSide === 'right'}
+                  editorViewRef={rightViewRef}
+                  commentActionRef={rightCommentRef}
+                  {...paneProps}
+                />
+              )
+            ) : (
+              <div className={styles.splitEmpty}>
+                <button onClick={split.disable} className={styles.splitEmptyClose} aria-label="Close split view">
+                  <LuX />
+                </button>
+                
+                <div className={styles.splitPicker}>
+                  <h3 className={styles.splitPickerTitle}>Open in Split View</h3>
+                  
+                  <div className={styles.splitPickerSection}>
+                    <h4>Notes</h4>
+                    <div className={styles.splitPickerList}>
+                      {pickerNotes.map(n => {
+                        const bg = getNoteBackground(n.color)
+                        return (
+                          <button
+                            key={n.id}
+                            onClick={() => split.setSplitTarget({ type: 'note', id: n.id })}
+                            className={`${styles.splitPickerItem} ${bg ? styles.splitPickerItemColored : ''}`}
+                            style={bg ? { backgroundColor: bg } : undefined}
+                          >
+                            {n.title || 'Untitled'}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className={styles.splitPickerSection}>
+                    <h4>Sandboxes</h4>
+                    <div className={styles.splitPickerList}>
+                      {sandboxes.map(s => (
+                        <button key={s.id} onClick={() => split.setSplitTarget({ type: 'sandbox', id: s.id })} className={styles.splitPickerItem}>
+                           {s.title || 'Untitled'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        }
+      />
+      {bothNotes && <EditorDock viewRef={activeSplitViewRef} sandboxes={sandboxes} variant="fixed" onComment={sharedOnComment} />}
+    </>
   ) : pdfView.isOpen ? (
     // PDF side-view: note column on the left, PDF viewer on the right.
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', height: '100vh', overflow: 'hidden' }}>
-      <div style={{ overflow: 'auto', height: '100%' }}>
-        <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
-      </div>
-      <PdfPane pdf={pdfView.pdf} onClose={pdfView.close} />
-    </div>
+    <ResizablePanes
+      left={
+        <div style={{ overflow: 'auto', height: '100%' }}>
+          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+        </div>
+      }
+      right={<PdfPane pdf={pdfView.pdf} onClose={pdfView.close} />}
+    />
   ) : (
-    // Single-note mode. Half-mode wraps the note column + a sandbox column in a
-    // CSS grid; hidden/PiP modes leave the column full width and overlay the dock.
-    <div
-      style={sandboxView.isHalf ? {
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        height: '100vh',
-        overflow: 'hidden',
-      } : { width: '100%', height: '100%' }}
-    >
-      <div style={sandboxView.isHalf ? { overflow: 'auto', height: '100%' } : { height: '100%' }}>
-        <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+    // Single-note mode. Half-mode wraps the note column + a sandbox column in a resizable split;
+    // hidden/PiP modes leave the column full width and overlay the dock.
+    sandboxView.isHalf ? (
+      <ResizablePanes
+        left={
+          <div style={{ overflow: 'auto', height: '100%' }}>
+            <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+          </div>
+        }
+        right={
+          <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+            <SandboxDock notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} />
+          </div>
+        }
+      />
+    ) : (
+      <div style={{ width: '100%', height: '100%' }}>
+        <div style={{ height: '100%' }}>
+          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+        </div>
+        {!sandboxView.isHidden && <SandboxDock notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} />}
       </div>
-      {!sandboxView.isHidden && <SandboxDock notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} />}
-    </div>
+    )
   )
 
   return (
-    <div className={styles.tabbedPage}>
+    <div className={`${styles.tabbedPage} ${isFilledLayout ? styles.tabbedPageFilled : ''}`}>
       <NoteTabBar notes={notes} controlsRef={setControlsSlot} />
-      <div className={styles.tabbedBody}>{body}</div>
+      <div className={`${styles.tabbedBody} ${isFilledLayout ? styles.tabbedBodyFilled : ''}`}>{body}</div>
     </div>
   )
 }

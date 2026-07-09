@@ -1,6 +1,6 @@
 import { EditorView } from '@codemirror/view'
 import { uploadImageFile, fileFromLocalPath } from '../utils/imageUpload'
-import { isOpen as isLocalOpen } from './localStore'
+import { isOpen as isLocalOpen, saveAttachment } from './localStore'
 
 // Native OS file-drop handling for the desktop shell. On WebKitGTK the webview's
 // DOM drop event exposes no usable file data (and `dragDropEnabled:false` just
@@ -11,6 +11,7 @@ import { isOpen as isLocalOpen } from './localStore'
 // Bag, and insert the markdown at the drop point in whichever editor was hit.
 
 const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|avif)$/i
+const PDF_EXT = /\.pdf$/i
 const safeName = (n) => (n || 'image').replace(/[[\]()\n\r]/g, '').trim() || 'image'
 const encodePathForMarkdown = (p) => {
   if (/^(data:|https?:|blob:)/.test(p)) return p
@@ -31,23 +32,39 @@ function editorAt(cssX, cssY) {
 
 async function handleDrop(paths, position) {
   if (!isLocalOpen()) return
-  const imgs = (paths || []).filter((p) => IMG_EXT.test(p))
-  if (!imgs.length) return
+  const files = (paths || []).filter((p) => IMG_EXT.test(p) || PDF_EXT.test(p))
+  if (!files.length) return
   // Tauri gives a PhysicalPosition; convert to CSS pixels for DOM hit-testing.
   const dpr = window.devicePixelRatio || 1
   const target = editorAt((position?.x || 0) / dpr, (position?.y || 0) / dpr)
   if (!target) return
   const { view } = target
   let pos = target.pos
-  for (const p of imgs) {
+  let lastPdf = null
+  for (const p of files) {
     const file = await fileFromLocalPath(p)
     if (!file) continue
     try {
-      const { path } = await uploadImageFile(null, null, file) // local Bag save — no auth needed
-      const md = `![${safeName(file.name)}](${encodePathForMarkdown(path)})\n`
-      view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length } })
-      pos += md.length
+      if (PDF_EXT.test(p)) {
+        // Copy into the Bag and drop a clickable link (persists so the PDF can be
+        // reopened later); the last one dropped also opens in the viewer pane.
+        const rel = await saveAttachment(file)
+        if (!rel) continue
+        const name = file.name || 'document.pdf'
+        const md = `[${safeName(name)}](${encodePathForMarkdown(rel)})\n`
+        view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length } })
+        pos += md.length
+        lastPdf = { path: rel, name }
+      } else {
+        const { path } = await uploadImageFile(null, null, file) // local Bag save — no auth needed
+        const md = `![${safeName(file.name)}](${encodePathForMarkdown(path)})\n`
+        view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length } })
+        pos += md.length
+      }
     } catch { /* skip this file */ }
+  }
+  if (lastPdf && typeof window.__siddranOpenPdf === 'function') {
+    window.__siddranOpenPdf(lastPdf.path, lastPdf.name)
   }
 }
 

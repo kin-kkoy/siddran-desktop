@@ -1,10 +1,25 @@
 /* Tab bar above the editor area, then the note body fills the rest. leftPane is
    the scroll container (shared by the sticky toolbar + note). */
 .tabbedPage {
+    display: flex;
+    flex-direction: column;
     min-height: 100%;
 }
 .tabbedBody {
-    /* plain flow */
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Filled layouts (split view / PDF side-view / half sandbox) hand their body to
+   ResizablePanes, whose panes size against `height: 100%`. That needs a definite
+   height up the chain, so the page fills the content pane exactly (no outer page
+   scroll — each pane scrolls internally, matching the single-note view height). */
+.tabbedPageFilled {
+    height: 100%;
+    min-height: 0;
+}
+.tabbedBodyFilled {
+    overflow: hidden;
 }
 
 /* NotePane root: the editor column + an optional right-rail outline sit side by
@@ -391,17 +406,16 @@
     flex: 1 1 0;
     min-width: 0;
     overflow-y: auto;
-    /* Reserve the ring's width so focusing a pane doesn't nudge layout. */
-    box-shadow: inset 0 0 0 2px transparent;
-    transition: box-shadow 0.2s ease;
 }
 
 .pane:first-child {
     border-right: 1px solid var(--border-default);
 }
 
+/* Focus is surfaced by the tab bar (lit half), the shared dock, and the control
+   cluster following the focused pane — so the pane itself needs no heavy ring. */
 .paneFocused {
-    box-shadow: inset 0 0 0 2px var(--accent-blue);
+    box-shadow: none;
 }
 
 /* Right pane before a note is chosen. */
@@ -441,4 +455,77 @@
 .splitEmptyClose:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+}
+
+.splitPicker {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.splitPickerTitle {
+    font-size: 18px;
+    color: var(--text-primary);
+    margin: 0;
+    text-align: center;
+}
+
+.splitPickerSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.splitPickerSection h4 {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+}
+
+.splitPickerList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.splitPickerItem {
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.splitPickerItem:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+/* A note with a chosen colour keeps its swatch as the item fill, mirroring the
+   coloured cards in the NotesHub list view. */
+.splitPickerItemColored {
+    color: var(--text-primary);
+}
+.splitPickerItemColored:hover {
+    filter: brightness(1.15);
+    background: unset; /* keep the note colour rather than the generic hover fill */
 }

@@ -4,11 +4,13 @@ import {
   FaLink, FaListUl, FaListOl, FaQuoteLeft, FaQuestion,
 } from 'react-icons/fa'
 import { MdCheckBox, MdHorizontalRule } from 'react-icons/md'
-import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuEyeOff, LuHighlighter, LuPaperclip, LuImage, LuFileText, LuChevronDown, LuChevronUp } from 'react-icons/lu'
+import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuEyeOff, LuHighlighter, LuPaperclip, LuImage, LuFileText, LuMessageSquare, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { TbBracketsContain } from 'react-icons/tb'
+import { useNavigate } from 'react-router-dom'
 import { useCalendarView } from '../../contexts/CalendarViewContext'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { usePdfView } from '../../contexts/PdfViewContext'
+import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { attachImageViaPicker, attachPdfViaPicker } from '../../desktop/media'
 import styles from './EditorDock.module.css'
@@ -105,10 +107,15 @@ const WIKILINK_TYPES = [
   { key: 'sandbox', icon: LuShapes, label: 'Sandbox', prefix: 'sandbox:' },
 ]
 
-function EditorDock({ viewRef, sandboxes = [] }) {
+// variant: 'sticky' (default) sits at the bottom of the note column and recenters
+// with the sidebar. 'fixed' pins the dock to the bottom-center of the whole screen
+// — used by split view, where one shared dock spans both note panes.
+function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) {
   const calView = useCalendarView()
   const sandboxView = useSandboxView()
   const pdfView = usePdfView()
+  const split = useNoteSplit()
+  const navigate = useNavigate()
   const { collapsed: sidebarCollapsed } = useSidebar()
   const [dockVisible, setDockVisible] = useState(() => {
     try { return localStorage.getItem('cinder_dock_visible') !== 'false' } catch { return true }
@@ -137,8 +144,22 @@ function EditorDock({ viewRef, sandboxes = [] }) {
   const handleAttachPdf = useCallback(async () => {
     setMediaOpen(false)
     const r = await attachPdfViaPicker()
-    if (r) pdfView.requestOpen(r.path, r.name)
-  }, [pdfView])
+    if (!r) return
+    // Persist a clickable link in the note, then open the viewer.
+    const view = viewRef.current
+    if (view && r.markdown) {
+      const { from, to } = view.state.selection.main
+      const insert = r.markdown + '\n'
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } })
+      view.focus()
+    }
+    // Opening the PDF collapses a note split to the route note; if the right pane
+    // was focused, promote it first so the PDF opens beside the note we edited.
+    if (split.enabled && split.focusedSide === 'right' && split.splitTarget?.type === 'note') {
+      navigate(`/notes/${split.splitTarget.id}`)
+    }
+    pdfView.requestOpen(r.path, r.name)
+  }, [pdfView, viewRef, split, navigate])
 
   const toggleDock = useCallback(() => {
     setDockVisible(prev => {
@@ -175,7 +196,7 @@ function EditorDock({ viewRef, sandboxes = [] }) {
 
   return (
     <div
-      className={`${styles.dockZone} ${dockVisible ? styles.open : styles.closed}`}
+      className={`${styles.dockZone} ${variant === 'fixed' ? styles.fixed : ''} ${dockVisible ? styles.open : styles.closed}`}
       style={{ '--dock-sidebar-offset': sidebarCollapsed ? '0px' : '220px' }}
     >
       <button
@@ -252,6 +273,18 @@ function EditorDock({ viewRef, sandboxes = [] }) {
             </div>
           )}
         </div>
+
+        {/* Comment on the current selection (or open the comments panel) */}
+        {onComment && (
+          <button
+            className={styles.btn}
+            title="Comment (select text to add)"
+            aria-label="Comment"
+            onMouseDown={e => { e.preventDefault(); onComment() }}
+          >
+            <LuMessageSquare />
+          </button>
+        )}
 
         {/* Calendar + Sandbox */}
         <span className={styles.sep} />

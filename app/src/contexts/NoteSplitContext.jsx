@@ -1,39 +1,38 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
 // EXPERIMENTAL split view: two notes side by side on NotePage. The left pane is
-// always the route note (/notes/:id); the right pane is `splitNoteId` (null until
-// the user picks a note from the sidebar). `focusedSide` decides which pane a
-// sidebar click targets and which pane shows the focus ring. Mirrors the shape of
-// SandboxViewContext / CalendarViewContext.
+// always the route note (/notes/:id); the right pane is `splitTarget` (null until
+// the user picks a note/sandbox from the picker). `focusedSide` decides which pane
+// shows the focus ring.
 const NoteSplitContext = createContext(null)
 
 export function NoteSplitProvider({ children }) {
     const [enabled, setEnabled] = useState(false)
-    const [splitNoteId, setSplitNoteId] = useState(null)
+    const [splitTarget, setSplitTarget] = useState(null)
     const [focusedSide, setFocusedSide] = useState('left')
 
-    // Turn split on with an empty, focused right pane — the user fills it from the sidebar.
+    // Turn split on with an empty, focused right pane — the user fills it from the picker.
     const enable = useCallback(() => {
         setEnabled(true)
-        setSplitNoteId(null)
+        setSplitTarget(null)
         setFocusedSide('right')
     }, [])
 
     const disable = useCallback(() => {
         setEnabled(false)
-        setSplitNoteId(null)
+        setSplitTarget(null)
         setFocusedSide('left')
     }, [])
 
     const value = useMemo(() => ({
         enabled,
-        splitNoteId,
+        splitTarget,
         focusedSide,
         enable,
         disable,
-        setSplitNoteId,
+        setSplitTarget,
         setFocusedSide,
-    }), [enabled, splitNoteId, focusedSide, enable, disable])
+    }), [enabled, splitTarget, focusedSide, enable, disable])
 
     return (
         <NoteSplitContext.Provider value={value}>

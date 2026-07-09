@@ -6,16 +6,48 @@ import { toast } from '../../utils/toast'
 import 'highlight.js/styles/atom-one-dark.css'
 import styles from './ReadingView.module.css'
 
+// Wrap each unresolved comment's quoted text in a `.rv-comment` span so it reads
+// highlighted in reading mode too. Anchors by text quote (offsets don't survive
+// markdown→HTML rendering); re-walks per thread so several highlights can share a
+// paragraph. Returns cleanups that unwrap the spans before the next re-decorate.
+function highlightComments(root, threads, cleanups) {
+  const active = (threads || []).filter((t) => !t.resolved && !t.orphaned && t.quote && t.quote.trim().length >= 2)
+  for (const t of active) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) =>
+        (n.nodeValue && n.nodeValue.includes(t.quote) &&
+         !n.parentElement.closest('pre, code, .rv-comment'))
+          ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+    })
+    const node = walker.nextNode()
+    if (!node) continue
+    const idx = node.nodeValue.indexOf(t.quote)
+    const range = document.createRange()
+    range.setStart(node, idx)
+    range.setEnd(node, idx + t.quote.length)
+    const span = document.createElement('span')
+    span.className = 'rv-comment'
+    span.setAttribute('data-comment-id', t.id)
+    try { range.surroundContents(span) } catch { continue }
+    cleanups.push(() => {
+      const parent = span.parentNode
+      if (parent) { parent.replaceChild(document.createTextNode(span.textContent), span); parent.normalize() }
+    })
+  }
+}
+
 // Read-only rendered view of a note — the "reading mode" the read/edit toggle
 // switches to in the new editor. Renders note markdown to HTML once per content
 // change and decorates each <pre> with a Copy button.
-function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink, onCheckboxToggle }) {
+function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink, onCheckboxToggle, comments, onCommentClick }) {
   const ref = useRef(null)
   const html = useMemo(() => markdownToHtml(markdown || ''), [markdown])
 
   const handleClick = (e) => {
+    const cm = e.target.closest?.('.rv-comment')
+    if (cm && onCommentClick) { e.preventDefault(); onCommentClick(cm.getAttribute('data-comment-id')); return }
     const link = e.target.closest?.('.rv-link')
-    if (link && onOpenLink) { onOpenLink(link); return }
+    if (link && onOpenLink) { e.preventDefault(); onOpenLink(link); return }
     const tag = e.target.closest?.('.rv-hashtag')
     if (tag && onSearchTag) onSearchTag(tag.getAttribute('data-tag'))
   }
@@ -153,6 +185,10 @@ function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink,
       pre.appendChild(btn)
       cleanups.push(() => { btn.removeEventListener('click', onClick); btn.remove() })
     })
+
+    // Comment highlights (run last so it doesn't fight the other decorations).
+    highlightComments(root, comments, cleanups)
+
     return () => cleanups.forEach((fn) => fn())
   })
 

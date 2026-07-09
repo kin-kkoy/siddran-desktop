@@ -37,24 +37,27 @@ A running list of what's implemented and what's planned. Add freely.
 ## 🔜 To implement / deferred
 
 ### High priority
-- [ ] **Sandbox PDF Previews** — Allow PDFs to be attached directly within the Sandbox, rendering an inline preview similar to images. The preview will act as a scrollable container so users can scroll through pages directly within the Sandbox card/view.
-- [ ] **Comments** (Google-Docs style) — select text → add a comment; a comments view toggled by the comment button. Storage = sidecar `<note>.comments.json` per note; anchors tracked **live** (remap through edits) so editing a commented region keeps it attached (only detaches if the whole anchored text is deleted).
+- [x] **Sandbox PDF Previews** — Insert → **PDF** copies a PDF into the Bag and drops a `pdf` **card** (`SandboxPdfCard`) with a scrollable `<iframe>` preview; drag by the header, resize/rotate via the shared selection handles. Added a transparent **drag-shield** during transform gestures so dragging over the iframe doesn't break the resize.
+- [x] **Comments** (Google-Docs style) — select text (edit or read mode) → comment button starts a thread; the right-rail **CommentsPanel** shows threads with replies, **resolve/reopen**, delete, and a show-resolved toggle. Highlights render in **both** the editor (CM6 mark decorations) and the reading view (quote-matched spans); clicking a highlight focuses its thread, clicking a thread scrolls the editor to it.
+  - **Anchoring:** a CM6 StateField maps each anchor's `[from,to)` live through edits, so a commented region stays attached as you type and **detaches (orphaned)** only when its whole text is deleted. React owns thread *content*; the editor owns *positions* and feeds remaps back via `onCommentsRemap`. Cross-session re-anchoring uses a stored **text quote + prefix/suffix** (offsets are just a hint), so it survives body edits between sessions.
+  - **Storage:** sidecar `<note>.comments.json` next to the note's `.md` (written/moved/pruned alongside it by `localStore` reconcile); served via `GET/PUT /notes/:id/comments`.
+  - Files: `hooks/useComments.js`, `components/Editor/cm/comments.js`, `components/Comments/CommentsPanel.{jsx,module.css}`; wired through `NotePane` → `CodeMirrorEditor` → `ReadingView`. No author names (local single-user), timestamps only.
 
 ### PDF follow-ups
-- [ ] **Drag-drop a `.pdf`** onto the note to attach (extend the Tauri file-drop handler).
-- [ ] **Persist / re-open PDFs** — save the attachment as a clickable reference in the note so it can be re-opened later (regular markdown links aren't routed through the note's link handler yet).
+- [x] **Drag-drop a `.pdf`** onto the note to attach — extends the Tauri file-drop handler: the PDF is copied into the Bag, a clickable `[name](attachments/…)` link is inserted at the drop point, and it opens in the viewer pane.
+- [x] **Persist / re-open PDFs** — PDFs are saved as a plain markdown link in the note; clicking a `.pdf` link (editor live-preview or reading view) opens it in the side viewer instead of navigating. Attaching via the dock also inserts the link.
 
 ### Resizable panes (requested — later)
-- [ ] **PDF view** column resizable (drag the divider).
-- [ ] **Split view** columns resizable.
-- [ ] **Sandbox (when in split/half)** column resizable.
+- [x] **PDF view** column resizable (drag the divider).
+- [x] **Split view** columns resizable.
+- [x] **Sandbox (when in split/half)** column resizable.
 
 ### Outline polish (optional)
-- [ ] Update the outline **live as you type** (currently refreshes on save).
-- [ ] Remember outline open/closed **per note** across sessions.
+- [x] Update the outline **live as you type** — while the outline is open, headings mirror the editor's current text (250 ms debounce); falls back to the saved body when closed.
+- [x] Remember outline open/closed **per note** across sessions — persisted in `noteOutlineCache` (localStorage), restored on open/remount.
 
 ### Other / ideas
-- [ ] (Optional) Restore **favorites floating to the top** as a two-level sort, if wanted alongside manual order.
+- [x] Restore **favorites floating to the top** as a two-level sort (`compareByFavoriteThenOrder`): pinned notes float up, manual drag order preserved within each group — applied in NotesHub and the sidebar.
 - [x] TasksHub: Kanban view (noted earlier as "later").
 
 ---

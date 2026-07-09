@@ -6,7 +6,7 @@ import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
 import { MdChromeReaderMode } from "react-icons/md";
 import { HiPencilSquare } from "react-icons/hi2";
 import { HiOutlineDownload, HiOutlineCog, HiOutlineDocumentText } from "react-icons/hi";
-import { LuColumns2, LuX, LuTag, LuMessageSquare, LuListTree } from "react-icons/lu";
+import { LuColumns2, LuTag, LuMessageSquare, LuListTree } from "react-icons/lu";
 import CodeMirrorEditor from '../../components/Editor/CodeMirrorEditor'
 import NoteOutline from '../../components/Notes/NoteOutline'
 import { parseHeadings } from '../../utils/headings'
@@ -16,7 +16,12 @@ import TaskDetailsModal from '../../components/Common/TaskDetailsModal'
 import { useApi } from '../../contexts/ApiContext'
 import { useSandboxes } from '../../hooks/useSandboxes'
 import { readViewMode, writeViewMode } from '../../hooks/noteViewModeCache'
+import { readOutlineOpen, writeOutlineOpen } from '../../hooks/noteOutlineCache'
+import { useComments } from '../../hooks/useComments'
+import CommentsPanel from '../../components/Comments/CommentsPanel'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
+import { usePdfView } from '../../contexts/PdfViewContext'
+import { isPdfHref, pdfNameFromHref } from '../../utils/pdfLinks'
 import { toast } from '../../utils/toast'
 import Skeleton from '../../components/Common/Skeleton'
 import { NOTE_COLORS } from '../../components/Notes/noteColors'
@@ -33,6 +38,10 @@ function NotePane({
   onEnterSplit,
   onClose,
   controlsSlot,
+  ownsControls = true,
+  showDock = true,
+  editorViewRef,
+  commentActionRef,
   notes,
   notesLoading,
   editTitle,
@@ -45,9 +54,11 @@ function NotePane({
   addNote,
   updateTask,
   bundles,
+  docCache,
 }) {
 
   const split = useNoteSplit()
+  const pdfView = usePdfView()
   const { authFetch, API } = useApi()
   const { sandboxes, sandboxesLoaded } = useSandboxes()
 
@@ -57,6 +68,15 @@ function NotePane({
     ? notes.find(n => n.id === noteId || n.id === Number(noteId))
     : null
   const isOptimistic = note?._optimistic === true
+
+  // Comments (Google-Docs style). React owns thread content; the editor owns live
+  // anchor positions and feeds remaps back through `applyRemap`.
+  const comments = useComments(note?.id)
+  const commentApiRef = useRef(null)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [activeThreadId, setActiveThreadId] = useState(null)
+  const [draftAnchor, setDraftAnchor] = useState(null) // captured selection awaiting its first comment
+  useEffect(() => { setCommentsOpen(false); setActiveThreadId(null); setDraftAnchor(null) }, [noteId])
 
   // Opening a note (wikilink, created-note, link click) stays within this pane:
   // the primary pane drives the route; a secondary pane swaps its own note via
@@ -96,10 +116,23 @@ function NotePane({
   const headerObserverRef = useRef(null)
   const [headerVisible, setHeaderVisible] = useState(true)
   // Document outline (right rail). Per-pane state so each split pane toggles its
-  // own. Headings are parsed from the saved body (updates on save).
-  const [outlineOpen, setOutlineOpen] = useState(false)
+  // own; the open/closed choice is remembered per note across sessions.
+  const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen(noteId))
+  useEffect(() => { setOutlineOpen(readOutlineOpen(noteId)) }, [noteId])
+  const outlineOpenRef = useRef(outlineOpen)
+  useEffect(() => { outlineOpenRef.current = outlineOpen }, [outlineOpen])
   const scrollToLineRef = useRef(null)
-  const outlineHeadings = useMemo(() => parseHeadings(note?.body || ''), [note?.body])
+  // Headings update live as you type: while the outline is open we mirror the
+  // editor's current text into `liveBody` (debounced); null falls back to the
+  // saved body (fresh note / outline closed).
+  const [liveBody, setLiveBody] = useState(null)
+  const liveBodyTimer = useRef(null)
+  useEffect(() => { setLiveBody(null) }, [noteId])
+  useEffect(() => () => { if (liveBodyTimer.current) clearTimeout(liveBodyTimer.current) }, [])
+  const outlineHeadings = useMemo(
+    () => parseHeadings(liveBody != null ? liveBody : (note?.body || '')),
+    [liveBody, note?.body],
+  )
   // Callback ref (not useRef + mount effect): on a hard refresh the page first
   // renders the skeleton, so a mount-time effect would run before the real header
   // exists and the observer would never attach (sticky toggle then never shows).
@@ -163,17 +196,6 @@ function NotePane({
     }
   }, [newTitle, noteId])
 
-  // Warn user before closing tab with unsaved changes
-  useEffect(() => {
-    const handler = (e) => {
-      if (isDirtyRef.current) {
-        e.preventDefault()
-      }
-    }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [])
-
   const handleDirtyChange = useCallback((dirty) => {
     isDirtyRef.current = dirty
   }, [])
@@ -183,6 +205,72 @@ function NotePane({
     if (!note) return false
     return await editBody(note.id, markdownContent)
   }, [note?.id, editBody])
+
+  // Every editor edit: keep the layout-remount cache current, and (while the
+  // outline is open) refresh its headings live with a small debounce.
+  const handleDocChange = useCallback((md) => {
+    if (note) docCache?.set(String(note.id), md)
+    if (outlineOpenRef.current) {
+      if (liveBodyTimer.current) clearTimeout(liveBodyTimer.current)
+      liveBodyTimer.current = setTimeout(() => setLiveBody(md), 250)
+    }
+  }, [docCache, note?.id])
+
+  // Toggle the outline; persist the choice and seed live headings from the
+  // editor's current text when opening so it's accurate immediately.
+  const toggleOutline = useCallback(() => {
+    setOutlineOpen(prev => {
+      const next = !prev
+      writeOutlineOpen(noteId, next)
+      if (next && note) setLiveBody(docCache?.get(String(note.id)) ?? note.body ?? '')
+      return next
+    })
+  }, [noteId, note, docCache])
+
+  // ── Comments ──
+  const { threads: commentThreads, addThread, addReply, resolveThread, deleteThread, deleteComment, applyRemap } = comments
+  const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+
+  // Comment button: with a text selection (editor or reading view) → start a new
+  // thread; otherwise just toggle the panel.
+  const handleCommentButton = useCallback(() => {
+    let anchor = commentApiRef.current?.captureSelection?.()
+    if (!anchor) {
+      const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
+      const text = sel && !sel.isCollapsed ? sel.toString().trim() : ''
+      if (text) anchor = commentApiRef.current?.locateSelectionText?.(text)
+    }
+    if (anchor) { setDraftAnchor({ id: uid(), ...anchor }); setCommentsOpen(true) }
+    else setCommentsOpen(o => !o)
+  }, [])
+
+  // Expose the comment action so the shared split-view dock (owned by NotePage)
+  // can trigger it on whichever pane is focused.
+  useEffect(() => {
+    if (!commentActionRef) return
+    commentActionRef.current = handleCommentButton
+    return () => { if (commentActionRef.current === handleCommentButton) commentActionRef.current = null }
+  }, [commentActionRef, handleCommentButton])
+
+  const submitDraft = useCallback((text) => {
+    setDraftAnchor(d => {
+      if (d && text.trim()) { addThread(d, text); setActiveThreadId(d.id) }
+      return null
+    })
+  }, [addThread])
+
+  const selectThread = useCallback((id) => {
+    setActiveThreadId(id)
+    commentApiRef.current?.setActive?.(id)
+    commentApiRef.current?.scrollTo?.(id)
+  }, [])
+
+  // A highlight (editor or reading view) was clicked → focus its thread.
+  const handleCommentClick = useCallback((id) => {
+    setCommentsOpen(true)
+    setActiveThreadId(id)
+    commentApiRef.current?.setActive?.(id)
+  }, [])
 
   // Confirm-creating a note from an unresolved [[wikilink]]: create it (awaiting
   // the synced note so we land on its real id), then navigate.
@@ -230,52 +318,39 @@ function NotePane({
     if (tag) navigate(`/notes?q=${encodeURIComponent(tag)}`)
   }, [navigate])
 
+  // Open a PDF attachment link in the side viewer (shared by editor + reading view).
+  // Opening a PDF collapses any note split back to the route note, so if this is
+  // the secondary pane, promote its note to the route first — the PDF then opens
+  // beside the note you clicked from instead of jumping to the first tab.
+  const handleOpenPdf = useCallback((href) => {
+    if (!href) return
+    if (!isPrimary && noteId != null) navigate(`/notes/${noteId}`)
+    pdfView.requestOpen(href, pdfNameFromHref(href))
+  }, [pdfView, isPrimary, noteId, navigate])
+
   // Clicking a [[link]] in the reading view — same behaviours as the editor.
   const handleOpenLink = useCallback((el) => {
     const kind = el.getAttribute('data-link-kind')
     if (kind === 'task') { handleOpenTask(el.getAttribute('data-link-id')); return }
     if (kind === 'sandbox') { handleOpenSandbox(el.getAttribute('data-link-id')); return }
     if (kind === 'bundle') { navigate(`/tasks?bundle=${el.getAttribute('data-link-id')}`); return }
+    const href = el.getAttribute('data-href')
+    if (href && isPdfHref(href)) { handleOpenPdf(href); return }
     const target = (el.getAttribute('data-target') || '').trim()
     const found = (notes || []).find(n => (n.title || '').trim().toLowerCase() === target.toLowerCase())
     if (found) navigateToNote(found.id)
     else if (target) setLinkModalTitle(target)
-  }, [handleOpenTask, handleOpenSandbox, navigate, navigateToNote, notes])
+  }, [handleOpenTask, handleOpenSandbox, handleOpenPdf, navigate, navigateToNote, notes])
 
-  // Draft recovery: decide the editor's initial content once per note. The
-  // decision (is there a localStorage draft newer than the server copy?) is
-  // computed purely here, keyed on note.id so it tracks the editor's remount
-  // and never re-runs on incidental re-renders. The side effects (consuming the
-  // draft + toasting) live in the effect below — running them inline on every
-  // render is what caused the toast to fire repeatedly while editing.
-  const initialContentInfo = useMemo(() => {
-    if (!note) return { content: '' }
-    const draftKey = `cinder_draft_${note.id}`
-    try {
-      const draft = localStorage.getItem(draftKey)
-      if (draft) {
-        const { content, savedAt } = JSON.parse(draft)
-        const noteUpdated = new Date(note.updated_at).getTime()
-        if (savedAt > noteUpdated) {
-          return { content, recoveredKey: draftKey }
-        }
-        return { content: note.body || '', staleKey: draftKey } // stale draft, clean up
-      }
-    } catch { /* ignore malformed draft */ }
-    return { content: note.body || '' }
+  // The editor's initial content, resolved once per note.id (it's remount-keyed).
+  // Prefer the live in-memory cache — set on every edit — so a layout-mode remount
+  // reopens with the current text; fall back to the saved body on first open.
+  const initialContent = useMemo(() => {
+    if (!note) return ''
+    const cached = docCache?.get(String(note.id))
+    return cached != null ? cached : (note.body || '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id])
-
-  // Consume the draft (and toast once) after mount. Stable per note.id, so this
-  // runs exactly once per note — not on every re-render.
-  useEffect(() => {
-    if (initialContentInfo.recoveredKey) {
-      localStorage.removeItem(initialContentInfo.recoveredKey)
-      toast.warning('Recovered unsaved changes from local backup')
-    } else if (initialContentInfo.staleKey) {
-      localStorage.removeItem(initialContentInfo.staleKey)
-    }
-  }, [initialContentInfo])
 
   // Skeleton shown while loading notes from server, or while a freshly-created
   // optimistic note is still syncing with the backend
@@ -398,20 +473,15 @@ function NotePane({
 
       {/* Header controls → portaled into the tab bar's right slot for the primary
           note (tabs + controls share one row); rendered inline otherwise. */}
-      {(() => {
+      {ownsControls && (() => {
         const headerContent = (
-          <div className={`${styles.headerRow} ${isPrimary && controlsSlot ? styles.headerRowSlotted : ''}`} ref={headerRowRef}>
-        {!isPrimary && (
-          <button onClick={onClose} className={styles.backBtn} aria-label="Close split view">
-            <LuX /> Close split
-          </button>
-        )}
-
+          <div className={`${styles.headerRow} ${controlsSlot ? styles.headerRowSlotted : ''}`} ref={headerRowRef}>
         <button onClick={toggleViewMode} className={styles.backBtn} aria-label={viewMode ? 'Switch to edit mode' : 'Switch to read mode'}>
           {viewMode ? <HiPencilSquare /> : <MdChromeReaderMode />}
         </button>
 
-        {isPrimary && (
+        {/* Enter-split is offered only when we're NOT already in a split. */}
+        {isPrimary && !split.enabled && (
           <button
             onClick={onEnterSplit}
             className={styles.backBtn}
@@ -422,19 +492,18 @@ function NotePane({
           </button>
         )}
 
-        {isPrimary && (
-          <button
-            onClick={() => toast.success('Comments — coming soon')}
-            className={styles.backBtn}
-            title="Comments"
-            aria-label="Comments"
-          >
-            <LuMessageSquare />
-          </button>
-        )}
+        <button
+          onClick={handleCommentButton}
+          className={styles.backBtn}
+          aria-pressed={commentsOpen}
+          title="Comments (select text to add)"
+          aria-label="Comments"
+        >
+          <LuMessageSquare />
+        </button>
 
         <button
-          onClick={() => setOutlineOpen(o => !o)}
+          onClick={toggleOutline}
           className={styles.backBtn}
           aria-pressed={outlineOpen}
           title="Document outline"
@@ -509,7 +578,9 @@ function NotePane({
         </div>
           </div>
         )
-        return isPrimary && controlsSlot ? createPortal(headerContent, controlsSlot) : headerContent
+        // The focused pane owns the shared control cluster in the tab bar. Fall
+        // back to inline rendering only if the slot isn't mounted yet.
+        return controlsSlot ? createPortal(headerContent, controlsSlot) : headerContent
       })()}
 
       <div className={styles.editorSurface}>
@@ -530,8 +601,9 @@ function NotePane({
         <CodeMirrorEditor
           key={note.id}
           readMode={viewMode}
-          initialContent={initialContentInfo.content}
+          initialContent={initialContent}
           onSave={handleEditorSave}
+          onDocChange={handleDocChange}
           noteId={note.id}
           onDirtyChange={handleDirtyChange}
           placeholder='Start typing here...'
@@ -544,10 +616,18 @@ function NotePane({
           onOpenBundle={(id) => navigate(`/tasks?bundle=${id}`)}
           onSearchTag={handleSearchTag}
           onOpenLink={handleOpenLink}
+          onOpenPdf={handleOpenPdf}
           tasks={tasks}
           bundles={bundles}
           sandboxes={sandboxes}
           scrollApiRef={scrollToLineRef}
+          showDock={showDock}
+          editorViewRef={editorViewRef}
+          comments={commentThreads}
+          onCommentsRemap={applyRemap}
+          onCommentClick={handleCommentClick}
+          commentApiRef={commentApiRef}
+          onComment={handleCommentButton}
         />
       </div>
 
@@ -625,6 +705,21 @@ function NotePane({
         headings={outlineHeadings}
         onJump={(line) => scrollToLineRef.current?.(line)}
         onClose={() => setOutlineOpen(false)}
+      />
+    )}
+    {commentsOpen && (
+      <CommentsPanel
+        threads={commentThreads}
+        draft={draftAnchor}
+        activeId={activeThreadId}
+        onSubmitDraft={submitDraft}
+        onCancelDraft={() => setDraftAnchor(null)}
+        onSelectThread={selectThread}
+        onReply={addReply}
+        onResolve={resolveThread}
+        onDelete={(id) => { deleteThread(id); setActiveThreadId(a => (a === id ? null : a)) }}
+        onDeleteComment={deleteComment}
+        onClose={() => setCommentsOpen(false)}
       />
     )}
     </div>

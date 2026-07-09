@@ -14,7 +14,7 @@ import ConfirmModal from '../../components/Common/ConfirmModal'
 import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineViewList, HiOutlineUpload } from 'react-icons/hi'
 import { LuNotebookPen } from 'react-icons/lu'
 import { toast } from '../../utils/toast'
-import { compareByOrder } from '../../utils/noteSorting'
+import { compareByOrder, compareByFavoriteThenOrder } from '../../utils/noteSorting'
 import { useDragReorder } from '../../hooks/useDragReorder'
 import Skeleton from '../../components/Common/Skeleton'
 
@@ -237,7 +237,7 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
 
       return false
     })
-    .sort(compareByOrder), [notes, notebookIdSet, searchQuery])
+    .sort(compareByFavoriteThenOrder), [notes, notebookIdSet, searchQuery])
 
   // Drag-to-reorder (disabled while searching or selecting — you'd only be
   // reordering the filtered subset). The sidebar mirrors the same `order`.

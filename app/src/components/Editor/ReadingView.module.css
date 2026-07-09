@@ -135,6 +135,15 @@
 :global(.rv-link-sandbox)::before { content: '▦ '; opacity: 0.85 }
 :global(.rv-link-bundle) { color: var(--src-bundle) }
 :global(.rv-link-bundle)::before { content: '⊞ '; opacity: 0.85 }
+:global(.rv-link-pdf) { color: var(--accent-warning) }
+:global(.rv-link-pdf)::before { content: '▤ '; opacity: 0.85 }
+
+:global(.rv-comment) {
+  background-color: rgba(240, 184, 64, 0.16);
+  border-bottom: 2px solid rgba(240, 184, 64, 0.55);
+  cursor: pointer;
+}
+:global(.rv-comment):hover { background-color: rgba(240, 184, 64, 0.28); }
 
 /* Callouts (scoped under .reading so they beat the base blockquote rule). */
 .reading :global(.rv-callout) {

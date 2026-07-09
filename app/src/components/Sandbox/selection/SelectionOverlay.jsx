@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
     getItemBounds, getSelectionBounds, getOrientedAnchors, boxCenter,
     boxUpVector, rotatePoint,
@@ -48,6 +49,9 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     const dragRef = useRef(null)
     const connectorRef = useRef(null)   // active connector drag, separate from transform
     const [guides, setGuides] = useState([])  // [{type:'v'|'h', pos}] world coords
+    // A transparent shield covers the viewport during a transform gesture so pointer
+    // events over an embedded card (e.g. a PDF iframe) don't break the drag.
+    const [gesturing, setGesturing] = useState(false)
 
     const { viewport } = canvas
     // Connectors have no transform box — exclude them so a selected connector
@@ -96,6 +100,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         window.removeEventListener('pointerup', onWindowUp)
         dragRef.current = null
         setGuides([])
+        setGesturing(false)
         endTransaction()
     }
 
@@ -164,6 +169,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         e.stopPropagation()
         beginTransaction()
         dragRef.current = { ...init, snap: snapshot(), startWorld: worldFromClient(e) }
+        setGesturing(true)
         window.addEventListener('pointermove', onWindowMove)
         window.addEventListener('pointerup', onWindowUp)
     }
@@ -308,6 +314,10 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             data-sb-handle="true"
             style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}
         >
+            {gesturing && createPortal(
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9998, cursor: 'grabbing' }} />,
+                document.body,
+            )}
             <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
                 {/* per-item outlines (subtle), only for multi-select */}
                 {box && selectedItems.length > 1 && selectedItems.map(it => {

@@ -86,13 +86,53 @@
   background: radial-gradient(circle at top right, transparent 8px, var(--bg-elevated) 8px);
 }
 
-/* tabs that belong to the current split view */
-.inSplit { box-shadow: inset 0 0 0 1px var(--accent-warning); }
-.splitMark {
-  color: var(--accent-warning);
-  font-weight: 700;
-  margin-right: -2px;
+/* Combined Edge-style split tab: `left | right` as one tab, the focused half lit.
+   Clicking a half focuses that pane (and syncs the editor's focus ring + dock). */
+.splitTab {
+  display: flex;
+  align-items: stretch;
+  max-width: 360px;
+  min-width: 190px;
+  border-radius: 8px 8px 0 0;
+  background: var(--bg-surface);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
+.splitHalf {
+  display: block; /* single-line ellipsis */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.splitHalf:hover { color: var(--text-secondary); }
+/* The focused pane's half reads as the "active" tab. */
+.splitHalfActive {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.splitTabDivider {
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--border-strong);
+  margin: 6px 0;
+}
+.splitTab .tabClose {
+  align-self: center;
+  margin-right: 4px;
+}
+.splitTab:hover .tabClose { opacity: 1; }
 
 .tabTitle {
   overflow: hidden;

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import styles from './SidebarList.module.css'
-import { compareByOrder } from '../../../utils/noteSorting'
+import { compareByOrder, compareByFavoriteThenOrder } from '../../../utils/noteSorting'
 import { HiChevronDown } from 'react-icons/hi'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 
@@ -11,19 +11,15 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
     const split = useNoteSplit()
     const [collapsedIds, setCollapsedIds] = useState(() => new Set())
 
-    // In split view, a click targets the focused pane. When the right pane is
-    // focused we replace its note in place (no route change) instead of
-    // navigating — but never duplicate the left note (shared draft / save key).
+    // Standard navigation handler.
     const handleSelect = (noteId) => (e) => {
-        if (split.enabled && split.focusedSide === 'right') {
-            e.preventDefault()
-            if (noteId == currentNoteID) return // can't show the same note on both sides (loose: route id is a string)
-            split.setSplitNoteId(noteId)
-        }
+        // We no longer intercept clicks for the right pane.
+        // Sidebar always navigates the main app route.
     }
 
     // Highlight both open notes: the route note (left) and the split note (right).
-    const isActive = (noteId) => currentNoteID == noteId || split.splitNoteId == noteId
+    const splitNoteId = split.splitTarget?.type === 'note' ? split.splitTarget.id : null
+    const isActive = (noteId) => currentNoteID == noteId || splitNoteId == noteId
 
     const toggleNotebook = (id) => {
         setCollapsedIds(prev => {
@@ -55,12 +51,12 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
             .sort((a, b) => compareByOrder(a.notebook, b.notebook))
             .map(group => ({
                 ...group,
-                notes: group.notes.slice().sort(compareByOrder)
+                notes: group.notes.slice().sort(compareByFavoriteThenOrder)
             }))
 
         return {
             notebookGroups,
-            standaloneNotes: standalone.slice().sort(compareByOrder)
+            standaloneNotes: standalone.slice().sort(compareByFavoriteThenOrder)
         }
     }, [notes, notebooks])
 
