@@ -141,7 +141,40 @@
   border-radius: 12px;
   text-align: center;
 }
-.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.bagItem { display: flex; align-items: center; gap: 6px; }
+.bagItem .bagRow { flex: 1; min-width: 0; }
+.bagRemove {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.bagRemove:hover {
+  color: #e0574c;
+  border-color: #e0574c;
+  background: rgba(224, 87, 76, 0.1);
+}
 .bagRow {
   width: 100%;
   display: grid;

@@ -22,8 +22,6 @@ const styles = {
     subtitle: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginLeft: 'auto' },
     search: { margin: '12px 22px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, padding: '9px 12px', outline: 'none', fontFamily: 'inherit' },
     list: { flex: 1, overflowY: 'auto', padding: '0 12px 18px' },
-    item: { padding: '12px 14px', marginBottom: 6, background: 'transparent', border: '1px solid transparent', borderRadius: 8, cursor: 'pointer', transition: 'background-color 0.15s, border-color 0.15s' },
-    itemHover: { background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' },
     itemTitle: { fontFamily: 'var(--font-heading)', fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.3 },
     itemMeta: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.08em', marginTop: 4 },
     empty: { textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 24 },
@@ -32,7 +30,6 @@ const styles = {
 
 function TaskAttachPicker({ isOpen, tasks, onPick, onClose }) {
     const [q, setQ] = useState('')
-    const [hoverId, setHoverId] = useState(null)
 
     const filtered = useMemo(() => {
         const query = q.trim().toLowerCase()
@@ -52,6 +49,12 @@ function TaskAttachPicker({ isOpen, tasks, onPick, onClose }) {
             <style>{`
                 @keyframes sbFadeIn { from { opacity: 0 } to { opacity: 1 } }
                 @keyframes sbSlideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+                .sb-attach-item {
+                    padding: 12px 14px; margin-bottom: 6px;
+                    background: transparent; border: 1px solid transparent; border-radius: 8px;
+                    cursor: pointer; transition: background-color 0.15s, border-color 0.15s;
+                }
+                .sb-attach-item:hover { background: var(--bg-elevated); border-color: var(--border-default); }
             `}</style>
             <div style={styles.backdrop} onClick={onBackdrop}>
                 <div style={styles.modal}>
@@ -77,9 +80,7 @@ function TaskAttachPicker({ isOpen, tasks, onPick, onClose }) {
                         ) : filtered.map(t => (
                             <div
                                 key={t.id}
-                                style={{ ...styles.item, ...(hoverId === t.id ? styles.itemHover : {}) }}
-                                onMouseEnter={() => setHoverId(t.id)}
-                                onMouseLeave={() => setHoverId(null)}
+                                className="sb-attach-item"
                                 onClick={() => onPick(t)}
                             >
                                 <div style={styles.itemTitle}>{t.title || 'Untitled task'}</div>

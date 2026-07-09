@@ -52,6 +52,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // A transparent shield covers the viewport during a transform gesture so pointer
     // events over an embedded card (e.g. a PDF iframe) don't break the drag.
     const [gesturing, setGesturing] = useState(false)
+    const rafRef = useRef(0)
+    const lastMoveRef = useRef(null)
 
     const { viewport } = canvas
     // Connectors have no transform box — exclude them so a selected connector
@@ -96,6 +98,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // ---- gesture lifecycle ----
     const endGesture = () => {
         if (!dragRef.current) return
+        if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+        lastMoveRef.current = null
         window.removeEventListener('pointermove', onWindowMove)
         window.removeEventListener('pointerup', onWindowUp)
         dragRef.current = null
@@ -104,9 +108,22 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         endTransaction()
     }
 
-    const onWindowUp = () => endGesture()
+    const onWindowUp = () => { flushMove(); endGesture() }
 
+    // rAF-coalesce transform updates: a high-rate pointer (or a heavy item like a
+    // PDF iframe) would otherwise fire many updates per frame, each re-rendering +
+    // relaying-out. We keep only the latest event and apply it once per frame.
+    const flushMove = () => {
+        if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+        if (lastMoveRef.current) { const e = lastMoveRef.current; lastMoveRef.current = null; applyMove(e) }
+    }
     const onWindowMove = (e) => {
+        lastMoveRef.current = e
+        if (rafRef.current) return
+        rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; flushMove() })
+    }
+
+    const applyMove = (e) => {
         const d = dragRef.current
         if (!d) return
         const p = worldFromClient(e)

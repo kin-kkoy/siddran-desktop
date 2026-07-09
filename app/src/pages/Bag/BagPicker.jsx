@@ -3,7 +3,7 @@ import styles from './BagPicker.module.css'
 // The desktop entry screen. No login, no account — you open a "Bag" (a vault: a
 // folder that holds your notes/tasks) and you're in. The backpack + zipper is the
 // signature: a Bag is a thing you pack and carry through the void.
-export default function BagPicker({ recentBags = [], onOpen, onCreate, onOpenRecent, busy }) {
+export default function BagPicker({ recentBags = [], onOpen, onCreate, onOpenRecent, onRemoveRecent, busy }) {
   return (
     <div className={styles.screen}>
       <div className={styles.stage}>
@@ -31,21 +31,35 @@ export default function BagPicker({ recentBags = [], onOpen, onCreate, onOpenRec
           </button>
         </div>
 
-        {/* ── recent bags ────────────────────────────────────────── */}
+        {/* ── your bags ──────────────────────────────────────────── */}
         <section className={styles.recent}>
-          <p className={styles.recentHead}>Recent Bags</p>
+          <p className={styles.recentHead}>
+            Your Bags{recentBags.length > 0 ? ` · ${recentBags.length}` : ''}
+          </p>
           {recentBags.length === 0 ? (
             <p className={styles.empty}>No Bags yet — create your first to start packing.</p>
           ) : (
             <ul className={styles.list}>
               {recentBags.map((bag) => (
-                <li key={bag.path}>
+                <li key={bag.path} className={styles.bagItem}>
                   <button type="button" className={styles.bagRow} onClick={() => onOpenRecent(bag)} disabled={busy}>
                     <span className={styles.bagDot} aria-hidden="true" />
                     <span className={styles.bagName}>{bag.name}</span>
                     <span className={styles.bagPath}>{bag.path}</span>
                     <span className={styles.bagGo} aria-hidden="true">→</span>
                   </button>
+                  {onRemoveRecent && (
+                    <button
+                      type="button"
+                      className={styles.bagRemove}
+                      onClick={() => onRemoveRecent(bag)}
+                      disabled={busy}
+                      title="Remove from list (does not delete the folder)"
+                      aria-label={`Remove ${bag.name} from the list`}
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -23,7 +23,8 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         dragRef.current = {
             startX: e.clientX, startY: e.clientY,
             originX: item.x, originY: item.y,
-            pointerId: e.pointerId,
+            lastX: item.x, lastY: item.y,
+            pointerId: e.pointerId, moved: false,
         }
         elRef.current?.setPointerCapture?.(e.pointerId)
     }
@@ -33,13 +34,28 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         if (!d || d.pointerId !== e.pointerId) return
         const dx = (e.clientX - d.startX) / zoom
         const dy = (e.clientY - d.startY) / zoom
-        onUpdate(item.id, { x: d.originX + dx, y: d.originY + dy })
+        d.lastX = d.originX + dx
+        d.lastY = d.originY + dy
+        d.moved = true
+        // Coalesce to one state commit per animation frame: a high-rate pointer
+        // would otherwise fire many moves per frame, each re-rendering. Keeping the
+        // store as the source of truth (vs. poking DOM) also keeps the selection
+        // box in sync and survives any incidental re-render.
+        if (!d.raf) {
+            d.raf = requestAnimationFrame(() => {
+                d.raf = 0
+                if (dragRef.current === d) onUpdate(item.id, { x: d.lastX, y: d.lastY })
+            })
+        }
     }
 
     const onPointerUp = (e) => {
-        if (dragRef.current?.pointerId !== e.pointerId) return
+        const d = dragRef.current
+        if (d?.pointerId !== e.pointerId) return
+        if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0 }
         dragRef.current = null
         elRef.current?.releasePointerCapture?.(e.pointerId)
+        if (d.moved) onUpdate(item.id, { x: d.lastX, y: d.lastY })
         endTransaction?.()
     }
 

@@ -2,6 +2,7 @@ import { LuX } from 'react-icons/lu'
 import { useNoteTabs } from '../../contexts/NoteTabsContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import ExpandSidebarButton from '../Layout/Sidebar/ExpandSidebarButton'
+import NavArrows from '../Common/NavArrows'
 import styles from './NoteTabBar.module.css'
 
 // The open-notes tab strip above the editor. Click a tab to switch, × to close,
@@ -27,6 +28,7 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
   return (
     <div className={styles.tabBar}>
       <div className={styles.tabBarInner}>
+      <NavArrows className={styles.tabBarNav} />
       <ExpandSidebarButton className={styles.tabBarExpand} />
       <div className={styles.tabsScroll} role="tablist" aria-label="Open notes">
       {openTabs.map((id) => {

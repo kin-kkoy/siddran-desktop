@@ -36,15 +36,6 @@ function SandboxCard({ sandbox, onDelete, summary }) {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/sandboxes/${sandbox.id}`) }}
         >
-            <button
-                className={styles.menuBtn}
-                onClick={(e) => { e.stopPropagation(); onDelete?.(sandbox.id) }}
-                title="Delete sandbox"
-                aria-label="Delete sandbox"
-            >
-                <HiOutlineTrash size={16} />
-            </button>
-
             <div className={styles.preview}>
                 {count > 0 ? (
                     <div className={styles.mosaic}>
@@ -66,6 +57,14 @@ function SandboxCard({ sandbox, onDelete, summary }) {
             <div className={styles.meta}>
                 <div className={styles.title}>{sandbox.title}</div>
                 <div className={styles.timestamp}>{relativeTime(sandbox.updatedAt)}</div>
+                <button
+                    className={styles.menuBtn}
+                    onClick={(e) => { e.stopPropagation(); onDelete?.(sandbox.id) }}
+                    title="Delete sandbox"
+                    aria-label="Delete sandbox"
+                >
+                    <HiOutlineTrash size={15} />
+                </button>
             </div>
         </div>
     )

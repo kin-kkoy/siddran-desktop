@@ -102,6 +102,13 @@ function SandboxCanvas({
         const el = containerRef.current
         if (!el) return
         const onWheel = (e) => {
+            // Over a scrollable card (e.g. a note preview) the wheel scrolls the card
+            // instead of zooming the canvas — anywhere inside it, header included.
+            const card = e.target?.closest?.('[data-sb-scrollcard="true"]')
+            if (card) {
+                const scroller = card.querySelector('[data-sb-scroll="true"]')
+                if (scroller) { e.preventDefault(); scroller.scrollTop += e.deltaY; return }
+            }
             e.preventDefault()
             const rect = el.getBoundingClientRect()
             const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top }
@@ -310,6 +317,16 @@ function SandboxCanvas({
 
         const onPointerMove = (e) => {
             const { canvas } = latestRef.current
+
+            // Safety net for a lost pointerup (released over an iframe / outside the
+            // window, or swallowed by a native text selection): if a drag gesture is
+            // still "active" but no mouse button is pressed, finalize it now so the
+            // marquee/lasso/stroke can't get stuck following the cursor forever.
+            if (e.buttons === 0 && (marqueeRef.current || lassoRef.current || drawingRef.current
+                || shapingRef.current || eraseRef.current)) {
+                onPointerUp(e)
+                return
+            }
 
             // ---- hover detection for connection dots (idle pointer tool) ----
             // Only when nothing is being dragged/drawn and no connector drag is
@@ -671,6 +688,7 @@ function SandboxCanvas({
                 cursor,
                 touchAction: 'none',
                 userSelect: 'none',
+                WebkitUserSelect: 'none', // WebKitGTK ignores the unprefixed one
                 overflow: 'hidden',
                 backgroundColor: 'var(--bg-surface)',
                 ...gridStyle,

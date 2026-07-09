@@ -1,12 +1,13 @@
 /* Bottom editor dock: fixed to the note content lane so it recenters when the
    sidebar is shown/hidden, matching the note page's available space. */
 .dockZone {
-  position: sticky;
-  left: 0;
+  /* Fixed to the viewport bottom so it always anchors to the window's bottom edge
+     (a short note used to leave a sticky dock floating mid-page). The sidebar
+     offset keeps it centred on the note lane; the split view uses .fixed below. */
+  position: fixed;
+  left: var(--dock-sidebar-offset, 0px);
   right: 0;
   bottom: 0;
-  height: 0;
-  overflow: visible;
   z-index: 70;
   display: flex;
   flex-direction: column;

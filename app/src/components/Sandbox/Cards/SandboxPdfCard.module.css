@@ -8,6 +8,8 @@
     overflow: hidden;
     box-shadow: 0 6px 22px var(--shadow-color, rgba(0, 0, 0, 0.45));
     box-sizing: border-box;
+    -webkit-user-select: none;
+    user-select: none;
 }
 .selected { border-color: var(--accent-warning); }
 
@@ -76,4 +78,24 @@
     justify-content: center;
     color: var(--text-muted);
     font-size: 0.8rem;
+}
+
+/* Opaque cover shown while resizing so the PDF doesn't repaint every frame. */
+.resizeCover {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-elevated, #16181d);
+    color: var(--text-muted);
+}
+.coverName {
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
 }

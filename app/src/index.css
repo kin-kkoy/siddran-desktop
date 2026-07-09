@@ -1,4 +1,7 @@
 :root {
+  /* Render native controls (select popups, scrollbars, date pickers) dark —
+     without this WebKitGTK draws them light, so a <select> reads as a white box. */
+  color-scheme: dark;
   --bg-primary: #09090f;
   --bg-surface: #12121e;
   --bg-surface-alt: #181826;

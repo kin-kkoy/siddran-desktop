@@ -59,19 +59,6 @@ const styles = {
         overflowY: 'auto',
         padding: '0 12px 18px',
     },
-    item: {
-        padding: '12px 14px',
-        marginBottom: 6,
-        background: 'transparent',
-        border: '1px solid transparent',
-        borderRadius: 8,
-        cursor: 'pointer',
-        transition: 'background-color 0.15s, border-color 0.15s',
-    },
-    itemHover: {
-        background: 'var(--bg-elevated)',
-        borderColor: 'var(--border-default)',
-    },
     itemTitle: {
         fontFamily: 'var(--font-heading)',
         fontSize: 15,
@@ -104,7 +91,6 @@ const styles = {
 
 function NoteAttachPicker({ isOpen, notes, onPick, onClose }) {
     const [q, setQ] = useState('')
-    const [hoverId, setHoverId] = useState(null)
 
     const filtered = useMemo(() => {
         const query = q.trim().toLowerCase()
@@ -124,6 +110,13 @@ function NoteAttachPicker({ isOpen, notes, onPick, onClose }) {
             <style>{`
                 @keyframes sbFadeIn { from { opacity: 0 } to { opacity: 1 } }
                 @keyframes sbSlideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+                .sb-attach-item {
+                    padding: 12px 14px; margin-bottom: 6px;
+                    background: transparent; border: 1px solid transparent; border-radius: 8px;
+                    cursor: pointer; transition: background-color 0.15s, border-color 0.15s;
+                }
+                /* CSS :hover — clears reliably even if a mouseleave is missed. */
+                .sb-attach-item:hover { background: var(--bg-elevated); border-color: var(--border-default); }
             `}</style>
             <div style={styles.backdrop} onClick={onBackdrop}>
                 <div style={styles.modal}>
@@ -149,9 +142,7 @@ function NoteAttachPicker({ isOpen, notes, onPick, onClose }) {
                         ) : filtered.map(n => (
                             <div
                                 key={n.id}
-                                style={{ ...styles.item, ...(hoverId === n.id ? styles.itemHover : {}) }}
-                                onMouseEnter={() => setHoverId(n.id)}
-                                onMouseLeave={() => setHoverId(null)}
+                                className="sb-attach-item"
                                 onClick={() => onPick(n)}
                             >
                                 <div style={styles.itemTitle}>{n.title || 'Untitled'}</div>

@@ -16,6 +16,11 @@
   padding: 6px 20px 0 8px;
   border-bottom: 1px solid var(--border-default);
 }
+/* Back/forward arrows at the very start of the bar. */
+.tabBarNav {
+  align-self: center;
+  margin: 0 2px 6px 4px;
+}
 /* "Show sidebar" button before the first tab (only visible when collapsed). */
 .tabBarExpand {
   align-self: center;

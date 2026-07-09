@@ -14,8 +14,9 @@
 
 .card:hover {
     border-color: var(--border-strong);
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px var(--shadow-color);
+    /* No transform lift — it promotes the card to a GPU layer and text can read
+       blurry on fractional-scale displays. A stronger shadow gives the lift feel. */
+    box-shadow: 0 12px 28px var(--shadow-color);
 }
 
 .preview {
@@ -68,9 +69,8 @@
 
 .meta {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
 }
 
 .title {
@@ -94,23 +94,19 @@
     white-space: nowrap;
 }
 
+/* Trash sits in the meta row, just right of the timestamp. */
 .menuBtn {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    /* Above .preview (position:relative, later in DOM) — without this the preview
-       paints over the button and it's unclickable/invisible. */
-    z-index: 2;
+    flex-shrink: 0;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.5; /* always visible (was hover-only, hard to discover) */
+    opacity: 0.6;
     transition: opacity 0.2s, color 0.2s, background-color 0.2s;
     cursor: pointer;
 }
@@ -190,7 +186,7 @@
 .addCard:hover {
     border-color: var(--accent-warning);
     color: var(--accent-warning);
-    transform: translateY(-2px);
+    background: var(--bg-surface);
 }
 
 .addLabel {

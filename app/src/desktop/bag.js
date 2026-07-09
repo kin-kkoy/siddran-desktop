@@ -7,7 +7,7 @@
 // which persists per-app in both Tauri and the browser.
 
 const RECENTS_KEY = 'siddran_recent_bags'
-const MAX_RECENTS = 8
+const MAX_RECENTS = 50
 
 export function isTauri() {
   return typeof window !== 'undefined' && !!(window.__TAURI_INTERNALS__ || window.__TAURI__)
@@ -77,6 +77,15 @@ export function addRecentBag(bag) {
     list.unshift({ name: bag.name, path: bag.path })
     localStorage.setItem(RECENTS_KEY, JSON.stringify(list.slice(0, MAX_RECENTS)))
   } catch { /* non-fatal */ }
+}
+
+// Remove a Bag from the list (forgets it here; the folder on disk is untouched).
+export function removeRecentBag(path) {
+  try {
+    const list = getRecentBags().filter((b) => b.path !== path)
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(list))
+    return list
+  } catch { return getRecentBags() }
 }
 
 export function getLastBag() {

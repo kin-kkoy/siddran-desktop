@@ -33,7 +33,7 @@ import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
 import logger from "./utils/logger.js"
 import BagPicker from "./pages/Bag/BagPicker.jsx"
-import { pickExistingBag, createBag, getRecentBags, addRecentBag, isTauri } from "./desktop/bag.js"
+import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
 import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote } from "./desktop/localStore.js"
@@ -222,6 +222,20 @@ function App() {
     return () => { cancelled = true }
   }, [refreshAuthToken])
 
+  // Mouse buttons 4/5 (side back/forward buttons) drive history navigation
+  // everywhere — WebKitGTK doesn't do it by default. window.history triggers
+  // popstate, which BrowserRouter (mounted below) picks up.
+  useEffect(() => {
+    const onDown = (e) => { if (e.button === 3 || e.button === 4) e.preventDefault() }
+    const onUp = (e) => {
+      if (e.button === 3) { e.preventDefault(); window.history.back() }
+      else if (e.button === 4) { e.preventDefault(); window.history.forward() }
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousedown', onDown); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
   // Proactive token refresh - refreshes access token every 13 minutes
   // (before the 15-minute expiry) so the user never hits a 401 during normal use
   useEffect(() => {
@@ -317,6 +331,11 @@ function App() {
     catch (err) { logger.error('open recent bag failed', err) }
     finally { setBagBusy(false) }
   }, [openBag])
+
+  // Forget a Bag from the picker list (the folder on disk is left untouched).
+  const handleRemoveRecent = useCallback((bag) => {
+    setRecentBags(removeRecentBag(bag.path))
+  }, [])
 
   // Close the current Bag → flush to disk, then back to the Bag picker. Threaded
   // into the Sidebar in place of "logout".
@@ -746,6 +765,7 @@ function App() {
         onOpen={handleOpenBag}
         onCreate={handleCreateBag}
         onOpenRecent={handleOpenRecent}
+        onRemoveRecent={handleRemoveRecent}
         busy={bagBusy}
       />
     )

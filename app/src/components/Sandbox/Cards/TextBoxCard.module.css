@@ -40,6 +40,9 @@
     font-family: var(--font-body);
     padding: 0;
     margin: 0;
+    /* The canvas sets user-select:none; the edit textarea must opt back in. */
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .removeBtn {

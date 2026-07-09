@@ -1,6 +1,6 @@
 import {
     LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
-    LuType, LuEraser, LuPlus, LuPaintBucket,
+    LuType, LuEraser, LuImagePlus, LuPaintBucket,
     LuUndo2, LuRedo2, LuMagnet, LuDownload,
 } from 'react-icons/lu'
 import { useRef } from 'react'
@@ -84,8 +84,8 @@ function SandboxToolbar({
                 <LuType size={16} />
             </ToolBtn>
             <span ref={insertRef}>
-                <ToolBtn active={insertMenuOpen} title="Insert note / task / image" onClick={onToggleInsertMenu}>
-                    <LuPlus size={17} />
+                <ToolBtn active={insertMenuOpen} title="Media" onClick={onToggleInsertMenu}>
+                    <LuImagePlus size={16} />
                 </ToolBtn>
             </span>
             <InsertMenu

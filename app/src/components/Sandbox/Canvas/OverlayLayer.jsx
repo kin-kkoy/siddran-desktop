@@ -17,16 +17,27 @@ function OverlayLayer({ viewport, width, height, children }) {
                 pointerEvents: 'none',
             }}
         >
+            {/* Pan with a plain translate, ROUNDED to whole pixels + promoted to its
+                own compositor layer (translate3d + will-change). A fractional
+                translate samples the layer texture off-grid → the "sharp at 0,0 but
+                blurry once I pan" effect; rounding pins it to the pixel grid, and
+                compositing keeps panning cheap (no per-frame repaint of the cards). */}
             <div
                 style={{
                     position: 'absolute',
                     top: 0, left: 0,
-                    transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+                    transform: `translate3d(${Math.round(viewport.x)}px, ${Math.round(viewport.y)}px, 0)`,
                     transformOrigin: '0 0',
                     willChange: 'transform',
                 }}
             >
-                {children}
+                {/* ZOOM via the CSS `zoom` property, not `transform: scale()`. `zoom`
+                    re-lays-out the cards at the target size so text stays razor-sharp
+                    at any zoom (a scale() transform samples a base-res texture = the
+                    blur). Coords are unchanged: a world point (x,y) lands at vx+x*zoom. */}
+                <div style={{ zoom: viewport.zoom }}>
+                    {children}
+                </div>
             </div>
         </div>
     )

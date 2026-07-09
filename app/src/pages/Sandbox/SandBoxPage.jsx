@@ -13,6 +13,7 @@ import AttachedNoteCard from '../../components/Sandbox/Cards/AttachedNoteCard'
 import AttachedTaskCard from '../../components/Sandbox/Cards/AttachedTaskCard'
 import TextBoxCard from '../../components/Sandbox/Cards/TextBoxCard'
 import SandboxPdfCard from '../../components/Sandbox/Cards/SandboxPdfCard'
+import NavArrows from '../../components/Common/NavArrows'
 import { attachPdfViaPicker } from '../../desktop/media'
 import NoteAttachPicker from '../../components/Sandbox/Cards/NoteAttachPicker'
 import TaskAttachPicker from '../../components/Sandbox/Cards/TaskAttachPicker'
@@ -215,7 +216,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     const onPickNote = (note) => {
         const w = centerWorld()
-        act.addItem({ type: 'note', x: w.x - 100, y: w.y - 46, w: 200, h: 92, rotation: 0, z_index: nextZ(), payload: { noteId: note.id } })
+        act.addItem({ type: 'note', x: w.x - 165, y: w.y - 215, w: 330, h: 430, rotation: 0, z_index: nextZ(), payload: { noteId: note.id } })
         setNotePickerOpen(false)
         bump()
         toast.success(`Attached "${note.title || 'Untitled'}"`)
@@ -467,6 +468,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     return (
         <div className={mode === 'half' ? styles.pageHalf : styles.page}>
             <header className={styles.header}>
+                {mode !== 'half' && <NavArrows />}
                 <ExpandSidebarButton />
                 <div className={styles.titleGroup}>
                     <input

@@ -207,10 +207,19 @@ const escapeHtml = (s) => s.replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ))
 
+// Wrap image/link destinations that contain a space in <> so CommonMark parses
+// them. An unencoded space (e.g. an attachment in a note-titled folder like
+// `attachments/another test/…`) otherwise ends the destination early, and the
+// whole `![alt](path)` falls back to literal text — which is why an image could
+// render as its raw markdown. Skips already-bracketed dests and ones with a title.
+const bracketSpacedUrls = (md) =>
+  md.replace(/(\]\()([^()\n<>"]*?)(\))/g, (m, open, dest, close) =>
+    (/\s/.test(dest) ? `${open}<${dest.trim()}>${close}` : m))
+
 export function markdownToHtml(md) {
   if (!md) return ''
   try {
-    const { text, map } = normalizeCalloutWithMap(md)
+    const { text, map } = normalizeCalloutWithMap(bracketSpacedUrls(md))
     activeLineMap = map // consumed by rehypeLineNumbers; preserveIndent keeps line count
     return String(processor.processSync(preserveIndent(text)))
   } catch (err) {
