@@ -373,6 +373,30 @@
   width: 100%;
 }
 
+/* Explicit "clear deadline" button beside the datetime input (native controls
+   don't reliably expose one on WebKitGTK, and the field is optional). */
+.clearDue {
+  flex: 0 0 auto;
+  width: 40px;
+  align-self: stretch;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.clearDue:hover {
+  color: var(--accent-danger);
+  background-color: var(--bg-hover);
+  border-color: var(--accent-danger);
+}
+
 /* Fade-in for form content when switching task types */
 .formContent {
   animation: fadeIn 0.25s ease;

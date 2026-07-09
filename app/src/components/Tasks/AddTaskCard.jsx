@@ -297,7 +297,19 @@ function AddTaskCard({ addTask, addBundle, viewMode }) {
                                 value={dueDate}
                                 onChange={e => setDueDate(e.target.value)}
                                 className={styles.input}
+                                title="Deadline (optional)"
                             />
+                            {dueDate && (
+                                <button
+                                    type="button"
+                                    className={styles.clearDue}
+                                    onClick={() => setDueDate("")}
+                                    title="Clear deadline"
+                                    aria-label="Clear deadline"
+                                >
+                                    ×
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}

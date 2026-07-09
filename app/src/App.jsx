@@ -33,7 +33,7 @@ import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
 import logger from "./utils/logger.js"
 import BagPicker from "./pages/Bag/BagPicker.jsx"
-import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, isTauri } from "./desktop/bag.js"
+import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, getLastBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
 import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote } from "./desktop/localStore.js"
@@ -87,6 +87,10 @@ function App() {
   const [currentBag, setCurrentBag] = useState(null)
   const [recentBags, setRecentBags] = useState(() => getRecentBags())
   const [bagBusy, setBagBusy] = useState(false)
+  // Reopen the most recently used Bag on launch (desktop) so you land back inside
+  // it instead of the picker. Stays true until the attempt resolves so the picker
+  // never flashes first.
+  const [autoOpening, setAutoOpening] = useState(() => isTauri() && !!getLastBag())
   // Gates the first render until the startup token check resolves, so we never
   // flash the login page (or fire protected requests) while a bootstrap refresh
   // is in flight.
@@ -308,6 +312,26 @@ function App() {
     setUsername(bag.name)
     addRecentBag(bag)
     setRecentBags(getRecentBags())
+  }, [])
+
+  // Auto-reopen the last Bag on launch. Verifies the folder still exists first, so
+  // a moved/deleted Bag falls through to the picker instead of resurrecting an
+  // empty one. Runs once on mount.
+  useEffect(() => {
+    if (!autoOpening) return
+    let cancelled = false
+    ;(async () => {
+      const last = getLastBag()
+      try {
+        if (last) {
+          const fs = isTauri() ? createTauriFs() : createMemFs()
+          if (await fs.exists(last.path)) await openBag(last)
+        }
+      } catch (err) { logger.error('auto-open last bag failed', err) }
+      finally { if (!cancelled) setAutoOpening(false) }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleOpenBag = useCallback(async () => {
@@ -757,8 +781,11 @@ function App() {
     return <div style={{ ...style, minHeight: '100vh' }} />
   }
 
-  // No Bag open → the desktop entry screen (no login, no accounts).
+  // No Bag open → the desktop entry screen (no login, no accounts). While the
+  // last Bag is being reopened on launch, hold a blank frame instead of flashing
+  // the picker.
   if (!currentBag) {
+    if (autoOpening) return <div style={{ ...style, minHeight: '100vh' }} />
     return (
       <BagPicker
         recentBags={recentBags}
