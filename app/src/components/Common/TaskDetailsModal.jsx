@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiXCircle, FiExternalLink } from 'react-icons/fi'
+import { FiExternalLink } from 'react-icons/fi'
 import styles from './TaskDetailsModal.module.css'
+import DateTimePicker from './DateTimePicker.jsx'
 import { useModalPresence } from '../../utils/modalPresence'
 
 function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub}) {
@@ -133,27 +134,14 @@ function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub})
                         {!isDailyTask && (
                             <div className={`${styles.metaItem} ${styles.deadlineItem}`}>
                                 <span className={styles.fieldLabel}>Deadline</span>
-                                <div className={styles.deadlineRow}>
-                                    <input
-                                        type="datetime-local"
-                                        className={styles.dateInput}
-                                        style={{ colorScheme: 'dark' }}
-                                        value={toLocalInput(dueDate)}
-                                        onChange={e => {
-                                            setDueDate(e.target.value ? new Date(e.target.value).toISOString() : null)
-                                            isDirtyRef.current = true
-                                        }}
-                                    />
-                                    {dueDate && (
-                                        <button
-                                            type="button"
-                                            className={styles.clearDeadlineBtn}
-                                            onClick={() => { setDueDate(null); isDirtyRef.current = true }}
-                                            title="Clear deadline"
-                                            aria-label="Clear deadline"
-                                        ><FiXCircle size={16} /></button>
-                                    )}
-                                </div>
+                                <DateTimePicker
+                                    value={toLocalInput(dueDate)}
+                                    onChange={(v) => {
+                                        setDueDate(v ? new Date(v).toISOString() : null)
+                                        isDirtyRef.current = true
+                                    }}
+                                    placeholder="No deadline"
+                                />
                             </div>
                         )}
                     </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './TaskCard.module.css'
 import RecurrencePicker from '../Calendar/Peek/RecurrencePicker.jsx'
+import DateTimePicker from '../Common/DateTimePicker.jsx'
 import { toast } from '../../utils/toast'
 import { modalPresence } from '../../utils/modalPresence'
 
@@ -292,24 +293,7 @@ function AddTaskCard({ addTask, addBundle, viewMode }) {
                                 <option value="high">High Priority</option>
                             </select>
 
-                            <input
-                                type="datetime-local"
-                                value={dueDate}
-                                onChange={e => setDueDate(e.target.value)}
-                                className={styles.input}
-                                title="Deadline (optional)"
-                            />
-                            {dueDate && (
-                                <button
-                                    type="button"
-                                    className={styles.clearDue}
-                                    onClick={() => setDueDate("")}
-                                    title="Clear deadline"
-                                    aria-label="Clear deadline"
-                                >
-                                    ×
-                                </button>
-                            )}
+                            <DateTimePicker value={dueDate} onChange={setDueDate} placeholder="No deadline" />
                         </div>
                     </div>
                 )}

@@ -1,0 +1,201 @@
+.wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* Calendar button that replaces the date field. */
+.trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.trigger:hover { border-color: var(--text-faint); color: var(--text-secondary); }
+.triggerOpen { border-color: var(--accent-warning); }
+.hasValue { color: var(--text-primary); }
+.calIcon { flex-shrink: 0; opacity: 0.85; }
+.triggerText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Clear button — deliberately high-contrast so it reads in dark mode. */
+.clear {
+  flex: 0 0 auto;
+  width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.clear:hover {
+  color: #fff;
+  background-color: var(--accent-danger, #e0574c);
+  border-color: var(--accent-danger, #e0574c);
+}
+
+/* ── Popup (portaled to body, fixed-positioned) ── */
+.popup {
+  position: fixed;
+  z-index: 4000;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
+  padding: 12px;
+  user-select: none;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.monthLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.nav:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.weekdays span {
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  padding: 4px 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+.day:hover { background: var(--bg-hover); color: var(--text-primary); }
+.today {
+  color: var(--accent-warning);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.selected,
+.selected:hover {
+  background: var(--accent-warning);
+  color: var(--bg-primary);
+  font-weight: 700;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+}
+/* Time gets its own full-width row so AM/PM is never clipped. */
+.timeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.timeLabel {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.time {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.time:focus { border-color: var(--accent-warning); }
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.footBtn {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.footBtn:hover { color: var(--text-primary); border-color: var(--border-strong); background: var(--bg-hover); }
+.footClear:hover { color: var(--accent-danger, #e0574c); border-color: var(--accent-danger, #e0574c); }
+.footDone {
+  background: var(--accent-warning);
+  border-color: var(--accent-warning);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+.footDone:hover { background: var(--accent-warning); color: var(--bg-primary); filter: brightness(1.08); }

@@ -393,9 +393,9 @@ function App() {
     events: calendarEvents, addEvent, updateEvent, deleteEvent, addEvents, removeEventsBySchedule, recolorEventsBySchedule
   } = useCalendarEvents(authFetch, API, unlocked && calendarActive)
   const { schedules, createSchedule, restampSchedule, deleteSchedule, updateSchedule } = useSchedules(authFetch, API, unlocked && calendarActive)
-  const {
-    tasks: calendarTasks, undated: calendarUndated, retimeTask, scheduleTask, unscheduleTask
-  } = useCalendarTasks(authFetch, API, unlocked && calendarActive)
+  // Derived from the shared useTasks store (single source of truth) — new/edited
+  // tasks reflect on the calendar live, and there's no second copy to duplicate.
+  const { tasks: calendarTasks, undated: calendarUndated } = useCalendarTasks(tasks)
   // Recurring dailies + per-day completions (gated the same way so non-calendar pages stay quiet).
   const {
     recurringDailies, completions: dailyCompletions, toggleCompletion, addRecurring, removeRecurring
@@ -404,20 +404,21 @@ function App() {
   // add/delete/edit reflect on the calendar live, with no refetch.
   const ephemeralDailies = useMemo(() => dailyTasks.filter(d => d.recurrence == null), [dailyTasks])
 
-  // Calendar owns the PUT; patchTaskInCache also syncs the app-level useTasks cache so TasksHub
-  // reflects new dates live (no extra request).
+  // Retime/schedule/unschedule a task: patch the shared store immediately
+  // (optimistic — the derived calendar lists update at once) and persist via
+  // updateTask. Both act on the same useTasks store the calendar now reads.
   const onTaskRetime = useCallback((id, patch) => {
-    retimeTask(id, patch)
     patchTaskInCache(id, patch)
-  }, [retimeTask, patchTaskInCache])
+    updateTask(id, patch)
+  }, [patchTaskInCache, updateTask])
   const onTaskSchedule = useCallback((taskId, due) => {
-    scheduleTask(taskId, due)
     patchTaskInCache(taskId, { due_date: due })
-  }, [scheduleTask, patchTaskInCache])
+    updateTask(taskId, { due_date: due })
+  }, [patchTaskInCache, updateTask])
   const onTaskUnschedule = useCallback((taskId) => {
-    unscheduleTask(taskId)
     patchTaskInCache(taskId, { due_date: null })
-  }, [unscheduleTask, patchTaskInCache])
+    updateTask(taskId, { due_date: null })
+  }, [patchTaskInCache, updateTask])
 
   // Persist a daily task from ANY surface (TasksHub, calendar quick-add, calendar create-modal) and,
   // if it's recurring, inject it into the calendar's separate recurring set so it plots immediately

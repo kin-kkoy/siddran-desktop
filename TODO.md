@@ -36,6 +36,10 @@ A running list of what's implemented and what's planned. Add freely.
 
 ## 🔜 To implement / deferred
 
+### Task deadline
+- [x] **Custom date picker** — replaced the native `datetime-local` (buried clear button + clipped AM/PM) with `components/Common/DateTimePicker.jsx`: a calendar-button + popup, high-contrast clear buttons, full-width time row. Used in `AddTaskCard` + `TaskDetailsModal`.
+- [ ] **Optional deadline TIME (blank by default / date-only deadlines)** — needs the "no time ⇒ end of day, remembered as date-only" decision. Details + recommended approach in [references/deadline-and-calendar.md](references/deadline-and-calendar.md). (Calendar confirmed working like the web build — same doc.)
+
 ### High priority
 - [x] **Sandbox PDF Previews** — Insert → **PDF** copies a PDF into the Bag and drops a `pdf` **card** (`SandboxPdfCard`) with a scrollable `<iframe>` preview; drag by the header, resize/rotate via the shared selection handles. Added a transparent **drag-shield** during transform gestures so dragging over the iframe doesn't break the resize.
 - [x] **Comments** (Google-Docs style) — select text (edit or read mode) → comment button starts a thread; the right-rail **CommentsPanel** shows threads with replies, **resolve/reopen**, delete, and a show-resolved toggle. Highlights render in **both** the editor (CM6 mark decorations) and the reading view (quote-matched spans); clicking a highlight focuses its thread, clicking a thread scrolls the editor to it.
