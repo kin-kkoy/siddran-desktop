@@ -24,17 +24,19 @@
   height: 28px;
   margin-bottom: -1px;
   background: var(--bg-primary);
-  border: none;
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
   border-radius: 9px 9px 0 0;
   color: var(--accent-warning);
   font-size: 17px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 -6px 18px var(--shadow-color);
   transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
-/* Same tab-shape ears as .dock — when open they merge into the dock below; when
-   closed they curve into the bottom of the screen. */
+/* Tab-shape ears ONLY when the dock is closed — the toggle then sits alone at the
+   bottom of the screen and its base flares into it. When the dock is OPEN the
+   toggle sits flush on the dock, so no ears (their concave curve would otherwise
+   reveal the page beside the toggle and read as a gap). */
 .dockToggle::before,
 .dockToggle::after {
   content: '';
@@ -44,11 +46,11 @@
   height: 9px;
   pointer-events: none;
 }
-.dockToggle::before {
+.closed .dockToggle::before {
   left: -9px;
   background: radial-gradient(circle at top left, transparent 9px, var(--bg-primary) 9px);
 }
-.dockToggle::after {
+.closed .dockToggle::after {
   right: -9px;
   background: radial-gradient(circle at top right, transparent 9px, var(--bg-primary) 9px);
 }
@@ -57,10 +59,10 @@
   color: var(--text-primary);
   background: var(--bg-hover);
 }
-.dockToggle:hover::before {
+.closed .dockToggle:hover::before {
   background: radial-gradient(circle at top left, transparent 9px, var(--bg-hover) 9px);
 }
-.dockToggle:hover::after {
+.closed .dockToggle:hover::after {
   background: radial-gradient(circle at top right, transparent 9px, var(--bg-hover) 9px);
 }
 
@@ -78,8 +80,9 @@
   gap: 2px;
   padding: 8px 12px 10px;
   background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
   border-radius: 12px 12px 0 0;
-  box-shadow: 0 -8px 28px var(--shadow-color);
   pointer-events: auto;
   transition: transform 0.18s ease, opacity 0.18s ease;
 }
