@@ -33,6 +33,7 @@ import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
 import logger from "./utils/logger.js"
 import BagPicker from "./pages/Bag/BagPicker.jsx"
+import SplashScreen from "./components/Splash/SplashScreen.jsx"
 import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, getLastBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
@@ -86,11 +87,24 @@ function App() {
   // the app. `{ name, path }` or null. `unlocked` (computed below) gates the shell.
   const [currentBag, setCurrentBag] = useState(null)
   const [recentBags, setRecentBags] = useState(() => getRecentBags())
+  // True while flushing one Bag and loading another (profile bag-switcher). Holds a
+  // blank frame instead of flashing the picker during the swap.
+  const [switching, setSwitching] = useState(false)
   const [bagBusy, setBagBusy] = useState(false)
   // Reopen the most recently used Bag on launch (desktop) so you land back inside
   // it instead of the picker. Stays true until the attempt resolves so the picker
   // never flashes first.
   const [autoOpening, setAutoOpening] = useState(() => isTauri() && !!getLastBag())
+  // Launch animation — plays once per app session (not per route change / remount).
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      if (!sessionStorage.getItem('siddran_splash_shown')) {
+        sessionStorage.setItem('siddran_splash_shown', '1')
+        return true
+      }
+    } catch { /* sessionStorage unavailable — skip the splash */ }
+    return false
+  })
   // Gates the first render until the startup token check resolves, so we never
   // flash the login page (or fire protected requests) while a bootstrap refresh
   // is in flight.
@@ -368,6 +382,23 @@ function App() {
     setCurrentBag(null)
     setUsername(null)
   }, [])
+
+  // Switch straight from one open Bag to another (the sidebar profile bag-switcher).
+  // Flush the current Bag to disk, briefly unmount the shell (so the data hooks reset
+  // and refetch against the new store), reset the URL so the router doesn't try to
+  // restore a note id that only exists in the old Bag, then open the new one.
+  const switchBag = useCallback(async (bag) => {
+    if (!bag || (currentBag && bag.path === currentBag.path)) return
+    setSwitching(true)
+    try {
+      await closeBagStore()
+      try { window.history.replaceState(null, '', '/') } catch { /* ignore */ }
+      setCurrentBag(null)
+      setUsername(null)
+      await openBag(bag)
+    } catch (err) { logger.error('switch bag failed', err) }
+    finally { setSwitching(false) }
+  }, [openBag, currentBag])
 
 
   // ------------- DATA LOGIC (Adding, deleting, etc. of Notes and Notebooks) ===================================
@@ -777,6 +808,17 @@ function App() {
     '--cinder-sidebar-w': sidebarW,
   };
 
+  // Launch animation (once per session). Placed after all hooks so the auth/auto-open
+  // effects keep running underneath while it plays — the app is ready by the time it
+  // dismisses. `style` gives it the themed background behind the transparent overlay.
+  if (showSplash) {
+    return (
+      <div style={{ ...style, minHeight: '100vh' }}>
+        <SplashScreen onDone={() => setShowSplash(false)} />
+      </div>
+    )
+  }
+
   // Hold the first paint until startup resolves.
   if (!authReady) {
     return <div style={{ ...style, minHeight: '100vh' }} />
@@ -786,7 +828,7 @@ function App() {
   // last Bag is being reopened on launch, hold a blank frame instead of flashing
   // the picker.
   if (!currentBag) {
-    if (autoOpening) return <div style={{ ...style, minHeight: '100vh' }} />
+    if (autoOpening || switching) return <div style={{ ...style, minHeight: '100vh' }} />
     return (
       <BagPicker
         recentBags={recentBags}
@@ -839,9 +881,12 @@ function App() {
           zIndex: 5,
         }}>
 
-          {/* Sidebar is fully hidden when collapsed — expand via the contextual
-              "show sidebar" buttons (tab bar / sandbox header / floating). */}
-          {unlocked && !isCollapsed && (
+          {/* Sidebar stays MOUNTED and slides off-canvas when collapsed (see the
+              `.hidden` transform in Sidebar.module.css) — remounting it on every
+              toggle re-rendered the whole notes list and caused the collapse lag.
+              Expand via the contextual "show sidebar" buttons (tab bar / sandbox
+              header / floating). */}
+          {unlocked && (
             <Sidebar username={username}
               isCollapsed={isCollapsed}
               toggleSidebar={setIsCollapsed}
@@ -849,16 +894,21 @@ function App() {
               notebooks={notebooks}
               currentNoteID={currentNoteID}
               setIsAuthed={closeBag}
+              recentBags={recentBags}
+              currentBagPath={currentBag?.path}
+              onSwitchBag={switchBag}
             />
           )}
 
 
-          {/* blank space reserved for the fixed sidebar (0 when hidden) */}
+          {/* Blank space reserved for the fixed sidebar (0 when hidden). Reserved
+              instantly (no width transition): animating width reflows the content —
+              and the CodeMirror editor — every frame, which is what felt laggy. The
+              sidebar itself still glides via its transform transition. */}
           {unlocked && (
             <div style={{
               width: isCollapsed ? '0px' : '220px',
               flexShrink: 0,  /* Prevents this from shrinking */
-              transition: 'width 0.3s ease'
             }} />
           )}
 

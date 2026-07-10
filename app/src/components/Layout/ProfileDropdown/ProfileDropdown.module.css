@@ -8,8 +8,8 @@
 .profileBtn {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 1rem 1.2rem;
+  gap: 0.65rem;
+  padding: 0.55rem 1rem;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -18,16 +18,18 @@
   text-align: left;
   font-size: 0.78rem;
   transition: background 0.2s;
-  overflow: hidden;
+  /* visible so the avatar's hover glow isn't clipped; the text block truncates itself */
+  overflow: visible;
 }
 
+/* No background flash on hover — the avatar ring pulses instead (see below). */
 .profileBtn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Avatar circle */
 .avatar {
+  position: relative;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -43,15 +45,54 @@
   flex-shrink: 0;
 }
 
+/* A glowing amber ring that pulses on hover. Only opacity + transform are animated
+   (compositor-friendly — no layout/paint per frame), it's a tiny element, and it runs
+   only while hovered, so it's negligible on CPU/GPU/RAM. */
+.avatar::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-warning);
+  box-shadow: 0 0 8px 1px rgba(240, 184, 64, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+.profileBtn:hover .avatar::after {
+  animation: avatarPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes avatarPulse {
+  0%, 100% { opacity: 0.12; transform: scale(1); }
+  50%      { opacity: 0.75; transform: scale(1.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profileBtn:hover .avatar::after { animation: none; opacity: 0.5; transform: none; }
+}
+
 /* Username + subtitle wrapper */
 .userInfo {
   display: flex;
   flex-direction: column;
+  flex: 1;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
+  min-width: 0;
   opacity: 1;
   transition: opacity 0.2s ease 0.15s;
+}
+
+/* Bag name (bold, matches the app's mono UI font) */
+.userName {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .userInfoHidden {
@@ -86,7 +127,7 @@
     overflow: hidden;
     z-index: 9999;
     animation: slideIn 0.2s ease;
-    min-width: 200px;
+    min-width: 240px;
 }
 
 
@@ -111,6 +152,93 @@
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* ── Bag switcher (top of the menu) ── */
+.switchLabel {
+  margin: 0;
+  padding: 10px 14px 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+/* Scrollable so a long Bag list stays compact (~3.5 rows visible). */
+.bagList {
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 2px 6px;
+  scrollbar-width: thin;
+}
+.bagList::-webkit-scrollbar { width: 5px; }
+.bagList::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+.bagItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.bagItem:hover { background: var(--bg-hover); }
+.bagItemActive { cursor: default; }
+.bagItemActive:hover { background: none; }
+
+.bagAvatar {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid rgba(240, 184, 64, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-warning);
+}
+.bagItemActive .bagAvatar {
+  background: rgba(240, 184, 64, 0.14);
+  border-color: var(--accent-warning);
+}
+
+.bagInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.2;
+}
+.bagName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bagPath {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bagCheck {
+  flex-shrink: 0;
+  display: flex;
+  color: var(--accent-warning);
 }
 
 /* Dropdown items */

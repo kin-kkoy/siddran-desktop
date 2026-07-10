@@ -12,8 +12,9 @@ import { imageExtensions } from './cm/imagePaste'
 import { wikilinks, wikilinkMarkdownExtension, resolveNote } from './cm/wikilinks'
 import { obsidianSyntax } from './cm/syntaxNodes'
 import { headingFold, foldedLineSet, applyFolds } from './cm/fold'
-import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, commentState } from './cm/comments'
+import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, anchorFromRange, commentState } from './cm/comments'
 import { listEditingKeymap, listIndentNormalizer, enterIndent } from './cm/listEditing'
+import { formattingKeymap } from './cm/formatting'
 import { cinderHighlightStyle } from './cm/highlight'
 import { cinderTheme } from './cm/theme'
 import ReadingView from './ReadingView'
@@ -234,6 +235,8 @@ function CodeMirrorEditor({
           // its Backspace→deleteMarkupBackward (nice list-marker delete) explicitly.
           // The [[ ]] completionKeymap (Prec.highest) still owns Enter while open.
           keymap.of([...listEditingKeymap, { key: 'Enter', run: enterIndent }, { key: 'Backspace', run: deleteMarkupBackward }]),
+          // Inline-format shortcuts (Ctrl+B/I/U/H/=) — before defaultKeymap so they win.
+          keymap.of(formattingKeymap),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           indentUnit.of('    '),
           listIndentNormalizer, // snap stray hand-typed list indents to a sibling level

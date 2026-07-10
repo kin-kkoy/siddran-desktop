@@ -28,8 +28,8 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
   return (
     <div className={styles.tabBar}>
       <div className={styles.tabBarInner}>
-      <NavArrows className={styles.tabBarNav} />
       <ExpandSidebarButton className={styles.tabBarExpand} />
+      <NavArrows className={styles.tabBarNav} />
       <div className={styles.tabsScroll} role="tablist" aria-label="Open notes">
       {openTabs.map((id) => {
         // Fold the pair's standalone tabs away; the combined tab is rendered in

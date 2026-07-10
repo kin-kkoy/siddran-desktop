@@ -29,7 +29,7 @@ const DEFAULTS = {
   starCount: 100,
   starDirection: '↙',
   noteEditorWidth: 1200,
-  rememberNoteState: false,
+  rememberNoteState: true,
 }
 
 // ── Color utilities ────────────────────────────────────────────────
@@ -234,7 +234,16 @@ export function SettingsProvider({ children, authFetch, API, isAuthed }) {
   const [settings, setSettings] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('cinder_settings'))
-      return { ...DEFAULTS, ...cached }
+      const merged = { ...DEFAULTS, ...cached }
+      // One-time migration: fold persistence ("Remember File/Note State") is now on
+      // by default. Existing installs have a cached `rememberNoteState:false` that
+      // would otherwise mask the new default, so force it on once. After this the
+      // user can still turn it off in Settings and that choice sticks.
+      if (!localStorage.getItem('cinder_folds_default_on')) {
+        merged.rememberNoteState = true
+        localStorage.setItem('cinder_folds_default_on', '1')
+      }
+      return merged
     } catch { return { ...DEFAULTS } }
   })
 

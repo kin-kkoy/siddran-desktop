@@ -29,7 +29,8 @@ function Composer({ value, onChange, onSubmit, onCancel, placeholder, submitLabe
         rows={2}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() }
+          // Enter submits; Shift+Enter (or Ctrl/Cmd+Enter) inserts a newline.
+          if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); submit() }
           if (e.key === 'Escape' && onCancel) { e.preventDefault(); onCancel() }
         }}
       />

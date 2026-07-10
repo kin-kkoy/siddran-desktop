@@ -13,19 +13,12 @@ import { usePdfView } from '../../contexts/PdfViewContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { attachImageViaPicker, attachPdfViaPicker } from '../../desktop/media'
+import { wrapSelection } from './cm/formatting'
 import styles from './EditorDock.module.css'
 
 // ── Formatting helpers ──
-
-function wrapSelection(view, before, after = before) {
-  const { from, to } = view.state.selection.main
-  const selected = view.state.sliceDoc(from, to)
-  view.dispatch({
-    changes: { from, to, insert: before + selected + after },
-    selection: { anchor: from + before.length, head: to + before.length },
-  })
-  view.focus()
-}
+// `wrapSelection` is shared with the keyboard shortcuts (cm/formatting.js) so the
+// dock buttons and Ctrl+B/I/U/H/= stay identical.
 
 function toggleLinePrefix(view, prefix) {
   const { from } = view.state.selection.main

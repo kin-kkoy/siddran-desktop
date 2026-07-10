@@ -27,6 +27,7 @@
   --src-bundle: #c084fc;
   --src-sandbox: var(--accent-danger);
   --cal-now: #34d8c0;            /* Calendar "now"-line — reserved hue, distinct from every source colour */
+  --header-height: 48px;         /* shared height: sidebar brand header == note tab bar, so their bottom borders align */
   --font-display: 'Syne', sans-serif;
   --font-heading: 'Fraunces', serif;
   --font-body: 'Crimson Pro', serif;

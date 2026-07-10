@@ -3,9 +3,10 @@ import { createPortal } from "react-dom"
 import styles from './ProfileDropdown.module.css'
 import { IoMdSettings } from "react-icons/io";
 import { TbLogout2 } from "react-icons/tb";
+import { LuCheck } from "react-icons/lu";
 import { useSettings } from "../../../contexts/SettingsContext";
 
-function ProfileDropdown({ username, isCollapsed, handleLogout }) {
+function ProfileDropdown({ username, isCollapsed, handleLogout, recentBags = [], currentBagPath, onSwitchBag }) {
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef(null)
     const buttonRef = useRef(null) // This refers to the profile button
@@ -38,6 +39,11 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
         handleLogout()
     }
 
+    const selectBag = (bag) => {
+        setIsOpen(false)
+        if (bag.path !== currentBagPath) onSwitchBag?.(bag)
+    }
+
     // get dropdown menu position based on button position (profile btn)
     const getDropdownStyle = () => {
         if(!buttonRef.current) return {}
@@ -56,10 +62,10 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
                 left: `${rect.right + 8}px`,
             }
         }else{
-            // if expanded, the menu appears above instead
+            // Profile sits at the TOP of the sidebar, so the menu opens downward.
             return{
                 position: 'fixed',
-                bottom: `${window.innerHeight - rect.top + 8}px`,
+                top: `${rect.bottom + 8}px`,
                 left: `${rect.left}px`,
                 width: `${rect.width}px`
             }
@@ -77,18 +83,45 @@ function ProfileDropdown({ username, isCollapsed, handleLogout }) {
             >
                 <span className={styles.avatar}>{username ? username.charAt(0).toUpperCase() : '?'}</span>
                 <span className={`${styles.userInfo} ${isCollapsed ? styles.userInfoHidden : ''}`}>
-                    <span>{username}</span>
+                    <span className={styles.userName}>{username}</span>
                     <span className={styles.userTitle}>star chaser</span>
                 </span>
             </button>
 
             {/* Render dropdown using Portal */}
             {isOpen && createPortal(
-                <div 
+                <div
                     ref={dropdownRef}
                     className={styles.dropdownMenu}
                     style={getDropdownStyle()}  // ← Position dynamically
                 >
+                    {recentBags.length > 0 && (
+                        <>
+                            <p className={styles.switchLabel}>Switch Bag</p>
+                            {/* Scrollable so a long list stays compact instead of cluttering. */}
+                            <div className={styles.bagList}>
+                                {recentBags.map((bag) => {
+                                    const active = bag.path === currentBagPath
+                                    return (
+                                        <button
+                                            key={bag.path}
+                                            className={`${styles.bagItem} ${active ? styles.bagItemActive : ''}`}
+                                            onClick={() => selectBag(bag)}
+                                            title={bag.path}
+                                        >
+                                            <span className={styles.bagAvatar}>{bag.name ? bag.name.charAt(0).toUpperCase() : '?'}</span>
+                                            <span className={styles.bagInfo}>
+                                                <span className={styles.bagName}>{bag.name}</span>
+                                                <span className={styles.bagPath}>{bag.path}</span>
+                                            </span>
+                                            {active && <span className={styles.bagCheck}><LuCheck size={14} /></span>}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                            <div className={styles.divider}></div>
+                        </>
+                    )}
                     <button onClick={navigateSettings} className={styles.dropdownItem}>
                         <span className={styles.itemIcon}><IoMdSettings /></span>
                         <span>Settings</span>

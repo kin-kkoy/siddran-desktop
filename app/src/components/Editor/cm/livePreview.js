@@ -3,7 +3,7 @@ import { RangeSet } from '@codemirror/state'
 import { syntaxTree, foldEffect, unfoldEffect } from '@codemirror/language'
 import { BulletWidget, CheckWidget, ImageWidget } from './widgets'
 import { wikilinkConfig, parseTypedLink } from './wikilinks'
-import { listFoldRange, rangeFolded, CHEVRON_SVG } from './fold'
+import { listFoldRange, listFoldState, rangeFolded, CHEVRON_SVG } from './fold'
 
 // Live-preview decorations — a Phase 1 subset of the reference clone's buildDeco
 // (garb2/obsidian-notes-clone.html). The principle: walk the markdown syntax tree
@@ -321,8 +321,8 @@ function scanInline(state, ranges) {
         const hang = (sp * 0.25 + 1.56).toFixed(2)
         // A checked task gets `cm-task-checked` so the theme can grey the label text.
         deco.push(Decoration.line({ class: checked ? 'cm-list-line cm-task-checked' : 'cm-list-line', attributes: { style: `--nest-pad:${nestPad}em;--mark:${mark}em;--hang:${hang}em` } }).range(line.from))
-        const tfr = listFoldRange(state, line.from)
-        if (tfr) deco.push(Decoration.widget({ widget: new InlineFoldWidget(rangeFolded(state, tfr)), side: -1 }).range(dashStart))
+        const tfs = listFoldState(state, line.from)
+        if (tfs.foldable) deco.push(Decoration.widget({ widget: new InlineFoldWidget(tfs.folded), side: -1 }).range(dashStart))
         continue
       }
       const bm = /^(\s*)([-*+])(\s+)/.exec(txt)
@@ -334,8 +334,8 @@ function scanInline(state, ranges) {
         const mark = (Math.floor(sp / 4) * 0.6 + sp * 0.25).toFixed(2)
         const hang = (sp * 0.25 + 0.9 + bm[3].length * 0.25).toFixed(2)
         deco.push(Decoration.line({ class: 'cm-list-line', attributes: { style: `--nest-pad:${nestPad}em;--mark:${mark}em;--hang:${hang}em` } }).range(line.from))
-        const bfr = listFoldRange(state, line.from)
-        if (bfr) deco.push(Decoration.widget({ widget: new InlineFoldWidget(rangeFolded(state, bfr)), side: -1 }).range(f))
+        const bfs = listFoldState(state, line.from)
+        if (bfs.foldable) deco.push(Decoration.widget({ widget: new InlineFoldWidget(bfs.folded), side: -1 }).range(f))
         continue
       }
       // Ordered-list number: tint it so it matches the bullet colour (and the
@@ -350,8 +350,8 @@ function scanInline(state, ranges) {
         const digitCount = om[2].length - 1
         const hang = (sp * 0.25 + digitCount * 0.56 + 0.3 + om[3].length * 0.25).toFixed(2)
         deco.push(Decoration.line({ class: 'cm-list-line', attributes: { style: `--nest-pad:${nestPad}em;--mark:${mark}em;--hang:${hang}em` } }).range(line.from))
-        const ofr = listFoldRange(state, line.from)
-        if (ofr) deco.push(Decoration.widget({ widget: new InlineFoldWidget(rangeFolded(state, ofr)), side: -1 }).range(f))
+        const ofs = listFoldState(state, line.from)
+        if (ofs.foldable) deco.push(Decoration.widget({ widget: new InlineFoldWidget(ofs.folded), side: -1 }).range(f))
       }
     }
   }

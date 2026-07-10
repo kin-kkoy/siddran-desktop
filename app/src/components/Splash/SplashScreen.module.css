@@ -1,0 +1,117 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 42%, #14101d 0%, #09090f 60%, #050509 100%);
+  animation: splashFade var(--fade-dur, 800ms) ease var(--fade-delay, 2100ms) forwards;
+}
+
+/* Centered scene; the dive zooms the whole thing INTO the bag's mouth. */
+.stage {
+  width: min(46vmin, 340px);
+  height: min(46vmin, 340px);
+  transform-origin: 50% 40%;   /* the bag mouth */
+  animation: splashDive var(--dive-dur, 1300ms) cubic-bezier(0.7, 0, 0.7, 0.25) var(--dive-delay, 1400ms) forwards;
+}
+
+.bag {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.6));
+  animation: splashBagIn var(--bagIn-dur, 700ms) cubic-bezier(0.18, 0.9, 0.3, 1.2) var(--bagIn-delay, 0ms) both;
+}
+
+/* interior glow — hidden while closed, blooms as the mouth opens + during the dive */
+.glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: splashGlow var(--glow-dur, 2000ms) ease-in var(--glow-delay, 680ms) both;
+}
+
+/* the top lip edge lifts slightly as it splits open */
+.mouth { transform-box: fill-box; transform-origin: center; }
+.lip { animation: splashLip var(--lip-dur, 1200ms) ease var(--lip-delay, 630ms) both; }
+
+.handle { animation: splashHandle var(--handle-dur, 770ms) ease var(--handle-delay, 280ms) both; }
+
+/* zipper pull slides along the (curved) seam, then flicks away */
+.pull {
+  transform-box: fill-box;
+  animation: splashZip var(--zip-dur, 950ms) ease-in-out var(--zip-delay, 250ms) both;
+}
+
+/* the Siddran sparkle rises out of the opened bag */
+.spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: splashSpark var(--spark-dur, 1150ms) ease var(--spark-delay, 770ms) both;
+}
+
+/* ── keyframes: each is a self-contained 0→100 motion; delay/duration position it ── */
+
+@keyframes splashBagIn {
+  0%   { transform: translateY(-38%) scale(0.6) rotate(-6deg); opacity: 0; }
+  60%  { transform: translateY(4%) scale(1.03) rotate(1deg);  opacity: 1; }
+  100% { transform: translateY(0) scale(1) rotate(0deg);       opacity: 1; }
+}
+
+@keyframes splashHandle {
+  0%   { opacity: 0; transform: translateY(6px); }
+  55%  { opacity: 0.85; transform: translateY(0); }
+  100% { opacity: 0.85; transform: translateY(0); }
+}
+
+@keyframes splashZip {
+  0%   { transform: translate(40px, 100px); opacity: 1; }
+  55%  { transform: translate(200px, 100px); opacity: 1; }
+  72%  { transform: translate(224px, 96px); opacity: 0; }
+  100% { transform: translate(224px, 96px); opacity: 0; }
+}
+
+@keyframes splashGlow {
+  0%   { opacity: 0; transform: scaleY(0.15); }
+  35%  { opacity: 0.9; transform: scaleY(1); }
+  50%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(2.4); }
+}
+
+@keyframes splashLip {
+  0%   { opacity: 0.9; transform: translateY(0); }
+  45%  { opacity: 0.9; transform: translateY(-6px); }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+@keyframes splashSpark {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.4); }
+  45%  { opacity: 1; transform: translateY(-6px) scale(1.15); }
+  62%  { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { opacity: 0; transform: translateY(-16px) scale(1.4); }
+}
+
+@keyframes splashDive {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(16); opacity: 0; }
+}
+
+@keyframes splashFade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── reduced motion: just a brief, still logo fade ── */
+.reduced { animation: splashFade 0.6s ease forwards; }
+.reduced .stage { animation: none; transform: none; }
+.reduced .bag { animation: none; }
+.reduced .glow { animation: none; opacity: 0.6; }
+.reduced .handle { animation: none; opacity: 0.85; }
+.reduced .lip { animation: none; }
+.reduced .pull { animation: none; }
+.reduced .spark { animation: none; opacity: 1; }

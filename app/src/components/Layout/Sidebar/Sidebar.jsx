@@ -5,7 +5,7 @@ import ProfileDropdown from "../ProfileDropdown/ProfileDropdown";
 import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu";
 
 
-function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed }) {
+function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag }) {
 
     const navigate = useNavigate()
     const location = useLocation()
@@ -22,17 +22,24 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
 
 
     return (
-        <div className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
+        <div className={`${styles.sidebar} ${isCollapsed ? styles.hidden : ''}`} aria-hidden={isCollapsed}>
 
             {/* TOP SECTION: brand + navigation links */}
             <div className={styles.topSection}>
 
-                {/* Brand: logo (→ home) on the left, collapse/expand toggle on the right */}
+                {/* Identity: profile (avatar · Bag name · "star chaser") on the left,
+                    collapse toggle on the right. */}
                 <div className={styles.brand}>
-                    <Link to="/" className={styles.brandLink} title="Home">
-                        <div className={styles.brandName}>SIDDRAN</div>
-                        <div className={styles.brandSub}>space drifting</div>
-                    </Link>
+                    <div className={styles.brandProfile}>
+                        <ProfileDropdown
+                            username={username}
+                            isCollapsed={isCollapsed}
+                            handleLogout={handleLogout}
+                            recentBags={recentBags}
+                            currentBagPath={currentBagPath}
+                            onSwitchBag={onSwitchBag}
+                        />
+                    </div>
                     <button
                         className={styles.collapseBtn}
                         onClick={() => toggleSidebar(!isCollapsed)}
@@ -88,11 +95,6 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                 )}
             </div>
 
-
-            {/* BOTTOM SECTION: user & settings */}
-            <div className={styles.bottomSection}>
-                <ProfileDropdown username={username} isCollapsed={isCollapsed} handleLogout={handleLogout} />
-            </div>
 
         </div>
     )

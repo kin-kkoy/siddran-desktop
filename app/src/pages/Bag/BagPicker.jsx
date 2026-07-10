@@ -43,7 +43,7 @@ export default function BagPicker({ recentBags = [], onOpen, onCreate, onOpenRec
               {recentBags.map((bag) => (
                 <li key={bag.path} className={styles.bagItem}>
                   <button type="button" className={styles.bagRow} onClick={() => onOpenRecent(bag)} disabled={busy}>
-                    <span className={styles.bagDot} aria-hidden="true" />
+                    <span className={styles.bagIcon} aria-hidden="true"><BagGlyph /></span>
                     <span className={styles.bagName}>{bag.name}</span>
                     <span className={styles.bagPath}>{bag.path}</span>
                     <span className={styles.bagGo} aria-hidden="true">→</span>
@@ -146,6 +146,27 @@ function Backpack() {
           <rect x="147" y="168" width="6" height="10" rx="3" fill="#f0b840" />
         </g>
       </g>
+    </svg>
+  )
+}
+
+// A compact bag chip for each Recent row — echoes the big pack's amber zipper.
+function BagGlyph() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="bagchip" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffd67a" />
+          <stop offset="1" stopColor="#f0b840" />
+        </linearGradient>
+      </defs>
+      {/* handle */}
+      <path d="M8 8.5 C8 4.8 16 4.8 16 8.5" fill="none" stroke="#f0b840" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      {/* body */}
+      <rect x="3.5" y="8" width="17" height="12.5" rx="4" fill="#141422" stroke="#3a3a5c" strokeWidth="1.2" />
+      {/* zipper + amber pull */}
+      <path d="M5 11.6 Q12 9.9 19 11.6" fill="none" stroke="url(#bagchip)" strokeWidth="1.3" strokeLinecap="round" strokeDasharray="0.5 2.4" />
+      <circle cx="12" cy="10.9" r="1.7" fill="url(#bagchip)" />
     </svg>
   )
 }

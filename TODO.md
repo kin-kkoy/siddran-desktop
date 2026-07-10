@@ -6,7 +6,55 @@ A running list of what's implemented and what's planned. Add freely.
 
 ---
 
-## ✅ Implemented this session (2026-07-09)
+## ✅ Implemented this session (2026-07-10)
+
+### Editor / UX
+- [x] **Fold/chevron memory on by default** — `rememberNoteState` now defaults to ON
+  (`contexts/SettingsContext.jsx`), so collapsed headings/bullets/checklists persist per note
+  across navigation and read/write modes without touching Settings. Includes a one-time
+  localStorage migration (`cinder_folds_default_on`) so existing installs flip on once (still
+  user-toggleable afterwards). The persistence machinery (`hooks/noteFoldsCache.js`,
+  `applyFolds`, read-view `data-line`) already existed — only the default changed.
+- [x] **Formatting keyboard shortcuts** — Ctrl+B/I/U/H/= → Bold `**`, Italic `*`,
+  Underline `<u></u>`, Hidden/Spoiler `||`, Highlight `==`. New shared `components/Editor/cm/
+  formatting.js` (`wrapSelection` + `formattingKeymap`) is used by BOTH the dock buttons and
+  the keymap, so a button and its shortcut stay identical. Wired at `Prec` above defaultKeymap
+  in `CodeMirrorEditor.jsx`; inert in read mode.
+- [x] **⚡ Fixed scroll lag/stutter in long, format-heavy notes** — the live-preview builder
+  was calling unbounded forward document scans (`listFoldRange`/`headingFoldRange`) once per
+  visible line on every scroll recompute (bit hard on nested-bullet blocks). Added O(1)
+  `listFoldState`/`headingFoldState`/`foldedAtLineEnd` to `cm/fold.js` (foldability decided by
+  the first following line; folded-state via an `foldedRanges` lookup) and swapped the per-line
+  chevron passes in `cm/livePreview.js` + the heading gutter `lineMarker` to use them. The full
+  scan is now only run on an actual fold click. No rendering/behavior change.
+
+### Bug fixes
+- [x] **Read-mode commenting crash** — `CodeMirrorEditor.jsx` called `anchorFromRange` (to
+  anchor a comment started from a reading-view text selection) without importing it, throwing
+  `ReferenceError` on that path. Added the missing import. Edit-mode commenting was unaffected.
+
+### Launch / shell
+- [x] **Sidebar profile = Bag switcher** — the top-of-sidebar profile (avatar · Bag name ·
+  "star chaser") now opens a menu with a **scrollable list of your Bags** (social-style profile
+  swap); the current Bag is checked, clicking another flushes the current to disk and loads it
+  (`App.jsx` `switchBag` briefly unmounts the shell + resets the route so the new Bag's data
+  refetches). Profile moved from the footer to the top; menu opens downward.
+- [x] **Landing (BagPicker) list polish** — each Recent-Bag row is now a card with a mini
+  amber-zipper bag chip, gradient fill, hover lift/glow + sliding arrow — matches the pack
+  aesthetic. Kept minimal.
+- [x] **Bag-unzip launch splash** — `components/Splash/SplashScreen.{jsx,module.css}`: a
+  zippered amber SVG bag drops in, the zipper pull slides across, the mouth opens onto a glowing
+  interior with the Siddran sparkle rising, then the camera dives into the bag to reveal the
+  app (~3.6s, CSS-keyframe driven). Plays **once per app session** (sessionStorage
+  `siddran_splash_shown`), Esc-skippable, honors `prefers-reduced-motion`. Rendered as an early
+  return in `App.jsx` so boot effects run underneath while it plays.
+- [x] **Sidebar header shows the open Bag's name** — replaced the hardcoded "SIDDRAN" /
+  "space drifting" brand with the Bag name (`Sidebar.jsx`, using the existing `username` prop).
+  New shared `--header-height: 48px` token (`index.css`) fixes the sidebar brand height and the
+  note tab bar to the same height (tab bar also made a touch taller), so their bottom borders
+  line up. (Bottom `ProfileDropdown` still carries the Bag name for its menu.)
+
+## ✅ Implemented earlier session (2026-07-09)
 
 ### Note editor / UI polish
 - [x] **Full-width ZenNotes-style toolbar** — tabs + controls span the content area edge-to-edge (sticky), replacing the old card-width "connected" bar.

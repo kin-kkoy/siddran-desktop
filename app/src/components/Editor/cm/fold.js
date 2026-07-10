@@ -59,6 +59,54 @@ export function foldRangeAt(state, lineFrom) {
   return headingFoldRange(state, lineFrom) || listFoldRange(state, lineFrom)
 }
 
+// Is a fold currently anchored at `pos` (a line's end)? Fold ranges always start at
+// their anchor line's `.to`, so this is the cheap (O(log n)) way to know a line is
+// folded without reconstructing its full range. Used by the per-line chevron passes.
+function foldedAtLineEnd(state, pos) {
+  let folded = false
+  foldedRanges(state).between(pos, pos + 1, (from) => { if (from === pos) folded = true })
+  return folded
+}
+
+// Cheap fold status for a LIST line's inline chevron — `{ foldable, folded }` —
+// WITHOUT walking the whole subtree. Foldability is decided entirely by the first
+// non-blank line below (exactly where listFoldRange's scan would `break`): a deeper
+// indent ⇒ has children ⇒ foldable. This is the hot path (runs per visible list line
+// on every scroll recompute), so it must stay O(1); the full range is only computed
+// on an actual fold click.
+export function listFoldState(state, lineFrom) {
+  const doc = state.doc
+  const line = doc.lineAt(lineFrom)
+  const m = LIST_ITEM.exec(line.text)
+  if (!m) return { foldable: false, folded: false }
+  const indent = m[1].length
+  let foldable = false
+  for (let n = line.number + 1; n <= doc.lines; n++) {
+    const t = doc.line(n).text
+    if (!t.trim()) continue // blank line: keep looking for the first real line
+    foldable = (t.length - t.trimStart().length) > indent
+    break // the first non-blank line settles it
+  }
+  if (!foldable) return { foldable: false, folded: false }
+  return { foldable: true, folded: foldedAtLineEnd(state, line.to) }
+}
+
+// Cheap fold status for a HEADING line's gutter chevron — `{ foldable, folded }` —
+// without scanning forward to the next equal/higher heading. A heading is foldable
+// iff it isn't the last line and the immediately-following line isn't an equal/higher
+// heading (i.e. there's at least one line of content to fold), which mirrors exactly
+// when headingFoldRange returns non-null.
+export function headingFoldState(state, lineFrom) {
+  const doc = state.doc
+  const line = doc.lineAt(lineFrom)
+  const m = HEADING.exec(line.text)
+  if (!m || line.number >= doc.lines) return { foldable: false, folded: false }
+  const level = m[1].length
+  const nhm = HEADING.exec(doc.line(line.number + 1).text)
+  if (nhm && nhm[1].length <= level) return { foldable: false, folded: false }
+  return { foldable: true, folded: foldedAtLineEnd(state, line.to) }
+}
+
 export function rangeFolded(state, range) {
   let folded = false
   foldedRanges(state).between(range.from, range.from + 1, (from, to) => {
@@ -128,10 +176,12 @@ export const headingFold = [
     lineMarker(view, line) {
       const text = view.state.doc.lineAt(line.from).text
       if (LIST_ITEM.test(text)) return null
-      const range = foldRangeAt(view.state, line.from)
-      if (!range) return null
+      // O(1) foldable/folded check — the full range (a forward scan) is only needed
+      // by the mousedown handler below, not per-line on every viewport change.
+      const st = headingFoldState(view.state, line.from)
+      if (!st.foldable) return null
       const hm = HEADING.exec(text)
-      return new ChevronMarker(rangeFolded(view.state, range), hm ? hm[1].length : 0)
+      return new ChevronMarker(st.folded, hm ? hm[1].length : 0)
     },
     initialSpacer() { return new ChevronMarker(false, 0) },
     domEventHandlers: {

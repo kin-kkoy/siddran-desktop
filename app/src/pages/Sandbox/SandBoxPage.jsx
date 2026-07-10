@@ -468,8 +468,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     return (
         <div className={mode === 'half' ? styles.pageHalf : styles.page}>
             <header className={styles.header}>
-                {mode !== 'half' && <NavArrows />}
                 <ExpandSidebarButton />
+                {mode !== 'half' && <NavArrows />}
                 <div className={styles.titleGroup}>
                     <input
                         className={styles.title}
