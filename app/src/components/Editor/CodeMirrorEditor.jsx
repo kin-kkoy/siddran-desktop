@@ -15,6 +15,7 @@ import { headingFold, foldedLineSet, applyFolds } from './cm/fold'
 import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, anchorFromRange, commentState } from './cm/comments'
 import { listEditingKeymap, listIndentNormalizer, enterIndent } from './cm/listEditing'
 import { formattingKeymap } from './cm/formatting'
+import { searchExtension, setSearchMatchesEffect, setActiveSearchEffect, clearSearchEffect } from './cm/search'
 import { cinderHighlightStyle } from './cm/highlight'
 import { cinderTheme } from './cm/theme'
 import ReadingView from './ReadingView'
@@ -61,6 +62,7 @@ function CodeMirrorEditor({
   bundles = [],
   sandboxes = [],
   scrollApiRef,
+  searchApiRef,
   showDock = true,
   editorViewRef,
   comments = [],
@@ -246,6 +248,7 @@ function CodeMirrorEditor({
           markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [wikilinkMarkdownExtension, obsidianSyntax, { remove: ['SetextHeading', 'IndentedCode'] }] }),
           syntaxHighlighting(cinderHighlightStyle),
           livePreview,
+          searchExtension,
           codeCopy,
           imageExtensions(() => ({ authFetch: authFetchRef.current, API: apiRef.current })),
           wikilinks({
@@ -396,6 +399,136 @@ function CodeMirrorEditor({
     }
     return () => { if (scrollApiRef) scrollApiRef.current = null }
   }, [readMode, scrollApiRef])
+
+  // Imperative in-note SEARCH API for the per-note find bar (NoteSearch). Mode-aware,
+  // like scrollApiRef: edit mode highlights matches via CM decorations and scrolls the
+  // doc; read mode wraps matches in the rendered HTML and scrolls to them (arbitrary
+  // matches have no data-line, so we walk text nodes like the comment highlighter).
+  const readSearchSpansRef = useRef([])
+  const editSearchRangesRef = useRef([])
+  // Read the live mode from a ref so the search API can be built once (below) without
+  // being torn down + rebuilt on every read/edit toggle (which would briefly null the
+  // ref and race the find bar's re-run).
+  const readModeRef = useRef(readMode)
+  useEffect(() => { readModeRef.current = readMode }, [readMode])
+  useEffect(() => {
+    if (!searchApiRef) return
+    const MAX = 300
+    // Build a { before, hit, after } snippet around a match for the results list.
+    const snippet = (id, text, start, len, line) => {
+      const CTX = 44
+      const s = Math.max(0, start - CTX)
+      return {
+        id, line,
+        before: (s > 0 ? '…' : '') + text.slice(s, start),
+        hit: text.slice(start, start + len),
+        after: text.slice(start + len, start + len + CTX * 2) + (start + len + CTX * 2 < text.length ? '…' : ''),
+      }
+    }
+    const clearReadHits = () => {
+      for (const span of readSearchSpansRef.current) {
+        const parent = span.parentNode
+        if (!parent) continue
+        parent.replaceChild(document.createTextNode(span.textContent), span)
+        parent.normalize()
+      }
+      readSearchSpansRef.current = []
+    }
+    const runEdit = (query) => {
+      const view = viewRef.current
+      if (!view) return []
+      const doc = view.state.doc
+      const hay = doc.toString().toLowerCase()
+      const needle = query.toLowerCase()
+      const ranges = []; const results = []
+      let i = hay.indexOf(needle)
+      while (i !== -1 && ranges.length < MAX) {
+        const from = i, to = i + query.length
+        ranges.push({ from, to })
+        const ln = doc.lineAt(from)
+        results.push(snippet(ranges.length - 1, ln.text, from - ln.from, query.length, ln.number))
+        i = hay.indexOf(needle, to)
+      }
+      editSearchRangesRef.current = ranges
+      view.dispatch({ effects: setSearchMatchesEffect.of({ ranges, active: -1 }) })
+      return results
+    }
+    const gotoEdit = (id) => {
+      const view = viewRef.current
+      const r = editSearchRangesRef.current[id]
+      if (!view || !r) return
+      view.dispatch({
+        selection: { anchor: r.from, head: r.to },
+        effects: [setActiveSearchEffect.of(id), EditorView.scrollIntoView(r.from, { y: 'center' })],
+      })
+    }
+    const runRead = (query) => {
+      clearReadHits()
+      const root = rootRef.current
+      if (!root) return []
+      const needle = query.toLowerCase()
+      const results = []; const spans = []
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) =>
+          (n.nodeValue && n.nodeValue.toLowerCase().includes(needle) && n.parentElement &&
+            !n.parentElement.closest('pre, code, .cm-editor, .rv-search-hit'))
+            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+      })
+      const nodes = []
+      let node
+      while ((node = walker.nextNode())) nodes.push(node)
+      for (const tn of nodes) {
+        if (results.length >= MAX) break
+        const val = tn.nodeValue
+        const low = val.toLowerCase()
+        let idx = low.indexOf(needle)
+        if (idx === -1) continue
+        const frag = document.createDocumentFragment()
+        let cursor = 0
+        while (idx !== -1 && results.length < MAX) {
+          if (idx > cursor) frag.appendChild(document.createTextNode(val.slice(cursor, idx)))
+          const span = document.createElement('span')
+          span.className = 'rv-search-hit'
+          span.textContent = val.slice(idx, idx + query.length)
+          frag.appendChild(span)
+          spans.push(span)
+          results.push(snippet(spans.length - 1, val, idx, query.length, null))
+          cursor = idx + query.length
+          idx = low.indexOf(needle, cursor)
+        }
+        if (cursor < val.length) frag.appendChild(document.createTextNode(val.slice(cursor)))
+        tn.parentNode?.replaceChild(frag, tn)
+      }
+      readSearchSpansRef.current = spans
+      return results
+    }
+    const gotoRead = (id) => {
+      const spans = readSearchSpansRef.current
+      spans.forEach((s, i) => s.classList.toggle('rv-search-hit-active', i === id))
+      spans[id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+
+    searchApiRef.current = {
+      // `isRead` is passed by the find bar (authoritative for the surface it's showing);
+      // falls back to the live ref if omitted.
+      run: (query, isRead = readModeRef.current) => {
+        if (!query) { searchApiRef.current.clear(); return [] }
+        return isRead ? runRead(query) : runEdit(query)
+      },
+      goto: (id, isRead = readModeRef.current) => { if (isRead) gotoRead(id); else gotoEdit(id) },
+      clear: () => {
+        clearReadHits()
+        const view = viewRef.current
+        if (view) view.dispatch({ effects: clearSearchEffect.of(null) })
+      },
+    }
+    return () => {
+      clearReadHits()
+      const view = viewRef.current
+      if (view) { try { view.dispatch({ effects: clearSearchEffect.of(null) }) } catch { /* view gone */ } }
+      if (searchApiRef) searchApiRef.current = null
+    }
+  }, [searchApiRef])
 
   const handleCheckboxToggle = (index) => {
     const view = viewRef.current

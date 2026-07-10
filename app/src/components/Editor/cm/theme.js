@@ -77,6 +77,16 @@ export const cinderTheme = EditorView.theme({
     backgroundColor: 'rgba(240, 184, 64, 0.34)',
   },
 
+  // ── In-note search hits ──
+  '.cm-search-hit': {
+    backgroundColor: 'rgba(240, 184, 64, 0.22)',
+    borderRadius: '2px',
+  },
+  '.cm-search-hit-active': {
+    backgroundColor: 'rgba(240, 184, 64, 0.5)',
+    outline: '1px solid rgba(240, 184, 64, 0.9)',
+  },
+
   // ── Blockquote ──
   '.cm-line.cm-quote': {
     borderLeft: '3px solid var(--border-strong)',

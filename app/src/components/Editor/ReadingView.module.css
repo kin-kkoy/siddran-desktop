@@ -145,6 +145,16 @@
 }
 :global(.rv-comment):hover { background-color: rgba(240, 184, 64, 0.28); }
 
+/* In-note search hits (read mode) */
+:global(.rv-search-hit) {
+  background-color: rgba(240, 184, 64, 0.22);
+  border-radius: 2px;
+}
+:global(.rv-search-hit-active) {
+  background-color: rgba(240, 184, 64, 0.5);
+  outline: 1px solid rgba(240, 184, 64, 0.9);
+}
+
 /* Callouts (scoped under .reading so they beat the base blockquote rule). */
 .reading :global(.rv-callout) {
   border-left: 3px solid var(--accent-blue);

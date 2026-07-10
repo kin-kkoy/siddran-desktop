@@ -9,6 +9,15 @@ A running list of what's implemented and what's planned. Add freely.
 ## ✅ Implemented this session (2026-07-10)
 
 ### Editor / UX
+- [x] **In-note search (Ctrl+F)** — a per-note find bar: search button after the outline button
+  (and Ctrl/Cmd+F), a wide sticky input + scrollable results list (line-snippet with the match).
+  Works in BOTH edit and read mode; all matches highlight (amber), clicking a result scrolls to
+  it and emphasizes it (edit = CM `Decoration.mark` via new `cm/search.js` StateField + doc
+  selection/scroll; read = DOM text-walker wrapping `.rv-search-hit` spans, like the comment
+  highlighter). In split view only the focused note is searched (button/panel live in the pane
+  that owns the controls; per-pane `searchApiRef`). Enter/Shift+Enter/↑↓ step matches, Esc closes.
+  Files: `components/Editor/cm/search.js`, `components/Notes/NoteSearch.{jsx,module.css}`,
+  imperative `searchApiRef` in `CodeMirrorEditor.jsx`, wired in `NotePane.jsx`.
 - [x] **Fold/chevron memory on by default** — `rememberNoteState` now defaults to ON
   (`contexts/SettingsContext.jsx`), so collapsed headings/bullets/checklists persist per note
   across navigation and read/write modes without touching Settings. Includes a one-time

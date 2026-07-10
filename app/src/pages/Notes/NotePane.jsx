@@ -6,9 +6,10 @@ import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
 import { MdChromeReaderMode } from "react-icons/md";
 import { HiPencilSquare } from "react-icons/hi2";
 import { HiOutlineDownload, HiOutlineCog, HiOutlineDocumentText } from "react-icons/hi";
-import { LuColumns2, LuTag, LuMessageSquare, LuListTree } from "react-icons/lu";
+import { LuColumns2, LuTag, LuMessageSquare, LuListTree, LuSearch } from "react-icons/lu";
 import CodeMirrorEditor from '../../components/Editor/CodeMirrorEditor'
 import NoteOutline from '../../components/Notes/NoteOutline'
+import NoteSearch from '../../components/Notes/NoteSearch'
 import { parseHeadings } from '../../utils/headings'
 import { printNoteToPdf } from '../../components/Editor/utils/exportPdf'
 import ConfirmModal from '../../components/Common/ConfirmModal'
@@ -122,6 +123,26 @@ function NotePane({
   const outlineOpenRef = useRef(outlineOpen)
   useEffect(() => { outlineOpenRef.current = outlineOpen }, [outlineOpen])
   const scrollToLineRef = useRef(null)
+  // In-note search (Ctrl+F). Per-pane so split view searches only the focused note;
+  // ephemeral (not persisted). `searchApiRef` is the editor's imperative find API.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchFocusToken, setSearchFocusToken] = useState(0)
+  const searchApiRef = useRef(null)
+  useEffect(() => { setSearchOpen(false) }, [noteId])
+  // Ctrl/Cmd+F opens the find bar — only on the pane that owns the controls (the
+  // focused one in split view), so a single handler targets the right note.
+  useEffect(() => {
+    if (!ownsControls) return
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault()
+        setSearchOpen(true)
+        setSearchFocusToken((t) => t + 1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ownsControls])
   // Headings update live as you type: while the outline is open we mirror the
   // editor's current text into `liveBody` (debounced); null falls back to the
   // saved body (fresh note / outline closed).
@@ -459,6 +480,14 @@ function NotePane({
   return (
     <div className={styles.paneRoot}>
     <div className={styles.mainCol}>
+    {ownsControls && searchOpen && (
+      <NoteSearch
+        searchRef={searchApiRef}
+        viewMode={viewMode}
+        focusToken={searchFocusToken}
+        onClose={() => setSearchOpen(false)}
+      />
+    )}
     <div className={styles.container}>
 
       <div className={`${styles.viewToggleWrapper} ${headerVisible ? styles.viewToggleHidden : ''}`}>
@@ -510,6 +539,16 @@ function NotePane({
           aria-label="Document outline"
         >
           <LuListTree />
+        </button>
+
+        <button
+          onClick={() => { setSearchOpen(v => !v); setSearchFocusToken(t => t + 1) }}
+          className={styles.backBtn}
+          aria-pressed={searchOpen}
+          title="Search in note (Ctrl+F)"
+          aria-label="Search in note"
+        >
+          <LuSearch />
         </button>
 
         <div className={styles.menuContainer} ref={menuRef}>
@@ -621,6 +660,7 @@ function NotePane({
           bundles={bundles}
           sandboxes={sandboxes}
           scrollApiRef={scrollToLineRef}
+          searchApiRef={searchApiRef}
           showDock={showDock}
           editorViewRef={editorViewRef}
           comments={commentThreads}
