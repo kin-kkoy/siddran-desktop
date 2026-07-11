@@ -31,7 +31,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 22px;
+    height: var(--header-height);
+    box-sizing: border-box;
+    padding: 0 22px;
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border-default);
     z-index: 2;

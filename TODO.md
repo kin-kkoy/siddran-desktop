@@ -8,6 +8,38 @@ A running list of what's implemented and what's planned. Add freely.
 
 ## ✅ Implemented this session (2026-07-10)
 
+### Calendar refinements — round 2 (2026-07-11)
+- [x] **Rebalance button moved** — now lives in the DayView dock, left of the Unscheduled toggle
+  (TimeGrid reports availability via `onRebalanceAvailable`); removed the floating one.
+- [x] **No text-selection while dragging** — `user-select:none` on the grid (`.wrap`) + drawer, and
+  `e.preventDefault()` on block/drawer pointer-down, so dragging no longer starts a stuttery highlight.
+- [x] **Empty end-time placeholder** — WebKitGTK renders a phantom time in an empty `<input type=time>`;
+  a `TimeField` overlay shows a real "--:--" while empty (still saves `null`). Applied to start+end.
+- [x] **Now-line centering on Week** — already covered (the center-scroll lives in shared TimeGrid, runs
+  for Week too when today is in view).
+- [x] **Now-time hover hint** — hovering the gutter now-time read-out shows a "Current Time: h:mm AM/PM"
+  pop-over above it (`.nowTip`; `.nowLabel` made hoverable).
+
+### Calendar refinements (2026-07-11)
+- [x] **New block end time empty** — verified: all create paths already seed `endTime: ''` (saves
+  `end_at: null`); no code change, empty after rebuild.
+- [x] **Day blocks show end time** — Day-view blocks render `start–end` (Week keeps start only),
+  via `endMinutesOf` in `TimeGrid.renderBlock`.
+- [x] **Calendar view persistence** — `CalendarViewContext` now persists `day2col`
+  (`cinder_cal_day_2col`) + `dayBalanced` (`cinder_cal_day_balanced`), mirroring `view`/`tall`.
+- [x] **Hidden-hours → pop-over** (Day + Week) — removed the "Xh hidden" bar; the gutter-corner eye
+  button opens a pop-over listing hidden hours (click one to reveal) + "Show all hours".
+- [x] **Now-line center setting** — `centerNowLine` (default ON) in Settings; `TimeGrid` auto-scroll
+  centers the now-line when today is visible. Now-line already rendered in Day (was just off-screen).
+- [x] **2-column Day view** — toolbar toggle (Day only) → whole day as two side-by-side timelines
+  sized to fit the viewport (no scroll). Geometry got a dynamic `setHourPx` (fit) + `data-row-offset`
+  so each half renders a slice and click-create/drag/resize keep working across halves. Default noon
+  split; a **rebalance** button appears when hidden hours make the halves unequal and equalizes the
+  column heights. Unscheduled drawer becomes a toggle pop-over in this mode (single-column keeps the
+  side column). Files: `views/timeGridGeom.js`, `views/TimeGrid.{jsx,module.css}`,
+  `views/DayView.{jsx,module.css}`, `pages/Calendar/Calendar.jsx`, `contexts/CalendarViewContext.jsx`,
+  `contexts/SettingsContext.jsx`, `components/Settings/SettingsPopup.jsx`.
+
 ### Editor / UX
 - [x] **In-note search (Ctrl+F)** — a per-note find bar: search button after the outline button
   (and Ctrl/Cmd+F), a wide sticky input + scrollable results list (line-snippet with the match).

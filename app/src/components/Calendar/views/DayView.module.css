@@ -14,3 +14,47 @@
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
 }
+
+/* 2-column layout: single full-width grid that fills the viewport; Unscheduled is a pop-over. */
+.shellSolo { position: relative; display: flex; flex-direction: column; }
+.fill { flex: 1; min-height: 0; }
+.shellSolo .grid { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+.unschedDock { position: absolute; top: 6px; right: 10px; z-index: 25; display: flex; align-items: flex-start; gap: 8px; }
+.rebalanceBtn {
+  background: var(--accent-warning-alpha);
+  border: 1px solid var(--accent-warning);
+  color: var(--accent-warning);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rebalanceBtn:hover { background: var(--accent-warning); color: var(--bg-primary); }
+.unschedToggle {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.unschedToggle:hover { border-color: var(--accent-warning); color: var(--accent-warning); }
+.unschedPopover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(320px, 80vw);
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  z-index: 30;
+}

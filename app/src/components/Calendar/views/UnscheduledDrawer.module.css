@@ -8,6 +8,9 @@
   /* Stretches to the full day-view height now; scroll internally if the list is long. */
   min-height: 0;
   overflow-y: auto;
+  /* Dragging a task must never start a text selection (stuttery highlight). */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .title {
   font-family: var(--font-display);

@@ -15,6 +15,8 @@ export const CAL_VIEW_MODES = {
 
 const VIEW_KEY = 'cinder_cal_last_view'
 const TALL_KEY = 'cinder_cal_tall' // height mode: fill the viewport (true) vs fit/overview (false)
+const DAY2COL_KEY = 'cinder_cal_day_2col'       // Day view: single timeline vs 2-column (morning/afternoon)
+const DAY_BALANCED_KEY = 'cinder_cal_day_balanced' // 2-column: equal-height columns (rebalance) vs noon split
 const VIEWS = ['day', 'week', 'month']
 
 function todayISO() {
@@ -47,6 +49,25 @@ export function CalendarViewProvider({ children }) {
         })
     }, [])
 
+    // Day view: 2-column (morning / afternoon) layout, and whether the two columns are
+    // rebalanced to equal height (vs the default noon split). Both persist across launches.
+    const [day2col, setDay2col] = useState(() => localStorage.getItem(DAY2COL_KEY) === 'true')
+    const toggleDay2col = useCallback(() => {
+        setDay2col(prev => {
+            const next = !prev
+            try { localStorage.setItem(DAY2COL_KEY, String(next)) } catch { /* ignore */ }
+            return next
+        })
+    }, [])
+    const [dayBalanced, setDayBalanced] = useState(() => localStorage.getItem(DAY_BALANCED_KEY) === 'true')
+    const toggleDayBalanced = useCallback(() => {
+        setDayBalanced(prev => {
+            const next = !prev
+            try { localStorage.setItem(DAY_BALANCED_KEY, String(next)) } catch { /* ignore */ }
+            return next
+        })
+    }, [])
+
     // Cmd/Ctrl+; — hidden ↔ peek (from half, collapse straight to hidden).
     const toggle = useCallback(() => {
         setMode(m => (m === CAL_VIEW_MODES.HIDDEN ? CAL_VIEW_MODES.PEEK : CAL_VIEW_MODES.HIDDEN))
@@ -65,6 +86,10 @@ export function CalendarViewProvider({ children }) {
         view,
         tall,
         toggleTall,
+        day2col,
+        toggleDay2col,
+        dayBalanced,
+        toggleDayBalanced,
         setFocusedDay,
         setView,
         toggle,
@@ -76,7 +101,7 @@ export function CalendarViewProvider({ children }) {
         isPeek: mode === CAL_VIEW_MODES.PEEK,
         isHalf: mode === CAL_VIEW_MODES.HALF,
         isFull: mode === CAL_VIEW_MODES.FULL,
-    }), [mode, pinned, focusedDay, view, tall, toggleTall, setView, toggle, peek, pin, unpin, close])
+    }), [mode, pinned, focusedDay, view, tall, toggleTall, day2col, toggleDay2col, dayBalanced, toggleDayBalanced, setView, toggle, peek, pin, unpin, close])
 
     return (
         <CalendarViewContext.Provider value={value}>

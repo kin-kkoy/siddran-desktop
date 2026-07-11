@@ -5,9 +5,16 @@
 // HOUR_PX pixels/hour, an event's top = its start time and height = its duration, and overlapping
 // events are packed into side-by-side columns ("lanes").
 
-export const HOUR_PX = 64            // pixels per hour
+export const HOUR_PX = 64            // pixels per hour (default; the 2-column Day view overrides it to fit)
 export const MIN_BLOCK_PX = 18       // floor height so tiny/zero-duration blocks stay readable
 export const DAY_PX = HOUR_PX * 24
+
+// Live pixels-per-hour. Default = HOUR_PX; the 2-column Day view shrinks it to fit the viewport.
+// Module-level like the hidden-hours mapping (only one grid renders at a time). Every render must
+// set it (TimeGrid calls setHourPx each render) so a stale value never leaks between views.
+let _hourPx = HOUR_PX
+export function setHourPx(px) { _hourPx = px > 0 ? px : HOUR_PX }
+export const hourPx = () => _hourPx
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -30,13 +37,15 @@ export function setVisibleHours(hidden) {
     _rowOfHour = rowOf; _hourOfRow = hourOf; _rowCount = hourOf.length
 }
 export const rowCount = () => _rowCount
-export const gridHeight = () => _rowCount * HOUR_PX
+export const gridHeight = () => _rowCount * _hourPx
+// Row index (0-based, into the contiguous visible axis) of a visible hour's top band.
+export const rowOfHour = (h) => (_rowOfHour ? (_rowOfHour[h] ?? 0) : h)
 // Y of a visible hour's top band (used to place hour lines/labels). h must be a visible hour.
-export const hourToY = (h) => (_rowOfHour ? (_rowOfHour[h] ?? 0) : h) * HOUR_PX
+export const hourToY = (h) => rowOfHour(h) * _hourPx
 
 export const snap15 = (min) => Math.round(min / 15) * 15
 export const minutesToY = (min) => {
-    if (!_rowOfHour) return (min / 60) * HOUR_PX
+    if (!_rowOfHour) return (min / 60) * _hourPx
     const m = Math.max(0, Math.min(24 * 60, min))
     const h = Math.min(23, Math.floor(m / 60))
     let row = _rowOfHour[h]
@@ -44,15 +53,15 @@ export const minutesToY = (min) => {
         // Hidden hour → clamp to the start of the next visible run (so a block edge stops cleanly).
         let nh = h
         while (nh < 24 && _rowOfHour[nh] === -1) nh++
-        return (nh < 24 ? _rowOfHour[nh] : _rowCount) * HOUR_PX
+        return (nh < 24 ? _rowOfHour[nh] : _rowCount) * _hourPx
     }
-    return row * HOUR_PX + ((m - h * 60) / 60) * HOUR_PX
+    return row * _hourPx + ((m - h * 60) / 60) * _hourPx
 }
 export const yToMinutes = (y) => {
-    if (!_rowOfHour) return (y / HOUR_PX) * 60
-    const row = Math.max(0, Math.min(_rowCount - 1, Math.floor(y / HOUR_PX)))
+    if (!_rowOfHour) return (y / _hourPx) * 60
+    const row = Math.max(0, Math.min(_rowCount - 1, Math.floor(y / _hourPx)))
     const h = _hourOfRow[row]
-    return h * 60 + ((y - row * HOUR_PX) / HOUR_PX) * 60
+    return h * 60 + ((y - row * _hourPx) / _hourPx) * 60
 }
 export const timeToMinutes = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
 export const minutesToTime = (min) => {
@@ -67,7 +76,10 @@ export function pointToDayTime(x, y) {
     if (!col) return null
     const day = col.getAttribute('data-col')
     const rect = col.getBoundingClientRect()
-    const minutes = Math.max(0, Math.min(24 * 60, yToMinutes(y - rect.top)))
+    // In the 2-column Day view a column only shows a slice of the axis starting at
+    // `data-row-offset`; add that offset back so the pointer maps to the real time.
+    const rowOffset = parseInt(col.getAttribute('data-row-offset') || '0', 10)
+    const minutes = Math.max(0, Math.min(24 * 60, yToMinutes((y - rect.top) + rowOffset * _hourPx)))
     return { day, minutes }
 }
 

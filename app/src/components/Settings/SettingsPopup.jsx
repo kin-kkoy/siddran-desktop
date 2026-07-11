@@ -159,6 +159,17 @@ function InterfaceTab({ settings, updateSetting }) {
         />
       </SettingRow>
 
+      {/* Center the calendar current-time line */}
+      <SettingRow
+        label="Center the current-time line"
+        description="Open the Day/Week calendar scrolled so the current-time line sits centered in view."
+      >
+        <ToggleSwitch
+          checked={settings.centerNowLine !== false}
+          onChange={(v) => updateSetting('centerNowLine', v)}
+        />
+      </SettingRow>
+
       {/* Star canvas toggle */}
       <SettingRow
         label="Twinkling Stars"

@@ -30,6 +30,7 @@ const DEFAULTS = {
   starDirection: '↙',
   noteEditorWidth: 1200,
   rememberNoteState: true,
+  centerNowLine: true,
 }
 
 // ── Color utilities ────────────────────────────────────────────────

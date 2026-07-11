@@ -50,7 +50,7 @@
 /* Identity section — holds the profile block (avatar · Bag name · subtitle) plus the
    collapse toggle. Sized to the profile; min-height keeps it aligned with the tab bar. */
 .brand {
-    min-height: var(--header-height);
+    height: var(--header-height);
     box-sizing: border-box;
     padding-right: 0.5rem;
     border-bottom: 1px solid var(--border-default);

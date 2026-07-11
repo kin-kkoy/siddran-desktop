@@ -17,6 +17,7 @@ export default function UnscheduledDrawer({ tasks, onSchedule, onDragPreview }) 
 
     const onPointerDown = (e, task) => {
         drag.current = { task, startX: e.clientX, startY: e.clientY, dragging: false }
+        e.preventDefault() // don't let the drag begin a text selection (stuttery highlight)
         try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* no-op */ }
     }
     const onPointerMove = (e) => {

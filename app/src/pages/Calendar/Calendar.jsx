@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiChevronLeft, FiChevronRight, FiMinimize2, FiMaximize2 } from 'react-icons/fi'
+import { FiChevronLeft, FiChevronRight, FiMinimize2, FiMaximize2, FiColumns, FiSquare } from 'react-icons/fi'
 import styles from './Calendar.module.css'
 import MonthView from '../../components/Calendar/views/MonthView.jsx'
 import WeekView from '../../components/Calendar/views/WeekView.jsx'
@@ -23,7 +23,9 @@ const VIEWS = ['day', 'week', 'month']
 // live in CalendarViewContext so the peek, the route, and the half pane all stay in sync. Calendar
 // data + task mutations are passed in from App (shared with the peek — single fetch).
 function Calendar({ authFetch, API, events, addEvent, updateEvent, deleteEvent, planning, enterPlan, applyPlan, discardPlan, planPending, designing, enterDesigner, exitDesigner, applyDesign, onDismissConflict, editingSchedule, schedules, onDeleteSchedule, onRecolorSchedule, onRenameSchedule, onReopenSchedule, onEditSchedule, dailyTasks, dailyCompletions, onToggleDaily, ephemeralDailies, onDailyTime, onDailyDone, onCreateDaily, tasks, undated, onTaskRetime, onTaskSchedule, onTaskUnschedule, onActivate, mode = 'full' }) {
-    const { view, setView, focusedDay, setFocusedDay, unpin, tall, toggleTall } = useCalendarView()
+    const { view, setView, focusedDay, setFocusedDay, unpin, tall, toggleTall, day2col, toggleDay2col, dayBalanced, toggleDayBalanced } = useCalendarView()
+    // The 2-column Day layout fills the viewport (no scroll), so force fill height for it.
+    const dayTwoCol = view === 'day' && day2col
     const navigate = useNavigate()
     const [modal, setModal] = useState(null) // { mode, draft } | null  (event create/edit)
     const [detail, setDetail] = useState(null) // normalized task/daily item, read-only view | null
@@ -148,7 +150,7 @@ function Calendar({ authFetch, API, events, addEvent, updateEvent, deleteEvent, 
     }, [updateEvent])
 
     return (
-        <div className={`${styles.page} ${tall ? styles.fill : ''} ${mode === 'half' ? styles.pageHalf : ''} ${(planning || designing) ? styles.planning : ''}`}>
+        <div className={`${styles.page} ${(tall || dayTwoCol) ? styles.fill : ''} ${mode === 'half' ? styles.pageHalf : ''} ${(planning || designing) ? styles.planning : ''}`}>
             <div className={styles.head}>
                 <h1 className={styles.title}>Cal<span className={styles.accent}>endar</span></h1>
 
@@ -194,6 +196,17 @@ function Calendar({ authFetch, API, events, addEvent, updateEvent, deleteEvent, 
                             ))}
                         </div>
 
+                        {view === 'day' && (
+                            <button
+                                className={`${styles.heightBtn} ${day2col ? styles.heightBtnOn : ''}`}
+                                onClick={toggleDay2col}
+                                title={day2col ? 'Single-column Day view' : '2-column Day view (whole day, no scrolling)'}
+                                aria-pressed={day2col}
+                            >
+                                {day2col ? <FiSquare /> : <FiColumns />}
+                            </button>
+                        )}
+
                         <button
                             className={styles.heightBtn}
                             onClick={toggleTall}
@@ -218,7 +231,7 @@ function Calendar({ authFetch, API, events, addEvent, updateEvent, deleteEvent, 
                     <WeekView anchor={anchor} itemsAt={itemsAt} ephemeralAt={ephemeralAt} fill={tall} onSlotClick={handleSlotClick} onEventClick={handleEventClick} onRetime={retime} onResizeEvent={handleResize} onToggleDaily={onToggleDaily} onDailyTime={onDailyTime} onDailyDone={onDailyDone} onJumpToDay={onJumpToDay} onDismissConflict={designing ? onDismissConflict : undefined} />
                 )}
                 {view === 'day' && (
-                    <DayView dayISO={focusedDay} itemsAt={itemsAt} ephemeralAt={ephemeralAt} fill={tall} onSlotClick={handleSlotClick} onEventClick={handleEventClick} onRetime={retime} onResizeEvent={handleResize} undated={undated} onSchedule={handleSchedule} onUnschedule={handleUnschedule} onToggleDaily={onToggleDaily} onDailyTime={onDailyTime} onDailyDone={onDailyDone} onJumpToDay={onJumpToDay} onDismissConflict={designing ? onDismissConflict : undefined} />
+                    <DayView dayISO={focusedDay} itemsAt={itemsAt} ephemeralAt={ephemeralAt} fill={tall || dayTwoCol} day2col={day2col} dayBalanced={dayBalanced} onToggleBalanced={toggleDayBalanced} onSlotClick={handleSlotClick} onEventClick={handleEventClick} onRetime={retime} onResizeEvent={handleResize} undated={undated} onSchedule={handleSchedule} onUnschedule={handleUnschedule} onToggleDaily={onToggleDaily} onDailyTime={onDailyTime} onDailyDone={onDailyDone} onJumpToDay={onJumpToDay} onDismissConflict={designing ? onDismissConflict : undefined} />
                 )}
             </div>
 

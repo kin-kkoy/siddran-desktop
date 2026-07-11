@@ -183,6 +183,22 @@
 }
 .dash { color: var(--text-muted); }
 
+/* Time field with an empty-state "--:--" overlay (hides WebKit's phantom default). */
+.timeField { position: relative; display: inline-flex; }
+.timeEmpty {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 5px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  pointer-events: none;
+}
+
 .swatches {
   display: flex;
   align-items: center;

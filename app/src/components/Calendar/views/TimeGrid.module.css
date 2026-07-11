@@ -5,6 +5,9 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-primary);
+  /* Dragging blocks must never start a text selection (caused a stuttery highlight). */
+  user-select: none;
+  -webkit-user-select: none;
 }
 /* Tall mode: fill the view area; the timeline body scrolls internally. */
 .wrap.fill { flex: 1; min-height: 0; }
@@ -30,7 +33,7 @@
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-default);
 }
-.gutterCorner { border-right: 1px solid var(--border-default); display: grid; place-items: center; padding: 2px; }
+.gutterCorner { position: relative; border-right: 1px solid var(--border-default); display: grid; place-items: center; padding: 2px; z-index: 30; }
 .dayHead {
   display: flex;
   align-items: baseline;
@@ -170,28 +173,97 @@
   white-space: nowrap;
 }
 
-/* Hidden-hours pill bar (under the all-day row). */
-.hiddenBar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-primary);
-  flex: 0 0 auto;
+/* Hidden-hours pop-over (opens from the gutter-corner eye button). */
+.hiddenPanel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 150px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
 }
-.hiddenPill {
+.hiddenPanelHead {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 6px 6px;
+}
+.hiddenList { max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
+.hiddenRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.hiddenRow:hover { background: var(--bg-hover); color: var(--text-primary); }
+.hiddenRowShow { color: var(--text-muted); font-size: 9px; }
+.hiddenRow:hover .hiddenRowShow { color: var(--accent-warning); }
+.hiddenShowAll {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px dashed var(--border-strong);
-  border-radius: 999px;
-  padding: 3px 10px;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
 }
-.hiddenPill:hover { border-color: var(--accent-warning); color: var(--accent-warning); }
+.hiddenShowAll:hover { border-color: var(--accent-warning); color: var(--accent-warning); }
+
+/* ── 2-column Day layout ── */
+.twoColBody {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border-default);
+}
+.panel {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+/* The rebalance toggle floats at the top-center seam between the two columns. */
+.rebalanceBtn {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: var(--accent-warning-alpha);
+  border: 1px solid var(--accent-warning);
+  color: var(--accent-warning);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rebalanceBtn:hover { background: var(--accent-warning); color: var(--bg-primary); }
 
 /* Day column */
 .col { position: relative; border-left: 1px solid var(--border-default); cursor: pointer; }
@@ -233,9 +305,30 @@
   border-radius: 4px;
   padding: 1px 4px;
   z-index: 7;
-  pointer-events: none;
+  /* Hoverable so the "Current Time" hint can appear (the line itself stays click-through). */
+  pointer-events: auto;
+  cursor: default;
   white-space: nowrap;
 }
+/* Hover hint above the now-time read-out. */
+.nowTip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 9;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--cal-now);
+  color: var(--cal-now);
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.nowLabel:hover .nowTip { opacity: 1; visibility: visible; }
 
 /* Positioned event block — "bold capsule": the source colour (--src, set by .srcXxx or inline) tints
    the whole fill so categories read at a glance, and the start time sits in a solid colour pill.

@@ -70,6 +70,28 @@ const fmtDate = (iso) => {
     } catch { return iso }
 }
 
+// Native <input type="time"> in WebKitGTK renders a phantom default (e.g. "12:30 PM") when its
+// value is empty, which misleads (it still saves null). Overlay a real "--:--" placeholder while
+// empty AND not focused; the overlay is click-through (so the first click focuses the input) and
+// hides on focus so you can actually type/pick a time.
+function TimeField({ value, onChange }) {
+    const [focused, setFocused] = useState(false)
+    return (
+        <span className={styles.timeField}>
+            <input
+                className={styles.field}
+                type="time"
+                step={900}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+            />
+            {!value && !focused && <span className={styles.timeEmpty} aria-hidden="true">--:--</span>}
+        </span>
+    )
+}
+
 export default function EventModal({ mode, draft, hideDate, onSave, onDelete, onClose, onOpenLink, authFetch, API }) {
     useModalPresence()
     const [editMode, setEditMode] = useState(mode === 'create')
@@ -268,9 +290,9 @@ export default function EventModal({ mode, draft, hideDate, onSave, onDelete, on
                                     <div className={styles.row}>
                                         <label className={styles.label}>Time</label>
                                         <div className={styles.timeGroup}>
-                                            <input className={styles.field} type="time" step={900} value={startTime} onChange={e => setStartTime(e.target.value)} />
+                                            <TimeField value={startTime} onChange={setStartTime} />
                                             <span className={styles.dash}>→</span>
-                                            <input className={styles.field} type="time" step={900} value={endTime} onChange={e => setEndTime(e.target.value)} />
+                                            <TimeField value={endTime} onChange={setEndTime} />
                                         </div>
                                     </div>
                                 )}
