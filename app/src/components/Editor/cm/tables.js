@@ -36,7 +36,10 @@ class TableWidget extends WidgetType {
   // re-renders (with a current `from`) when an edit above shifts the table.
   constructor(md, from) { super(); this.md = md; this.from = from }
   eq(other) { return other.md === this.md && other.from === this.from }
-  ignoreEvent() { return false } // we handle the widget's own events
+  // Tell CodeMirror to stay out of the widget entirely — our own handlers do all the
+  // work. Without this, keystrokes in a cell input still reached CM's keymap and acted
+  // at the document caret (backspace/enter hitting the wrong line).
+  ignoreEvent() { return true }
 
   toDOM(view) {
     const wrap = document.createElement('div')
@@ -101,9 +104,11 @@ class TableWidget extends WidgetType {
       cell.appendChild(input)
       cell.classList.add('cm-cell-editing')
       input.focus()
-      input.select()
+      const end = input.value.length // caret at end, not select-all (typing edits, not replaces)
+      input.setSelectionRange(end, end)
       active = { cell, line, col, input }
       input.addEventListener('keydown', (e) => {
+        e.stopPropagation() // keep CM from acting on keys while a cell is being edited
         if (e.key === 'Enter') { e.preventDefault(); endSession() }
         else if (e.key === 'Escape') { e.preventDefault(); const a = active; active = null; renderRendered(a.cell, a.line, a.col) }
         else if (e.key === 'Tab') { e.preventDefault(); focusSibling(cell, e.shiftKey ? -1 : 1) }

@@ -86,11 +86,11 @@ export function insertTable(view) {
   // ready separator so text written after the table stays out of it.
   const table = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n\n'
   const insert = lead + table
-  // caret onto "Column 1" (select it): after lead + '| '
-  const cellStart = line.to + lead.length + 2
   view.dispatch({
     changes: { from: line.to, insert },
-    selection: { anchor: cellStart, head: cellStart + 'Column 1'.length },
+    // Caret on the line after the table (past its blank-line separator). The table is
+    // atomic + click-to-edit, so we don't (and can't) drop the caret into a cell.
+    selection: { anchor: line.to + insert.length },
   })
   view.focus()
 }
