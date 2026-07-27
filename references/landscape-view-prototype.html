@@ -7,7 +7,6 @@
   :root {
     --bg-primary: #09090f;
     --bg-surface: #12121e;
-    --bg-surface-alt: #181826;
     --bg-elevated: #1e1e2e;
     --bg-hover: #252538;
     --border-default: #252538;
@@ -28,61 +27,64 @@
   /* ── control bar ─────────────────────────────────────────────── */
   .bar {
     position: sticky; top: 0; z-index: 5;
-    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
     padding: 10px 18px; background: var(--bg-surface);
     border-bottom: 1px solid var(--border-default);
     font-size: 13px; color: var(--text-secondary);
   }
   .group { display: flex; align-items: center; gap: 8px; }
+  .group.dim { opacity: .4; pointer-events: none; }
   .seg { display: flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
   .seg button {
     background: transparent; border: none; color: var(--text-muted);
-    padding: 5px 12px; font: inherit; cursor: pointer;
+    padding: 5px 11px; font: inherit; cursor: pointer; white-space: nowrap;
   }
   .seg button[aria-pressed="true"] { background: var(--bg-elevated); color: var(--text-primary); }
-  input[type=range] { width: 130px; accent-color: var(--accent-blue); }
+  input[type=range] { width: 110px; accent-color: var(--accent-blue); }
   .val { font-variant-numeric: tabular-nums; color: var(--text-muted); min-width: 44px; }
-  .hint { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+  .note {
+    padding: 8px 18px; background: var(--bg-surface); color: var(--text-muted);
+    font-size: 12px; border-bottom: 1px solid var(--border-default);
+  }
+  .note b { color: var(--text-secondary); font-weight: 600; }
 
-  /* ── stage ───────────────────────────────────────────────────── */
-  .stage { display: flex; justify-content: center; padding: 28px 16px 40px; }
+  .stage { display: flex; justify-content: center; padding: 26px 16px 48px; }
 
-  /* Book mode: a fixed-size viewport whose inner content is laid out in
-     CSS columns. Columns beyond the first two overflow to the right; we page by
-     translating the content horizontally. The browser does all the text flow —
-     including cutting mid-sentence at a page edge, which is the "real book" look. */
-  .book-outer { position: relative; }
+  /* ── shared note typography ──────────────────────────────────── */
+  .doc h1 { font-size: 1.7em; margin: 0 0 .4em; break-after: avoid; }
+  .doc h2 { font-size: 1.3em; margin: 1.2em 0 .35em; break-after: avoid; }
+  .doc p { margin: 0 0 .9em; }
+  .doc ul { margin: 0 0 .9em; padding-left: 1.3em; }
+  .doc table { border-collapse: collapse; margin: .6em 0; width: 100%; }
+  .doc th, .doc td { border: 1px solid var(--border-default); padding: 5px 9px; font-size: .92em; }
+  .doc th { background: var(--bg-elevated); }
+  .doc blockquote {
+    margin: 0 0 .9em; padding-left: 14px;
+    border-left: 3px solid var(--border-strong); color: var(--text-secondary);
+  }
+  .doc code { background: var(--bg-elevated); border-radius: 4px; padding: 0 4px; font-size: .9em; }
+  .doc mark { background: rgba(217,164,65,.25); color: inherit; border-radius: 2px; }
+  .doc:focus { outline: none; }
+
+  /* ── A. BOOK SPREAD (read, and "freeze" writing) ─────────────── */
   .viewport {
     position: relative; overflow: hidden;
     background: var(--bg-surface); border: 1px solid var(--border-strong);
     border-radius: 10px; padding: 34px 40px;
   }
-  .pages {
-    height: 100%;
-    column-count: 2;
-    column-gap: 64px;
-    column-fill: auto;              /* fill page 1 fully before page 2 */
-    outline: none;
-  }
-  /* "Keep whole": never split a block across a page edge. Pages then end early with
-     white space instead of cutting mid-sentence. Toggled in read mode. */
-  .pages.keep-whole p,
-  .pages.keep-whole li,
-  .pages.keep-whole blockquote,
-  .pages.keep-whole table,
-  .pages.keep-whole h1,
-  .pages.keep-whole h2 { break-inside: avoid; }
-  /* the "spine" between the two visible pages */
+  .viewport.scrolling { overflow-y: auto; }
+  .pages { height: 100%; column-count: 2; column-gap: 64px; column-fill: auto; }
+  /* While "frozen" the page clamp is lifted: text stops re-paginating mid-keystroke
+     and simply grows downward, then re-settles into pages when you pause. */
+  .pages.freeze { column-count: 1; height: auto; transform: none !important; }
+  .pages.keep-whole p, .pages.keep-whole li, .pages.keep-whole blockquote,
+  .pages.keep-whole table, .pages.keep-whole h1, .pages.keep-whole h2 { break-inside: avoid; }
   .spine {
     position: absolute; top: 26px; bottom: 26px; left: 50%; width: 1px;
     background: linear-gradient(to bottom, transparent, var(--border-default) 12%, var(--border-default) 88%, transparent);
     pointer-events: none;
   }
-
-  /* Scroll mode: the familiar single continuous column. */
-  .scroll-outer { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 34px 40px; }
-
-  /* ── page furniture ──────────────────────────────────────────── */
+  .spine.hidden { display: none; }
   .nav { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
   .arrow {
     background: var(--bg-elevated); border: 1px solid var(--border-strong);
@@ -92,35 +94,36 @@
   .arrow:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-blue); }
   .arrow:disabled { opacity: .35; cursor: default; }
   .pageno { color: var(--text-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .frozen-badge {
+    position: absolute; top: 8px; right: 12px; font-size: 11px;
+    color: var(--accent-warning); opacity: 0; transition: opacity .15s;
+  }
+  .frozen-badge.on { opacity: 1; }
 
-  /* ── note content ────────────────────────────────────────────── */
-  .pages h1, .scroll-outer h1 { font-size: 1.7em; margin: 0 0 .4em; break-after: avoid; }
-  .pages h2, .scroll-outer h2 { font-size: 1.3em; margin: 1.2em 0 .35em; break-after: avoid; }
-  .pages p, .scroll-outer p { margin: 0 0 .9em; }
-  .pages ul, .scroll-outer ul { margin: 0 0 .9em; padding-left: 1.3em; }
-  .pages table, .scroll-outer table { border-collapse: collapse; margin: .6em 0; width: 100%; }
-  .pages th, .pages td, .scroll-outer th, .scroll-outer td {
-    border: 1px solid var(--border-default); padding: 5px 9px; font-size: .92em;
+  /* ── B. VERTICAL PAGES (Word-style writing) ──────────────────── */
+  .vwrap { position: relative; }
+  .vpages {
+    position: relative; z-index: 1;
+    background: var(--bg-surface); border: 1px solid var(--border-strong);
+    border-radius: 10px; padding: 34px 40px;
   }
-  .pages th, .scroll-outer th { background: var(--bg-elevated); }
-  blockquote {
-    margin: 0 0 .9em; padding-left: 14px;
-    border-left: 3px solid var(--border-strong); color: var(--text-secondary);
+  .guides { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+  .guide { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border-strong); }
+  .guide span {
+    position: absolute; right: 10px; top: 4px;
+    font-size: 10.5px; color: var(--text-muted); background: var(--bg-surface); padding: 0 5px;
   }
-  code { background: var(--bg-elevated); border-radius: 4px; padding: 0 4px; font-size: .9em; }
-  mark { background: rgba(217,164,65,.25); color: inherit; border-radius: 2px; }
+
+  /* ── C. PLAIN SCROLL ─────────────────────────────────────────── */
+  .scrollWrap {
+    background: var(--bg-surface); border: 1px solid var(--border-strong);
+    border-radius: 10px; padding: 34px 40px;
+  }
 </style>
 </head>
 <body>
 
 <div class="bar">
-  <div class="group">
-    <span>Layout</span>
-    <div class="seg" id="modeSeg">
-      <button data-mode="scroll" aria-pressed="false">Scroll</button>
-      <button data-mode="book" aria-pressed="true">Book</button>
-    </div>
-  </div>
   <div class="group">
     <span>Mode</span>
     <div class="seg" id="editSeg">
@@ -128,14 +131,25 @@
       <button data-edit="write" aria-pressed="false">Write</button>
     </div>
   </div>
-  <div class="group">
-    <span>Breaks</span>
-    <div class="seg" id="breakSeg">
-      <button data-brk="flow" aria-pressed="true" title="Text cuts at the page edge and continues on the next page">Continue</button>
-      <button data-brk="keep" aria-pressed="false" title="Never split a paragraph, list item, or table across pages">Keep whole</button>
+
+  <div class="group" id="writeGroup">
+    <span>Writing as</span>
+    <div class="seg" id="writeSeg">
+      <button data-w="vertical" aria-pressed="true">Vertical pages</button>
+      <button data-w="freeze" aria-pressed="false">Book + freeze</button>
+      <button data-w="scroll" aria-pressed="false">Plain scroll</button>
     </div>
   </div>
-  <div class="group">
+
+  <div class="group" id="breakGroup">
+    <span>Breaks</span>
+    <div class="seg" id="breakSeg">
+      <button data-brk="flow" aria-pressed="true">Continue</button>
+      <button data-brk="keep" aria-pressed="false">Keep whole</button>
+    </div>
+  </div>
+
+  <div class="group" id="turnGroup">
     <span>Turn</span>
     <div class="seg" id="turnSeg">
       <button data-turn="slide" aria-pressed="true">Slide</button>
@@ -143,25 +157,28 @@
       <button data-turn="instant" aria-pressed="false">Instant</button>
     </div>
   </div>
+
   <div class="group">
-    <span>Width</span>
+    <span>W</span>
     <input type="range" id="wRange" min="600" max="1500" step="20" value="1000" />
-    <span class="val" id="wVal">1000px</span>
+    <span class="val" id="wVal">1000</span>
   </div>
   <div class="group">
-    <span>Height</span>
+    <span>H</span>
     <input type="range" id="hRange" min="360" max="900" step="20" value="620" />
-    <span class="val" id="hVal">620px</span>
+    <span class="val" id="hVal">620</span>
   </div>
-  <span class="hint">← / → or PageUp / PageDown to turn</span>
 </div>
 
+<div class="note" id="explain"></div>
+
 <div class="stage">
-  <!-- BOOK -->
-  <div class="book-outer" id="bookOuter">
+  <!-- A. book spread (read mode, and "book + freeze" writing) -->
+  <div id="bookOuter">
     <div class="viewport" id="viewport">
-      <div class="pages" id="pages"></div>
-      <div class="spine"></div>
+      <div class="pages doc" id="pages"></div>
+      <div class="spine" id="spine"></div>
+      <span class="frozen-badge" id="frozen">frozen while typing…</span>
     </div>
     <div class="nav">
       <button class="arrow" id="prev">‹ Previous</button>
@@ -170,12 +187,17 @@
     </div>
   </div>
 
-  <!-- SCROLL (for comparison) -->
-  <div class="scroll-outer" id="scrollOuter" hidden></div>
+  <!-- B. vertical pages -->
+  <div class="vwrap" id="vertOuter" hidden>
+    <div class="vpages doc" id="vpages"></div>
+    <div class="guides" id="guides"></div>
+  </div>
+
+  <!-- C. plain scroll -->
+  <div class="scrollWrap doc" id="scrollOuter" hidden></div>
 </div>
 
 <script>
-// ── sample note ────────────────────────────────────────────────────
 const NOTE = `
 <h1>On Keeping a Second Brain</h1>
 <p>The point of a note is not to <em>store</em> a thought but to make it findable
@@ -236,161 +258,214 @@ skimming still pays.</p>
 metadata your tool already knows; a title is the only handle your memory gets.</p>
 `;
 
-// ── elements ───────────────────────────────────────────────────────
-const pages = document.getElementById('pages');
-const viewport = document.getElementById('viewport');
-const bookOuter = document.getElementById('bookOuter');
-const scrollOuter = document.getElementById('scrollOuter');
-const prevBtn = document.getElementById('prev');
-const nextBtn = document.getElementById('next');
-const pageno = document.getElementById('pageno');
+const $ = (id) => document.getElementById(id);
+const viewport = $('viewport'), pages = $('pages'), bookOuter = $('bookOuter');
+const vertOuter = $('vertOuter'), vpages = $('vpages'), guides = $('guides');
+const scrollOuter = $('scrollOuter');
+const prevBtn = $('prev'), nextBtn = $('next'), pageno = $('pageno');
 
-pages.innerHTML = NOTE;
-scrollOuter.innerHTML = NOTE;
+let docHTML = NOTE;      // single source of truth, shared across the three views
+let editing = false;     // read | write
+let writeStyle = 'vertical';
+let turnStyle = 'slide';
+let spread = 0;
+let frozen = false, idleTimer = null;
 
-let spread = 0;          // 0-based index of the visible two-page spread
-let mode = 'book';
-let editing = false;
+// ── which view is showing ──────────────────────────────────────────
+function currentView() {
+  if (!editing) return 'book';
+  return writeStyle === 'freeze' ? 'book' : writeStyle; // 'vertical' | 'scroll' | 'book'
+}
+function activeDoc() {
+  const v = currentView();
+  return v === 'book' ? pages : v === 'vertical' ? vpages : scrollOuter;
+}
 
-// ── pagination maths ───────────────────────────────────────────────
-// One "spread" = the two columns currently visible. The distance from the start of
-// column 1 to the start of column 3 is (viewport content width + column gap), so
-// that's how far we translate per page-turn.
+const EXPLAIN = {
+  read: '<b>Read.</b> Book spread, two pages at a time. Try <b>Breaks</b> to switch between cutting mid-sentence and never splitting a block, and <b>Turn</b> to compare page-turn feels.',
+  vertical: '<b>Vertical pages.</b> Same page size, stacked top-to-bottom like Word. Typing pushes text <b>down</b>, so your caret stays put and nothing lurches sideways. Dashed lines mark where pages would break. <i>Prototype note: guides are drawn at exact page heights, so a line can straddle one — a real build would break cleanly.</i>',
+  freeze: '<b>Book + freeze.</b> While you type, pagination is suspended — the text just grows downward and nothing re-flows. When you pause (~0.8s) it re-settles into pages and jumps to your caret\'s page. Judge whether that <b>snap</b> is acceptable.',
+  scroll: '<b>Plain scroll.</b> Landscape becomes a reading-only presentation; writing stays today\'s continuous editor. Zero churn — the baseline to compare against.',
+};
+
+function setLayout(preserve = true) {
+  if (preserve) { const a = activeDoc(); if (a && a.isConnected && !a.hidden) docHTML = a.innerHTML; }
+  const v = currentView();
+
+  bookOuter.hidden = v !== 'book';
+  vertOuter.hidden = v !== 'vertical';
+  scrollOuter.hidden = v !== 'scroll';
+
+  // controls that only make sense for the book spread
+  $('writeGroup').classList.toggle('dim', !editing);
+  $('breakGroup').classList.toggle('dim', v !== 'book');
+  $('turnGroup').classList.toggle('dim', v !== 'book' || (editing && writeStyle === 'freeze'));
+  $('explain').innerHTML = editing ? EXPLAIN[writeStyle] : EXPLAIN.read;
+
+  const target = activeDoc();
+  target.innerHTML = docHTML;
+  target.contentEditable = editing ? 'true' : 'false';
+
+  unfreeze(false);
+  applySize();
+  if (v === 'vertical') drawGuides();
+  if (editing) target.focus();
+}
+
+// ── book spread paging ─────────────────────────────────────────────
 function metrics() {
   const gap = parseFloat(getComputedStyle(pages).columnGap) || 0;
-  const w = pages.clientWidth;                 // content box (padding excluded)
+  const w = pages.clientWidth;
   const step = w + gap;
   const total = Math.max(1, Math.round((pages.scrollWidth + gap) / step));
   return { gap, step, total };
 }
 
-let turnStyle = 'slide';
-
 function render(animate = true) {
+  if (currentView() !== 'book' || frozen) return;
   const { step, total } = metrics();
   spread = Math.max(0, Math.min(spread, total - 1));
   const place = () => { pages.style.transform = `translateX(${-spread * step}px)`; };
 
   if (!animate || turnStyle === 'instant') {
-    pages.style.transition = 'none';
-    pages.style.opacity = '1';
-    place();
+    pages.style.transition = 'none'; pages.style.opacity = '1'; place();
     requestAnimationFrame(() => { pages.style.transition = ''; });
   } else if (turnStyle === 'fade') {
-    // Cross-fade in place — reads as a cut rather than a pan.
     pages.style.transition = 'opacity .11s linear';
     pages.style.opacity = '0';
     setTimeout(() => {
-      pages.style.transition = 'none';
-      place();
+      pages.style.transition = 'none'; place();
       requestAnimationFrame(() => {
-        pages.style.transition = 'opacity .15s linear';
-        pages.style.opacity = '1';
+        pages.style.transition = 'opacity .15s linear'; pages.style.opacity = '1';
       });
     }, 110);
   } else {
     pages.style.transition = 'transform .28s cubic-bezier(.22,.61,.36,1)';
-    pages.style.opacity = '1';
-    place();
+    pages.style.opacity = '1'; place();
   }
 
-  pageno.textContent = `${spread * 2 + 1}–${Math.min(spread * 2 + 2, total * 2)} of ~${total * 2}`;
+  pageno.textContent = `${spread * 2 + 1}–${spread * 2 + 2} of ~${total * 2}`;
   prevBtn.disabled = spread === 0;
   nextBtn.disabled = spread >= total - 1;
 }
-
 const go = (d) => { spread += d; render(); };
 prevBtn.onclick = () => go(-1);
 nextBtn.onclick = () => go(1);
 
-// ── keep the caret's page visible while typing ─────────────────────
-// Writing in a paged layout means text reflows across page edges as you type. When
-// the caret lands on a page that isn't on screen, jump the spread to follow it.
+// ── caret tracking (book spread) ───────────────────────────────────
 function caretSpread() {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return null;
-  const r = sel.getRangeAt(0).cloneRange();
-  r.collapse(true);
+  const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
   let rect = r.getBoundingClientRect();
   if (!rect || (!rect.width && !rect.height)) {
-    // A collapsed range in an empty spot reports no box — measure a temp marker.
     const probe = document.createElement('span');
     probe.textContent = '​';
-    r.insertNode(probe);
-    rect = probe.getBoundingClientRect();
-    probe.remove();
+    r.insertNode(probe); rect = probe.getBoundingClientRect(); probe.remove();
   }
   const { step } = metrics();
   const x = rect.left - viewport.getBoundingClientRect().left + spread * step;
   return Math.floor(x / step);
 }
-
 function followCaret() {
-  if (!editing || mode !== 'book') return;
+  if (currentView() !== 'book' || !editing || frozen) return;
   const s = caretSpread();
-  if (s != null && s !== spread && s >= 0) { spread = s; render(); }
+  if (s != null && s >= 0 && s !== spread) { spread = s; render(false); }
 }
 
-pages.addEventListener('input', () => { render(false); followCaret(); });
-pages.addEventListener('keyup', (e) => { if (e.key.startsWith('Arrow') || e.key === 'Backspace' || e.key === 'Delete') followCaret(); });
-pages.addEventListener('click', () => setTimeout(followCaret, 0));
+// ── "freeze while typing" ──────────────────────────────────────────
+function freeze() {
+  if (frozen) return;
+  frozen = true;
+  pages.classList.add('freeze');
+  viewport.classList.add('scrolling');
+  $('spine').classList.add('hidden');
+  $('frozen').classList.add('on');
+}
+function unfreeze(settle = true) {
+  if (!frozen) { $('frozen').classList.remove('on'); return; }
+  frozen = false;
+  pages.classList.remove('freeze');
+  viewport.classList.remove('scrolling');
+  viewport.scrollTop = 0;
+  $('spine').classList.remove('hidden');
+  $('frozen').classList.remove('on');
+  if (settle) { render(false); followCaret(); }
+}
+
+// ── vertical page guides ───────────────────────────────────────────
+function drawGuides() {
+  const h = +$('hRange').value;
+  guides.innerHTML = '';
+  const total = Math.max(1, Math.ceil(vpages.scrollHeight / h));
+  for (let i = 1; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'guide';
+    d.style.top = (i * h) + 'px';
+    d.innerHTML = `<span>page ${i + 1}</span>`;
+    guides.appendChild(d);
+  }
+}
+
+// ── editing hooks ──────────────────────────────────────────────────
+function onInput() {
+  const v = currentView();
+  docHTML = activeDoc().innerHTML;
+  if (v === 'vertical') { drawGuides(); return; }        // push-down: nothing to re-page
+  if (v === 'scroll') return;
+  if (writeStyle === 'freeze') {                          // suspend, settle on pause
+    freeze();
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => unfreeze(true), 800);
+    return;
+  }
+  render(false); followCaret();                           // (read mode never edits)
+}
+[pages, vpages, scrollOuter].forEach((el) => {
+  el.addEventListener('input', onInput);
+  el.addEventListener('keyup', (e) => { if (e.key.startsWith('Arrow')) followCaret(); });
+  el.addEventListener('click', () => setTimeout(followCaret, 0));
+});
 
 // ── controls ───────────────────────────────────────────────────────
-document.getElementById('modeSeg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  mode = b.dataset.mode;
-  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  bookOuter.hidden = mode !== 'book';
-  scrollOuter.hidden = mode !== 'scroll';
-  if (mode === 'book') render(false);
-};
-
-document.getElementById('editSeg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  editing = b.dataset.edit === 'write';
-  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  pages.contentEditable = editing ? 'true' : 'false';
-  scrollOuter.contentEditable = editing ? 'true' : 'false';
-  if (editing) pages.focus();
-};
-
-document.getElementById('breakSeg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  pages.classList.toggle('keep-whole', b.dataset.brk === 'keep');
-  render(false);
-};
-
-document.getElementById('turnSeg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  turnStyle = b.dataset.turn;
-};
+function wire(id, attr, fn) {
+  $(id).onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...e.currentTarget.children].forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b.dataset[attr]);
+  };
+}
+wire('editSeg', 'edit', (v) => { editing = v === 'write'; setLayout(); });
+wire('writeSeg', 'w', (v) => { writeStyle = v; setLayout(); });
+wire('breakSeg', 'brk', (v) => { pages.classList.toggle('keep-whole', v === 'keep'); render(false); });
+wire('turnSeg', 'turn', (v) => { turnStyle = v; });
 
 function applySize() {
-  const w = +document.getElementById('wRange').value;
-  const h = +document.getElementById('hRange').value;
-  document.getElementById('wVal').textContent = w + 'px';
-  document.getElementById('hVal').textContent = h + 'px';
+  const w = +$('wRange').value, h = +$('hRange').value;
+  $('wVal').textContent = w; $('hVal').textContent = h;
   viewport.style.width = w + 'px';
   viewport.style.height = h + 'px';
+  // A vertical "page" is one page of the spread — half the width, same height.
+  const pageW = Math.round((w - 64) / 2) + 80;
+  vpages.style.width = pageW + 'px';
+  vpages.style.minHeight = h + 'px';
   scrollOuter.style.width = w + 'px';
-  render(false);
+  if (currentView() === 'book') render(false);
+  if (currentView() === 'vertical') drawGuides();
 }
-document.getElementById('wRange').oninput = applySize;
-document.getElementById('hRange').oninput = applySize;
+$('wRange').oninput = applySize;
+$('hRange').oninput = applySize;
 
 document.addEventListener('keydown', (e) => {
-  if (mode !== 'book') return;
-  // In write mode let Arrow keys move the caret; use PageUp/PageDown to turn pages.
+  if (currentView() !== 'book' || frozen) return;
   const turnKeys = editing ? ['PageDown', 'PageUp'] : ['PageDown', 'PageUp', 'ArrowRight', 'ArrowLeft'];
   if (!turnKeys.includes(e.key)) return;
   e.preventDefault();
   go(e.key === 'PageDown' || e.key === 'ArrowRight' ? 1 : -1);
 });
 
-window.addEventListener('resize', () => render(false));
-applySize();
+window.addEventListener('resize', () => { if (currentView() === 'book') render(false); else drawGuides(); });
+setLayout(false);
 </script>
 </body>
 </html>
