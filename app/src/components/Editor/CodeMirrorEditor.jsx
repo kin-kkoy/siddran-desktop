@@ -6,7 +6,7 @@ import { markdown, markdownLanguage, deleteMarkupBackward } from '@codemirror/la
 import { syntaxHighlighting, indentUnit, foldEffect, unfoldEffect } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { livePreview } from './cm/livePreview'
-import { liveTables, tableTypingGuard } from './cm/tables'
+import { liveTables, tableTypingGuard, tableKeymap } from './cm/tables'
 import { collapseTableGap } from './cm/tableGap'
 import { domVerticalMotion } from './cm/verticalMotion'
 import { codeCopy } from './cm/codeCopy'
@@ -254,6 +254,7 @@ function CodeMirrorEditor({
           livePreview,
           liveTables,
           tableTypingGuard,
+          tableKeymap,
           collapseTableGap,
           searchExtension,
           codeCopy,

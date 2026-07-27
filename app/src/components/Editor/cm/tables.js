@@ -12,12 +12,16 @@
 // A table that doesn't parse cleanly is left as normal source (no widget), so it's
 // always still editable as raw text — the escape hatch.
 
-import { StateField, EditorState } from '@codemirror/state'
-import { Decoration, EditorView, WidgetType } from '@codemirror/view'
+import { StateField, EditorState, Prec } from '@codemirror/state'
+import { Decoration, EditorView, WidgetType, keymap } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { renderTableDOM } from './tableRender'
 import { renderInlineInto } from './inlineRender'
 import { parseTable, setCell, insertRow, removeRow, insertColumn, removeColumn } from './tableModel'
+
+// Rendered-table DOM → its focus API, so the keymap below can move the caret from
+// the document INTO a table's cells. WeakMap so entries die with the widget's DOM.
+const tableApis = new WeakMap()
 
 function mkBtn(label, title, onClick) {
   const b = document.createElement('button')
@@ -81,12 +85,27 @@ class TableWidget extends WidgetType {
       active = null
       renderRendered(cell, line, col)
     }
-    const endSession = () => {
+    // Write the session back to the document. `place` optionally parks the CM caret
+    // on the line just above/below the table (used when arrowing out of the table).
+    const endSession = (place) => {
       commitActive()
       if (working !== self.md) {
         view.dispatch({ changes: { from: self.from, to: self.from + self.md.length, insert: working } })
       }
       view.focus()
+      if (!place) return
+      const st = view.state
+      const tableFrom = self.from
+      const tableTo = self.from + working.length
+      if (place === 'above') {
+        const line = st.doc.lineAt(tableFrom)
+        const pos = line.number > 1 ? st.doc.line(line.number - 1).to : 0
+        view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+      } else {
+        const line = st.doc.lineAt(Math.min(tableTo, st.doc.length))
+        const pos = line.number < st.doc.lines ? st.doc.line(line.number + 1).from : st.doc.length
+        view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+      }
     }
     const applyStructural = (newMd) => {
       // +/- controls: fold in any active edit, then dispatch the structural change.
@@ -115,26 +134,70 @@ class TableWidget extends WidgetType {
       input.addEventListener('keydown', (e) => {
         e.stopPropagation() // keep CM from acting on keys while a cell is being edited
         // Enter inserts a newline in the cell (textarea default). Commit happens when
-        // focus leaves the table, on Tab (next cell), or clicking away.
+        // focus leaves the table, on Tab / arrow-out, or clicking away.
+        const v = input.value
+        const atStart = input.selectionStart === 0 && input.selectionEnd === 0
+        const atEnd = input.selectionStart === v.length && input.selectionEnd === v.length
+        const onFirstLine = !v.slice(0, input.selectionStart).includes('\n')
+        const onLastLine = !v.slice(input.selectionEnd).includes('\n')
+
         if (e.key === 'Escape') { e.preventDefault(); const a = active; active = null; renderRendered(a.cell, a.line, a.col) }
         else if (e.key === 'Tab') { e.preventDefault(); focusSibling(cell, e.shiftKey ? -1 : 1) }
+        // Arrow keys move between cells once the caret is at the cell text's edge,
+        // and step out of the table at its boundaries — so the table behaves like
+        // part of the document rather than a trap.
+        else if (e.key === 'ArrowUp' && onFirstLine) { e.preventDefault(); moveRow(cell, -1) }
+        else if (e.key === 'ArrowDown' && onLastLine) { e.preventDefault(); moveRow(cell, 1) }
+        else if (e.key === 'ArrowLeft' && atStart) { e.preventDefault(); focusSibling(cell, -1) }
+        else if (e.key === 'ArrowRight' && atEnd) { e.preventDefault(); focusSibling(cell, 1) }
       })
     }
 
     const cellsInOrder = () => Array.from(table.querySelectorAll('th, td'))
+    const cellAt = (line, col) => table.querySelector(`[data-line="${line}"][data-col="${col}"]`)
+
     const focusSibling = (cell, dir) => {
       const cells = cellsInOrder()
-      const i = cells.indexOf(cell)
-      const next = cells[i + dir]
+      const next = cells[cells.indexOf(cell) + dir]
       if (next) startEdit(next, Number(next.dataset.line), Number(next.dataset.col))
-      else endSession()
+      else endSession(dir < 0 ? 'above' : 'below') // past either end → leave the table
     }
+
+    // Vertical move within a column. Source lines: 0 = header, 2+ = body rows
+    // (line 1 is the `| --- |` delimiter and is never a cell).
+    const moveRow = (cell, dir) => {
+      const line = Number(cell.dataset.line)
+      const col = Number(cell.dataset.col)
+      let target
+      if (dir < 0) target = line === 0 ? null : (line === 2 ? 0 : line - 1)
+      else target = line === 0 ? 2 : line + 1
+      const next = target == null ? null : cellAt(target, col)
+      if (next) startEdit(next, Number(next.dataset.line), Number(next.dataset.col))
+      else endSession(dir < 0 ? 'above' : 'below')
+    }
+
+    // Let arrow-key navigation from OUTSIDE enter this table (see tableKeymap).
+    wrap.dataset.tableFrom = String(this.from)
+    tableApis.set(wrap, {
+      focusEdge: (edge) => {
+        const cells = cellsInOrder()
+        if (!cells.length) return false
+        let cell
+        if (edge === 'top') cell = cells[0]
+        else {
+          const rows = table.querySelectorAll('tr')
+          cell = rows[rows.length - 1]?.querySelector('th, td') || cells[cells.length - 1]
+        }
+        startEdit(cell, Number(cell.dataset.line), Number(cell.dataset.col))
+        return true
+      },
+    })
 
     // One handler for the whole widget: never let a click place a CM caret in the
     // table (that was the "caret before/after the table" corruption). Clicks on a
     // cell open its editor; clicks on an open input are left alone.
     wrap.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.cm-table-btn') || e.target.tagName === 'INPUT') return
+      if (e.target.closest('.cm-table-btn') || e.target.tagName === 'TEXTAREA') return
       e.preventDefault()
       const cell = e.target.closest?.('th, td')
       if (cell && cell.dataset.line != null) startEdit(cell, Number(cell.dataset.line), Number(cell.dataset.col))
@@ -199,6 +262,50 @@ function decoFrom(state, tables) {
 export function buildTableDeco(state) {
   return decoFrom(state, scanTables(state))
 }
+
+// Arrow keys move the caret INTO a table's cells instead of letting it sit beside the
+// atomic widget (where typing used to corrupt the table). Pressing Down/Right toward a
+// table opens its first cell; Up/Left from below opens the last row's first cell.
+// Returns false when the caret isn't adjacent to a table, so normal motion is
+// unaffected. Registered at Prec.highest so it wins over domVerticalMotion's
+// Arrow-Up/Down (Prec.high); the wikilink completionKeymap still owns arrows while a
+// completion popup is open, since this only fires next to a table.
+function enterTable(view, dir) {
+  const { state } = view
+  const sel = state.selection.main
+  if (!sel.empty) return false
+  const field = state.field(liveTables, false)
+  if (!field || !field.tables.length) return false
+  const doc = state.doc
+  const caretLine = doc.lineAt(sel.head)
+
+  for (const t of field.tables) {
+    const first = doc.lineAt(t.from)
+    const last = doc.lineAt(t.to)
+    const beside = sel.head >= first.from && sel.head <= last.to // caret parked at the widget
+    const lineAbove = caretLine.number + 1 === first.number
+    const lineBelow = caretLine.number - 1 === last.number
+
+    const goTop = (dir === 'down' && (lineAbove || sel.head <= first.from))
+      || (dir === 'right' && ((beside && sel.head <= first.from) || (lineAbove && sel.head === caretLine.to)))
+    const goBottom = (dir === 'up' && (lineBelow || (beside && sel.head >= last.to)))
+      || (dir === 'left' && ((beside && sel.head >= last.to) || (lineBelow && sel.head === caretLine.from)))
+
+    if (!goTop && !goBottom) continue
+    const el = view.contentDOM.querySelector(`.cm-table-wrap[data-table-from="${t.from}"]`)
+    const api = el && tableApis.get(el)
+    if (!api) continue
+    return api.focusEdge(goTop ? 'top' : 'bottom')
+  }
+  return false
+}
+
+export const tableKeymap = Prec.highest(keymap.of([
+  { key: 'ArrowDown', run: (v) => enterTable(v, 'down') },
+  { key: 'ArrowUp', run: (v) => enterTable(v, 'up') },
+  { key: 'ArrowRight', run: (v) => enterTable(v, 'right') },
+  { key: 'ArrowLeft', run: (v) => enterTable(v, 'left') },
+]))
 
 // Typing at a rendered table's edge (the caret can rest just before/after an atomic
 // table) would otherwise be swallowed into the table by GFM — the first char becomes
