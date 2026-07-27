@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Siddran — Landscape (book) view prototype</title>
+<style>
+  :root {
+    --bg-primary: #09090f;
+    --bg-surface: #12121e;
+    --bg-surface-alt: #181826;
+    --bg-elevated: #1e1e2e;
+    --bg-hover: #252538;
+    --border-default: #252538;
+    --border-strong: #333350;
+    --text-primary: #e2ddf5;
+    --text-secondary: #b8b3d0;
+    --text-muted: #635f80;
+    --accent-blue: #5a9cf0;
+    --accent-warning: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg-primary); color: var(--text-primary);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.75;
+  }
+
+  /* ── control bar ─────────────────────────────────────────────── */
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    padding: 10px 18px; background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .seg { display: flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    background: transparent; border: none; color: var(--text-muted);
+    padding: 5px 12px; font: inherit; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--bg-elevated); color: var(--text-primary); }
+  input[type=range] { width: 130px; accent-color: var(--accent-blue); }
+  .val { font-variant-numeric: tabular-nums; color: var(--text-muted); min-width: 44px; }
+  .hint { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+
+  /* ── stage ───────────────────────────────────────────────────── */
+  .stage { display: flex; justify-content: center; padding: 28px 16px 40px; }
+
+  /* Book mode: a fixed-size viewport whose inner content is laid out in
+     CSS columns. Columns beyond the first two overflow to the right; we page by
+     translating the content horizontally. The browser does all the text flow —
+     including cutting mid-sentence at a page edge, which is the "real book" look. */
+  .book-outer { position: relative; }
+  .viewport {
+    position: relative; overflow: hidden;
+    background: var(--bg-surface); border: 1px solid var(--border-strong);
+    border-radius: 10px; padding: 34px 40px;
+  }
+  .pages {
+    height: 100%;
+    column-count: 2;
+    column-gap: 64px;
+    column-fill: auto;              /* fill page 1 fully before page 2 */
+    transition: transform .28s cubic-bezier(.22,.61,.36,1);
+    outline: none;
+  }
+  .pages.no-anim { transition: none; }
+  /* the "spine" between the two visible pages */
+  .spine {
+    position: absolute; top: 26px; bottom: 26px; left: 50%; width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--border-default) 12%, var(--border-default) 88%, transparent);
+    pointer-events: none;
+  }
+
+  /* Scroll mode: the familiar single continuous column. */
+  .scroll-outer { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 34px 40px; }
+
+  /* ── page furniture ──────────────────────────────────────────── */
+  .nav { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .arrow {
+    background: var(--bg-elevated); border: 1px solid var(--border-strong);
+    color: var(--text-secondary); border-radius: 8px; padding: 7px 14px;
+    font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .arrow:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-blue); }
+  .arrow:disabled { opacity: .35; cursor: default; }
+  .pageno { color: var(--text-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+  /* ── note content ────────────────────────────────────────────── */
+  .pages h1, .scroll-outer h1 { font-size: 1.7em; margin: 0 0 .4em; break-after: avoid; }
+  .pages h2, .scroll-outer h2 { font-size: 1.3em; margin: 1.2em 0 .35em; break-after: avoid; }
+  .pages p, .scroll-outer p { margin: 0 0 .9em; }
+  .pages ul, .scroll-outer ul { margin: 0 0 .9em; padding-left: 1.3em; }
+  .pages table, .scroll-outer table { border-collapse: collapse; margin: .6em 0; width: 100%; }
+  .pages th, .pages td, .scroll-outer th, .scroll-outer td {
+    border: 1px solid var(--border-default); padding: 5px 9px; font-size: .92em;
+  }
+  .pages th, .scroll-outer th { background: var(--bg-elevated); }
+  blockquote {
+    margin: 0 0 .9em; padding-left: 14px;
+    border-left: 3px solid var(--border-strong); color: var(--text-secondary);
+  }
+  code { background: var(--bg-elevated); border-radius: 4px; padding: 0 4px; font-size: .9em; }
+  mark { background: rgba(217,164,65,.25); color: inherit; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="group">
+    <span>Layout</span>
+    <div class="seg" id="modeSeg">
+      <button data-mode="scroll" aria-pressed="false">Scroll</button>
+      <button data-mode="book" aria-pressed="true">Book</button>
+    </div>
+  </div>
+  <div class="group">
+    <span>Mode</span>
+    <div class="seg" id="editSeg">
+      <button data-edit="read" aria-pressed="true">Read</button>
+      <button data-edit="write" aria-pressed="false">Write</button>
+    </div>
+  </div>
+  <div class="group">
+    <span>Width</span>
+    <input type="range" id="wRange" min="600" max="1500" step="20" value="1000" />
+    <span class="val" id="wVal">1000px</span>
+  </div>
+  <div class="group">
+    <span>Height</span>
+    <input type="range" id="hRange" min="360" max="900" step="20" value="620" />
+    <span class="val" id="hVal">620px</span>
+  </div>
+  <span class="hint">← / → or PageUp / PageDown to turn</span>
+</div>
+
+<div class="stage">
+  <!-- BOOK -->
+  <div class="book-outer" id="bookOuter">
+    <div class="viewport" id="viewport">
+      <div class="pages" id="pages"></div>
+      <div class="spine"></div>
+    </div>
+    <div class="nav">
+      <button class="arrow" id="prev">‹ Previous</button>
+      <span class="pageno" id="pageno">1 / 1</span>
+      <button class="arrow" id="next">Next ›</button>
+    </div>
+  </div>
+
+  <!-- SCROLL (for comparison) -->
+  <div class="scroll-outer" id="scrollOuter" hidden></div>
+</div>
+
+<script>
+// ── sample note ────────────────────────────────────────────────────
+const NOTE = `
+<h1>On Keeping a Second Brain</h1>
+<p>The point of a note is not to <em>store</em> a thought but to make it findable
+later, when a future version of you needs it and has forgotten it ever existed.
+That reframing changes what you write down and how.</p>
+<p>Most systems fail not because capture is hard but because retrieval is. A note
+you cannot find is indistinguishable from a note you never wrote.</p>
+
+<h2>The capture problem</h2>
+<p>Capture should cost almost nothing. If writing something down takes more than a
+few seconds of friction, the thought evaporates and you are left with the vague
+memory of having had an idea, which is worse than nothing because it nags.</p>
+<blockquote>A thought you half-remember is a debt you keep paying interest on.</blockquote>
+<p>This is why the inbox pattern works: one place, no decisions, sort later. The
+sorting is real work, but it is work you can batch, and batched work gets done.</p>
+<ul>
+  <li>Capture without categorising.</li>
+  <li>Review on a cadence you actually keep, not the one you admire.</li>
+  <li>Prune ruthlessly — an archive nobody reads is a graveyard.</li>
+</ul>
+
+<h2>Structure emerges, it isn't imposed</h2>
+<p>Every folder hierarchy designed in advance is a prediction about what you will
+think next year. Those predictions are usually wrong. Links, tags, and search let
+structure grow out of the material instead of being poured over it like concrete.</p>
+<p>Start flat. Add structure only where the pain is real — where you have looked
+for something three times and failed three times. That third failure is the
+signal, and it is worth waiting for.</p>
+
+<h2>A quick comparison</h2>
+<table>
+  <thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+  <tbody>
+    <tr><td>Folders</td><td>Familiar</td><td>One place per note</td></tr>
+    <tr><td>Tags</td><td>Many facets</td><td>Drifts without discipline</td></tr>
+    <tr><td>Links</td><td>Context travels</td><td>Needs a habit</td></tr>
+  </tbody>
+</table>
+
+<h2>On rereading</h2>
+<p>The highest-value habit is rereading old notes at random. It is also the one
+nobody does, because it produces no visible output and feels like procrastination.
+It isn't — it's the step where isolated facts turn into <mark>connections</mark>,
+and connections are the entire point of the exercise.</p>
+<p>Set a small, boring cadence. Five notes a week. Delete what is dead, rewrite
+what is unclear, link what is related. Most will be forgettable; the occasional
+one will rearrange how you think about a problem you're stuck on right now.</p>
+<p>The compounding is slow and then sudden, the way it is with anything that
+depends on a corpus reaching critical mass. Two hundred notes is a drawer. Two
+thousand is a collaborator.</p>
+
+<h2>Practical defaults</h2>
+<p>Write the note as if explaining to a competent stranger — because in six months
+that is exactly who you'll be. Use full sentences in summaries; shorthand rots.
+Put the conclusion first, the reasoning after, and the raw material last, so that
+skimming still pays.</p>
+<p>Name things by what they are about, not by when you made them. Dates are
+metadata your tool already knows; a title is the only handle your memory gets.</p>
+`;
+
+// ── elements ───────────────────────────────────────────────────────
+const pages = document.getElementById('pages');
+const viewport = document.getElementById('viewport');
+const bookOuter = document.getElementById('bookOuter');
+const scrollOuter = document.getElementById('scrollOuter');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+const pageno = document.getElementById('pageno');
+
+pages.innerHTML = NOTE;
+scrollOuter.innerHTML = NOTE;
+
+let spread = 0;          // 0-based index of the visible two-page spread
+let mode = 'book';
+let editing = false;
+
+// ── pagination maths ───────────────────────────────────────────────
+// One "spread" = the two columns currently visible. The distance from the start of
+// column 1 to the start of column 3 is (viewport content width + column gap), so
+// that's how far we translate per page-turn.
+function metrics() {
+  const gap = parseFloat(getComputedStyle(pages).columnGap) || 0;
+  const w = pages.clientWidth;                 // content box (padding excluded)
+  const step = w + gap;
+  const total = Math.max(1, Math.round((pages.scrollWidth + gap) / step));
+  return { gap, step, total };
+}
+
+function render(animate = true) {
+  const { step, total } = metrics();
+  spread = Math.max(0, Math.min(spread, total - 1));
+  pages.classList.toggle('no-anim', !animate);
+  pages.style.transform = `translateX(${-spread * step}px)`;
+  pageno.textContent = `${spread * 2 + 1}–${Math.min(spread * 2 + 2, total * 2)} of ~${total * 2}`;
+  prevBtn.disabled = spread === 0;
+  nextBtn.disabled = spread >= total - 1;
+  if (!animate) requestAnimationFrame(() => pages.classList.remove('no-anim'));
+}
+
+const go = (d) => { spread += d; render(); };
+prevBtn.onclick = () => go(-1);
+nextBtn.onclick = () => go(1);
+
+// ── keep the caret's page visible while typing ─────────────────────
+// Writing in a paged layout means text reflows across page edges as you type. When
+// the caret lands on a page that isn't on screen, jump the spread to follow it.
+function caretSpread() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const r = sel.getRangeAt(0).cloneRange();
+  r.collapse(true);
+  let rect = r.getBoundingClientRect();
+  if (!rect || (!rect.width && !rect.height)) {
+    // A collapsed range in an empty spot reports no box — measure a temp marker.
+    const probe = document.createElement('span');
+    probe.textContent = '​';
+    r.insertNode(probe);
+    rect = probe.getBoundingClientRect();
+    probe.remove();
+  }
+  const { step } = metrics();
+  const x = rect.left - viewport.getBoundingClientRect().left + spread * step;
+  return Math.floor(x / step);
+}
+
+function followCaret() {
+  if (!editing || mode !== 'book') return;
+  const s = caretSpread();
+  if (s != null && s !== spread && s >= 0) { spread = s; render(); }
+}
+
+pages.addEventListener('input', () => { render(false); followCaret(); });
+pages.addEventListener('keyup', (e) => { if (e.key.startsWith('Arrow') || e.key === 'Backspace' || e.key === 'Delete') followCaret(); });
+pages.addEventListener('click', () => setTimeout(followCaret, 0));
+
+// ── controls ───────────────────────────────────────────────────────
+document.getElementById('modeSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  mode = b.dataset.mode;
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  bookOuter.hidden = mode !== 'book';
+  scrollOuter.hidden = mode !== 'scroll';
+  if (mode === 'book') render(false);
+};
+
+document.getElementById('editSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  editing = b.dataset.edit === 'write';
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  pages.contentEditable = editing ? 'true' : 'false';
+  scrollOuter.contentEditable = editing ? 'true' : 'false';
+  if (editing) pages.focus();
+};
+
+function applySize() {
+  const w = +document.getElementById('wRange').value;
+  const h = +document.getElementById('hRange').value;
+  document.getElementById('wVal').textContent = w + 'px';
+  document.getElementById('hVal').textContent = h + 'px';
+  viewport.style.width = w + 'px';
+  viewport.style.height = h + 'px';
+  scrollOuter.style.width = w + 'px';
+  render(false);
+}
+document.getElementById('wRange').oninput = applySize;
+document.getElementById('hRange').oninput = applySize;
+
+document.addEventListener('keydown', (e) => {
+  if (mode !== 'book') return;
+  // In write mode let Arrow keys move the caret; use PageUp/PageDown to turn pages.
+  const turnKeys = editing ? ['PageDown', 'PageUp'] : ['PageDown', 'PageUp', 'ArrowRight', 'ArrowLeft'];
+  if (!turnKeys.includes(e.key)) return;
+  e.preventDefault();
+  go(e.key === 'PageDown' || e.key === 'ArrowRight' ? 1 : -1);
+});
+
+window.addEventListener('resize', () => render(false));
+applySize();
+</script>
+</body>
+</html>
