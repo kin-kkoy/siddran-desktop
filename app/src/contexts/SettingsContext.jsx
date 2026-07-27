@@ -31,6 +31,7 @@ const DEFAULTS = {
   noteEditorWidth: 1200,
   rememberNoteState: true,
   centerNowLine: true,
+  bgBrightness: 0, // background lightness offset, applied on every page; -20..+20
 }
 
 // ── Color utilities ────────────────────────────────────────────────
@@ -214,6 +215,28 @@ function literalPalette(hex, h, s, contrast) {
   }
 }
 
+// Shift a #rrggbb colour's lightness by `delta` percentage points (clamped 0–100).
+function shiftLightness(hex, delta) {
+  const [h, s, l] = rgbToHsl(...hexToRgb(hex))
+  return hslToHex(h, s, Math.max(0, Math.min(100, l + delta)))
+}
+
+// Return a copy of the palette with every background tier lightened/darkened by the
+// same amount, so the whole background hierarchy shifts together while keeping the
+// relative spacing between tiers. Only the bg-* tiers move — text and borders keep
+// their values (and thus their contrast). Recomputed from the base palette each
+// time, so it never compounds. Non-hex values are left untouched.
+const BG_TIERS = ['--bg-primary', '--bg-surface', '--bg-surface-alt', '--bg-elevated', '--bg-hover']
+function withBrightness(palette, delta) {
+  if (!delta) return palette
+  const out = { ...palette }
+  for (const key of BG_TIERS) {
+    const v = out[key]
+    if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) out[key] = shiftLightness(v, delta)
+  }
+  return out
+}
+
 // ── Apply palette to document ──────────────────────────────────────
 function applyPalette(palette) {
   const root = document.documentElement
@@ -260,13 +283,15 @@ export function SettingsProvider({ children, authFetch, API, isAuthed }) {
     try { localStorage.setItem('cinder_settings', JSON.stringify(settings)) } catch {}
   }, [settings])
 
-  // Apply theme whenever settings change — force default on auth pages
+  // Apply theme whenever settings change — force default on auth pages. The
+  // background-brightness offset is applied as a post-step so it works uniformly
+  // across every theme type.
   useEffect(() => {
     const palette = isAuthed
       ? generatePalette(settings.theme, settings.matchMode, settings.contrast)
       : darkDefaults('low')
-    applyPalette(palette)
-  }, [settings.theme, settings.matchMode, settings.contrast, isAuthed])
+    applyPalette(withBrightness(palette, isAuthed ? (settings.bgBrightness || 0) : 0))
+  }, [settings.theme, settings.matchMode, settings.contrast, settings.bgBrightness, isAuthed])
 
   // Note editor width — exposed as CSS variable for NotePage's container.
   useEffect(() => {

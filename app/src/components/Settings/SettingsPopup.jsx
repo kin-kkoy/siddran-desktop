@@ -109,6 +109,36 @@ function InterfaceTab({ settings, updateSetting }) {
         />
       </SettingRow>
 
+      {/* Background brightness — applies on every page */}
+      <SettingRow
+        label="Background Brightness"
+        description="Lighten or darken the background on every page."
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="range"
+            className={styles.starSlider}
+            min={-20}
+            max={20}
+            step={2}
+            value={settings.bgBrightness ?? 0}
+            onChange={e => updateSetting('bgBrightness', parseInt(e.target.value, 10))}
+          />
+          <span style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: 13 }}>
+            {(settings.bgBrightness ?? 0) > 0 ? '+' : ''}{settings.bgBrightness ?? 0}
+          </span>
+          <button
+            type="button"
+            onClick={() => updateSetting('bgBrightness', 0)}
+            title="Reset to default"
+            aria-label="Reset background brightness"
+            style={{ background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: 'var(--text-muted)' }}
+          >
+            ⟲
+          </button>
+        </div>
+      </SettingRow>
+
       {/* Note editor width */}
       <SettingRow
         label="Note Editor Width"
