@@ -11,6 +11,10 @@
 let seq = 1000
 const nextId = () => ++seq
 const uuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `id-${nextId()}`)
+// Ids arrive as strings (URL segments, drag payloads, JSON bodies). Legacy rows use
+// numeric ids; rows created from now on use uuids. Coerce digit-only strings back to
+// Number so `row.id === parseId(seg[1])` keeps matching both kinds.
+const parseId = (v) => (v == null ? null : (typeof v === 'number' ? v : (/^\d+$/.test(String(v)) ? Number(v) : String(v))))
 const nowISO = () => new Date().toISOString()
 
 // ── module state ────────────────────────────────────────────────────
@@ -135,8 +139,11 @@ async function hydrate(fs, bag) {
 
   // continue ids above anything already on disk
   const ids = []
-  for (const c of [db.notes, db.notebooks, db.tasks, db.dailies, db.projects, db.events, db.schedules]) for (const r of c) if (typeof r.id === 'number') ids.push(r.id)
-  for (const p of db.projects) for (const t of (p.tasks || [])) if (typeof t.id === 'number') ids.push(t.id)
+  // Number.isFinite, not `typeof === 'number'`: a hand-edited `id:` in note
+  // frontmatter parses to NaN, which passes the typeof check and then poisons
+  // Math.max — permanently wedging nextId() at NaN for the rest of the session.
+  for (const c of [db.notes, db.notebooks, db.tasks, db.dailies, db.projects, db.events, db.schedules]) for (const r of c) if (Number.isFinite(r.id)) ids.push(r.id)
+  for (const p of db.projects) for (const t of (p.tasks || [])) if (Number.isFinite(t.id)) ids.push(t.id)
   seq = Math.max(seq, ...ids, 1000)
 }
 
@@ -199,12 +206,25 @@ async function reconcileNotes(fs, bag) {
   }
 }
 
+// Rows go to disk in a stable id order so the `.siddran` files diff cleanly and
+// two devices appending different rows land in different places in the file
+// instead of colliding at the end of the same array. Sorting by id rather than by
+// date also means editing a row never moves it — an edit stays a one-line diff.
+// These sort copies: in-memory order is left alone, since the UI reads db directly.
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+const byId = (rows) => [...rows].sort((a, b) => cmp(String(a.id), String(b.id)))
+// completions have no id of their own — (daily_task_id, date) is their identity.
+const byCompletion = (rows) => [...rows].sort((a, b) =>
+  cmp(String(a.daily_task_id), String(b.daily_task_id)) || cmp(String(a.date), String(b.date)))
+// NOTE: project subtasks (`p.tasks`) are deliberately left in insertion order —
+// they're append-only, so already diff-stable, and not every render path sorts them.
+
 export async function flushNow() {
   if (!_fs || !_bag) return
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
   const fs = _fs, bag = _bag
-  if (dirty.tasks) await fs.writeText(`${bag}/tasks.siddran`, JSON.stringify({ tasks: db.tasks, dailies: db.dailies, completions: db.completions, projects: db.projects }, null, 2))
-  if (dirty.calendar) await fs.writeText(`${bag}/calendar.siddran`, JSON.stringify({ events: db.events, schedules: db.schedules }, null, 2))
+  if (dirty.tasks) await fs.writeText(`${bag}/tasks.siddran`, JSON.stringify({ tasks: byId(db.tasks), dailies: byId(db.dailies), completions: byCompletion(db.completions), projects: byId(db.projects) }, null, 2))
+  if (dirty.calendar) await fs.writeText(`${bag}/calendar.siddran`, JSON.stringify({ events: byId(db.events), schedules: byId(db.schedules) }, null, 2))
   if (dirty.settings) await fs.writeText(`${bag}/settings.siddran`, JSON.stringify({ settings: db.settings }, null, 2))
   if (dirty.notesTouched) await reconcileNotes(fs, bag)
   for (const id of dirty.sandboxes) {
@@ -233,6 +253,44 @@ export async function openBagStore(fs, bagPath) {
 export async function closeBagStore() {
   await flushNow()
   _fs = null; _bag = null; db = emptyDb()
+}
+
+// ── sync surface ────────────────────────────────────────────────────
+// The syncable slice of the vault: tasks + calendar only. Notes are markdown on
+// disk and out of scope; settings are device-local (window sizes, view prefs) and
+// syncing them would fight between machines.
+export function exportVault() {
+  return {
+    tasks: { tasks: db.tasks, dailies: db.dailies, completions: db.completions, projects: db.projects },
+    calendar: { events: db.events, schedules: db.schedules },
+  }
+}
+
+// Replace the syncable collections wholesale with a merged snapshot. Marks both
+// files dirty; the caller flushes. Rows are trusted — merge already validated them.
+export function importVault(snapshot) {
+  if (!snapshot) return
+  const t = snapshot.tasks || {}, c = snapshot.calendar || {}
+  db.tasks = t.tasks || []
+  db.dailies = t.dailies || []
+  db.completions = t.completions || []
+  db.projects = t.projects || []
+  db.events = c.events || []
+  db.schedules = c.schedules || []
+  dirty.tasks = true
+  dirty.calendar = true
+}
+
+// Raw vault-file access for the sync layer's base snapshot.
+export async function readVaultFile(name) {
+  if (!_fs || !_bag) return null
+  const p = `${_bag}/${name}`
+  if (!(await _fs.exists(p))) return null
+  try { return JSON.parse(await _fs.readText(p)) } catch { return null }
+}
+export async function writeVaultFile(name, data) {
+  if (!_fs || !_bag) return
+  await _fs.writeText(`${_bag}/${name}`, JSON.stringify(data, null, 2))
 }
 
 // True while a Bag is open — authFetch routes here when so.
@@ -323,7 +381,7 @@ export async function localFetch(url, reqProps = {}) {
 
 // notes / notebooks
 function handleNotes(method, seg, q, body) {
-  const id = seg[1] != null ? Number(seg[1]) : null
+  const id = parseId(seg[1])
   if (method === 'GET' && seg.length === 1) return ok(paginate(db.notes, 'notes', q))
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
@@ -418,10 +476,10 @@ function handleTasks(method, seg, q, body) {
   }
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
-    const tk = { id: nextId(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, is_completed: false, created_at: t, updated_at: t }
+    const tk = { id: uuid(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, is_completed: false, created_at: t, updated_at: t }
     db.tasks.push(tk); dirty.tasks = true; return created(tk)
   }
-  const id = seg[1] != null ? Number(seg[1]) : null
+  const id = parseId(seg[1])
   if (seg.length === 2 && id != null) {
     const tk = db.tasks.find((x) => x.id === id)
     if (method === 'GET') return tk ? ok(tk) : notFound()
@@ -435,8 +493,8 @@ function handleTasks(method, seg, q, body) {
 // daily tasks
 function handleDailies(method, seg, q, body) {
   if (seg[1] === 'completions' && method === 'GET') { const f = q.get('from'), to = q.get('to'); return ok({ completions: db.completions.filter((c) => (!f || c.date >= f) && (!to || c.date <= to)) }) }
-  if (seg[1] === 'batch-complete' && method === 'PATCH') { const up = []; for (const { id, is_completed } of (body?.tasks || [])) { const d = db.dailies.find((x) => x.id === Number(id)); if (d) { d.is_completed = !!is_completed; touch(d); up.push(d) } } dirty.tasks = true; return ok(up) }
-  if (seg[1] === 'batch-delete' && method === 'DELETE') { const ids = new Set((body?.tasks || []).map((t) => Number(t.id))); db.dailies = db.dailies.filter((d) => !ids.has(d.id)); dirty.tasks = true; return ok({ message: 'deleted' }) }
+  if (seg[1] === 'batch-complete' && method === 'PATCH') { const up = []; for (const { id, is_completed } of (body?.tasks || [])) { const d = db.dailies.find((x) => x.id === parseId(id)); if (d) { d.is_completed = !!is_completed; touch(d); up.push(d) } } dirty.tasks = true; return ok(up) }
+  if (seg[1] === 'batch-delete' && method === 'DELETE') { const ids = new Set((body?.tasks || []).map((t) => parseId(t.id))); db.dailies = db.dailies.filter((d) => !ids.has(d.id)); dirty.tasks = true; return ok({ message: 'deleted' }) }
   if (method === 'GET' && seg.length === 1) {
     if (q.get('recurring')) return ok({ dailyTasks: db.dailies.filter((d) => d.recurrence != null) })
     if (q.get('picker')) return ok({ items: db.dailies.map((d) => ({ id: d.id, title: d.title })) })
@@ -444,10 +502,10 @@ function handleDailies(method, seg, q, body) {
   }
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
-    const rows = (body?.tasks || []).map((s) => { const d = { id: nextId(), title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t, expires_at: s.recurrence != null ? null : eod(), recurrence: s.recurrence ?? null, time: s.time ?? null }; db.dailies.push(d); return d })
+    const rows = (body?.tasks || []).map((s) => { const d = { id: uuid(), title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t, expires_at: s.recurrence != null ? null : eod(), recurrence: s.recurrence ?? null, time: s.time ?? null }; db.dailies.push(d); return d })
     dirty.tasks = true; return created(rows)
   }
-  const id = seg[1] != null ? Number(seg[1]) : null
+  const id = parseId(seg[1])
   if (seg[2] === 'completions' && method === 'POST') { const date = body?.date, done = !!body?.done; db.completions = db.completions.filter((c) => !(c.daily_task_id === id && c.date === date)); if (done) db.completions.push({ daily_task_id: id, date }); dirty.tasks = true; return ok({ daily_task_id: id, date, done }) }
   if (seg.length === 2 && id != null) {
     const d = db.dailies.find((x) => x.id === id)
@@ -466,19 +524,19 @@ function handleProjects(method, seg, q, body) {
   if (method === 'GET' && seg.length === 1) { if (q.get('picker')) return ok({ items: db.projects.map((p) => ({ id: p.id, title: p.title })) }); return ok(paginate(db.projects, 'projects', q)) }
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
-    const p = { id: nextId(), title: body?.title || 'Untitled', priority: 'normal', is_completed: false, color: body?.color || null, created_at: t, updated_at: t, tasks: [] }
-    p.tasks = (body?.tasks || []).map((s) => ({ id: nextId(), project_id: p.id, title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t }))
+    const p = { id: uuid(), title: body?.title || 'Untitled', priority: 'normal', is_completed: false, color: body?.color || null, created_at: t, updated_at: t, tasks: [] }
+    p.tasks = (body?.tasks || []).map((s) => ({ id: uuid(), project_id: p.id, title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t }))
     p.priority = bucketPriority(p.tasks); db.projects.push(p); dirty.tasks = true; return created(p)
   }
-  const pid = seg[1] != null ? Number(seg[1]) : null
+  const pid = parseId(seg[1])
   const p = db.projects.find((x) => x.id === pid)
   if (seg[2] === 'tasks') {
     if (!p) return notFound()
     const t = nowISO()
-    if (method === 'POST' && seg.length === 3) { const add = (body?.tasks || []).map((s) => ({ id: nextId(), project_id: p.id, title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t })); p.tasks.push(...add); p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return created({ id: p.id, title: p.title, priority: p.priority, is_completed: p.is_completed, updated_at: p.updated_at, tasks: p.tasks }) }
-    if (method === 'PUT' && seg.length === 3) { for (const patch of (body?.tasks || [])) { const tk = p.tasks.find((x) => x.id === Number(patch.id)); if (tk) { Object.assign(tk, pick(patch, ['title', 'priority', 'is_completed'])); touch(tk) } } p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return ok({ ...projRow(p), allTasks: p.tasks }) }
-    if (method === 'DELETE' && seg.length === 3) { const ids = new Set((body?.tasks || []).map((x) => Number(x.id))); p.tasks = p.tasks.filter((x) => !ids.has(x.id)); p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return ok({ message: 'deleted' }) }
-    if (method === 'PUT' && seg.length === 4) { const tk = p.tasks.find((x) => x.id === Number(seg[3])); if (!tk) return notFound(); tk.is_completed = !!body?.is_completed; touch(tk); p.priority = bucketPriority(p.tasks); dirty.tasks = true; return ok({ id: tk.id, title: tk.title, priority: tk.priority, is_completed: tk.is_completed, updated_at: tk.updated_at }) }
+    if (method === 'POST' && seg.length === 3) { const add = (body?.tasks || []).map((s) => ({ id: uuid(), project_id: p.id, title: s.title || 'Untitled', priority: s.priority || 'normal', is_completed: false, created_at: t, updated_at: t })); p.tasks.push(...add); p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return created({ id: p.id, title: p.title, priority: p.priority, is_completed: p.is_completed, updated_at: p.updated_at, tasks: p.tasks }) }
+    if (method === 'PUT' && seg.length === 3) { for (const patch of (body?.tasks || [])) { const tk = p.tasks.find((x) => x.id === parseId(patch.id)); if (tk) { Object.assign(tk, pick(patch, ['title', 'priority', 'is_completed'])); touch(tk) } } p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return ok({ ...projRow(p), allTasks: p.tasks }) }
+    if (method === 'DELETE' && seg.length === 3) { const ids = new Set((body?.tasks || []).map((x) => parseId(x.id))); p.tasks = p.tasks.filter((x) => !ids.has(x.id)); p.priority = bucketPriority(p.tasks); touch(p); dirty.tasks = true; return ok({ message: 'deleted' }) }
+    if (method === 'PUT' && seg.length === 4) { const tk = p.tasks.find((x) => x.id === parseId(seg[3])); if (!tk) return notFound(); tk.is_completed = !!body?.is_completed; touch(tk); p.priority = bucketPriority(p.tasks); dirty.tasks = true; return ok({ id: tk.id, title: tk.title, priority: tk.priority, is_completed: tk.is_completed, updated_at: tk.updated_at }) }
   }
   if (seg.length === 2 && pid != null) {
     if (method === 'GET') return p ? ok(p) : notFound()
@@ -492,8 +550,8 @@ function handleProjects(method, seg, q, body) {
 // events
 function handleEvents(method, seg, q, body) {
   if (method === 'GET' && seg.length === 1) { const f = q.get('from'), to = q.get('to'); return ok({ events: db.events.filter((e) => (!f || (e.end_at || e.start_at) >= f) && (!to || e.start_at <= to)) }) }
-  if (method === 'POST' && seg.length === 1) { const t = nowISO(); const e = { id: nextId(), title: body?.title ?? '', description: body?.description ?? null, start_at: body?.start_at, end_at: body?.end_at ?? null, all_day: !!body?.all_day, color: body?.color ?? null, ref_type: body?.ref_type ?? null, ref_id: body?.ref_id ?? null, schedule_id: null, created_at: t, updated_at: t }; db.events.push(e); dirty.calendar = true; return created(e) }
-  const id = seg[1] != null ? Number(seg[1]) : null
+  if (method === 'POST' && seg.length === 1) { const t = nowISO(); const e = { id: uuid(), title: body?.title ?? '', description: body?.description ?? null, start_at: body?.start_at, end_at: body?.end_at ?? null, all_day: !!body?.all_day, color: body?.color ?? null, ref_type: body?.ref_type ?? null, ref_id: body?.ref_id ?? null, schedule_id: null, created_at: t, updated_at: t }; db.events.push(e); dirty.calendar = true; return created(e) }
+  const id = parseId(seg[1])
   if (seg.length === 2 && id != null) {
     const e = db.events.find((x) => x.id === id)
     if (!e) return notFound()
@@ -505,11 +563,11 @@ function handleEvents(method, seg, q, body) {
 
 // schedules
 const scheduleListRow = (s) => ({ id: s.id, name: s.name, color: s.color, template: s.template, created_at: s.created_at, block_count: db.events.filter((e) => e.schedule_id === s.id).length })
-function makeScheduleEvents(sid, events) { const t = nowISO(); return (events || []).map((b) => ({ id: nextId(), title: b.title ?? '', description: b.description ?? null, start_at: b.start_at, end_at: b.end_at ?? null, all_day: !!b.all_day, color: b.color ?? null, ref_type: b.ref_type ?? null, ref_id: b.ref_id ?? null, schedule_id: sid, created_at: t, updated_at: t })) }
+function makeScheduleEvents(sid, events) { const t = nowISO(); return (events || []).map((b) => ({ id: uuid(), title: b.title ?? '', description: b.description ?? null, start_at: b.start_at, end_at: b.end_at ?? null, all_day: !!b.all_day, color: b.color ?? null, ref_type: b.ref_type ?? null, ref_id: b.ref_id ?? null, schedule_id: sid, created_at: t, updated_at: t })) }
 function handleSchedules(method, seg, q, body) {
   if (method === 'GET' && seg.length === 1) return ok({ schedules: db.schedules.map(scheduleListRow) })
-  if (method === 'POST' && seg.length === 1) { const s = { id: nextId(), name: body?.name || 'Schedule', color: body?.color ?? null, template: body?.template ?? null, created_at: nowISO() }; db.schedules.push(s); const evs = makeScheduleEvents(s.id, body?.events); db.events.push(...evs); dirty.calendar = true; return created({ schedule: scheduleListRow(s), events: evs }) }
-  const id = seg[1] != null ? Number(seg[1]) : null
+  if (method === 'POST' && seg.length === 1) { const s = { id: uuid(), name: body?.name || 'Schedule', color: body?.color ?? null, template: body?.template ?? null, created_at: nowISO() }; db.schedules.push(s); const evs = makeScheduleEvents(s.id, body?.events); db.events.push(...evs); dirty.calendar = true; return created({ schedule: scheduleListRow(s), events: evs }) }
+  const id = parseId(seg[1])
   if (seg[2] === 'restamp' && method === 'PUT' && id != null) { const s = db.schedules.find((x) => x.id === id); if (!s) return notFound(); Object.assign(s, pick(body || {}, ['name', 'color', 'template'])); db.events = db.events.filter((e) => e.schedule_id !== id); const evs = makeScheduleEvents(id, body?.events); db.events.push(...evs); dirty.calendar = true; return ok({ schedule: scheduleListRow(s), events: evs }) }
   if (seg.length === 2 && id != null) {
     const s = db.schedules.find((x) => x.id === id)

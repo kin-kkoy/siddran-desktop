@@ -1,0 +1,13 @@
+name = "siddran-sync"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# The vault snapshot lives here. R2 (not KV) because KV is eventually consistent,
+# which would make the ETag concurrency check unreliable, and its 1k writes/day
+# free limit is the only one this app could plausibly reach.
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "siddran-vault"
+
+# SYNC_TOKEN is a secret, not a var — set it with:
+#   npx wrangler secret put SYNC_TOKEN

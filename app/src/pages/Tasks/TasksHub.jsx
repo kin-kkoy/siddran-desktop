@@ -300,10 +300,12 @@ function TasksHub({
   }, [sortedTasks])
   const onKanbanDrop = (e, prio) => {
     e.preventDefault()
-    const id = Number(e.dataTransfer.getData('text/plain'))
-    if (!id) return
-    const task = tasks.find(t => t.id === id)
-    if (task && task.priority !== prio) updateTask(id, { priority: prio })
+    // Ids come back as strings and may be numeric (legacy rows) or uuids — match on
+    // the string form, then act with the task's own id so its type is preserved.
+    const raw = e.dataTransfer.getData('text/plain')
+    if (!raw) return
+    const task = tasks.find(t => String(t.id) === raw)
+    if (task && task.priority !== prio) updateTask(task.id, { priority: prio })
   }
 
   const changeLayout = () => {
