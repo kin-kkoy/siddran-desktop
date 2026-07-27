@@ -74,6 +74,12 @@
   }
   .viewport.scrolling { overflow-y: auto; }
   .pages { height: 100%; column-count: 2; column-gap: 64px; column-fill: auto; }
+  /* Flow mode splits at ANY visual line. Browsers default to orphans/widows: 2, which
+     refuses to leave one lonely line at a page bottom (or carry one to the next top)
+     and shunts the WHOLE paragraph forward instead — which reads as "the paragraph
+     jumped" and leaves white space. 1/1 lets a paragraph break exactly where it fills. */
+  .pages:not(.keep-whole), .pages:not(.keep-whole) p, .pages:not(.keep-whole) li,
+  .pages:not(.keep-whole) blockquote { orphans: 1; widows: 1; }
   /* While "frozen" the page clamp is lifted: text stops re-paginating mid-keystroke
      and simply grows downward, then re-settles into pages when you pause. */
   .pages.freeze { column-count: 1; height: auto; transform: none !important; }
