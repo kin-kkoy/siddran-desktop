@@ -22,7 +22,7 @@ const NAV_COMMANDS = [
 const EDITOR_LIST = [...EDITOR_COMMANDS, ...WIKILINK_COMMANDS].map((c) => ({ ...c, kind: 'editor' }))
 const NAV_LIST = NAV_COMMANDS.map((c) => ({ ...c, kind: 'nav' }))
 
-export default function CommandPalette() {
+export default function CommandPalette({ notes = [], tasks = [] }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -49,10 +49,34 @@ export default function CommandPalette() {
   useEffect(() => { if (open) inputRef.current?.focus() }, [open])
 
   const hasEditor = !!capturedView.current
-  // Editor commands are shown but disabled with no focused editor, so the palette
-  // is always predictable rather than silently dropping half its commands.
-  const all = useMemo(() => [...EDITOR_LIST, ...NAV_LIST], [])
-  const results = useMemo(() => rankCommands(query, all), [query, all])
+
+  // "Open note/task: <title>" commands, built from the live note/task lists. Opening
+  // a note routes to it; opening a task uses the ?task= deep-link TasksHub already
+  // handles (fetches + opens its detail modal).
+  const dynamic = useMemo(() => {
+    const noteCmds = (notes || []).map((n) => ({
+      id: `open-note-${n.id}`,
+      title: (n.title || '').trim() || 'Untitled',
+      keywords: 'note open', icon: LuStickyNote, kind: 'nav', hint: 'note',
+      run: (nav) => nav(`/notes/${n.id}`),
+    }))
+    const taskCmds = (tasks || []).map((t) => ({
+      id: `open-task-${t.id}`,
+      title: (t.title || '').trim() || 'Untitled',
+      keywords: 'task open todo', icon: LuListTodo, kind: 'nav', hint: 'task',
+      run: (nav) => nav(`/tasks?task=${t.id}`),
+    }))
+    return [...noteCmds, ...taskCmds]
+  }, [notes, tasks])
+
+  // Editor commands are shown but disabled with no focused editor, so the palette is
+  // always predictable. The per-note/task commands are only mixed in once you've
+  // typed something — otherwise an empty palette would list every note and task.
+  const pool = useMemo(
+    () => (query.trim() ? [...EDITOR_LIST, ...NAV_LIST, ...dynamic] : [...EDITOR_LIST, ...NAV_LIST]),
+    [query, dynamic],
+  )
+  const results = useMemo(() => rankCommands(query, pool).slice(0, 50), [query, pool])
 
   // Keep the highlighted row in range as the list shrinks.
   useEffect(() => { setActive((i) => Math.min(i, Math.max(0, results.length - 1))) }, [results.length])
@@ -127,7 +151,9 @@ export default function CommandPalette() {
                   <span className={styles.icon}>{cmd.icon ? createElement(cmd.icon, { size: 15 }) : null}</span>
                   <span className={styles.title}>{cmd.title}</span>
                   {disabled && <span className={styles.hint}>needs a note</span>}
-                  {cmd.kind === 'nav' && <span className={styles.hint}>go</span>}
+                  {!disabled && (cmd.hint || (cmd.kind === 'nav' ? 'go' : '')) && (
+                    <span className={styles.hint}>{cmd.hint || 'go'}</span>
+                  )}
                 </li>
               )
             })}
