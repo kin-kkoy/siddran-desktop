@@ -1,10 +1,6 @@
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
-import {
-  FaBold, FaItalic, FaUnderline, FaStrikethrough, FaHeading, FaCode,
-  FaLink, FaListUl, FaListOl, FaQuoteLeft, FaQuestion,
-} from 'react-icons/fa'
-import { MdCheckBox, MdHorizontalRule } from 'react-icons/md'
-import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuEyeOff, LuHighlighter, LuPaperclip, LuImage, LuFileText, LuMessageSquare, LuChevronDown, LuChevronUp } from 'react-icons/lu'
+import { FaQuestion } from 'react-icons/fa'
+import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuPaperclip, LuImage, LuFileText, LuMessageSquare, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { TbBracketsContain } from 'react-icons/tb'
 import { useNavigate } from 'react-router-dom'
 import { useCalendarView } from '../../contexts/CalendarViewContext'
@@ -13,86 +9,13 @@ import { usePdfView } from '../../contexts/PdfViewContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { attachImageViaPicker, attachPdfViaPicker } from '../../desktop/media'
-import { wrapSelection } from './cm/formatting'
+import { insertWikilink } from './cm/formatting'
+import { EDITOR_COMMANDS } from './editorCommands'
 import styles from './EditorDock.module.css'
 
-// ── Formatting helpers ──
-// `wrapSelection` is shared with the keyboard shortcuts (cm/formatting.js) so the
-// dock buttons and Ctrl+B/I/U/H/= stay identical.
-
-function toggleLinePrefix(view, prefix) {
-  const { from } = view.state.selection.main
-  const line = view.state.doc.lineAt(from)
-  if (line.text.startsWith(prefix)) {
-    view.dispatch({ changes: { from: line.from, to: line.from + prefix.length, insert: '' } })
-  } else {
-    view.dispatch({ changes: { from: line.from, to: line.from, insert: prefix } })
-  }
-  view.focus()
-}
-
-function cycleHeading(view) {
-  const { from } = view.state.selection.main
-  const line = view.state.doc.lineAt(from)
-  const m = /^(#{1,6})\s/.exec(line.text)
-  if (!m) {
-    view.dispatch({ changes: { from: line.from, to: line.from, insert: '# ' } })
-  } else if (m[1].length >= 6) {
-    view.dispatch({ changes: { from: line.from, to: line.from + m[0].length, insert: '' } })
-  } else {
-    view.dispatch({ changes: { from: line.from, to: line.from + m[1].length, insert: m[1] + '#' } })
-  }
-  view.focus()
-}
-
-function insertHR(view) {
-  const { from } = view.state.selection.main
-  const line = view.state.doc.lineAt(from)
-  const insert = (line.text.length ? '\n' : '') + '---\n'
-  view.dispatch({ changes: { from: line.to, insert }, selection: { anchor: line.to + insert.length } })
-  view.focus()
-}
-
-function insertLink(view) {
-  const { from, to } = view.state.selection.main
-  const selected = view.state.sliceDoc(from, to)
-  const insert = `[${selected || 'text'}](url)`
-  view.dispatch({
-    changes: { from, to, insert },
-    selection: { anchor: from + 1, head: from + 1 + (selected.length || 4) },
-  })
-  view.focus()
-}
-
-function insertWikilink(view, prefix = '') {
-  const pos = view.state.selection.main.head
-  const insert = `[[${prefix}`
-  view.dispatch({
-    changes: { from: pos, insert },
-    selection: { anchor: pos + insert.length },
-  })
-  view.focus()
-}
-
-const ACTIONS = [
-  { key: 'bold', icon: FaBold, title: 'Bold', action: v => wrapSelection(v, '**') },
-  { key: 'italic', icon: FaItalic, title: 'Italic', action: v => wrapSelection(v, '*') },
-  // Underline has no native markdown; we store it as <u>…</u> raw HTML. The
-  // reading view (remarkUnderline), PDF export, and the editor's live preview
-  // (Underline node in cm/syntaxNodes.js + cm/livePreview.js) all render it.
-  { key: 'underline', icon: FaUnderline, title: 'Underline', action: v => wrapSelection(v, '<u>', '</u>') },
-  { key: 'strike', icon: FaStrikethrough, title: 'Strikethrough', action: v => wrapSelection(v, '~~') },
-  { key: 'heading', icon: FaHeading, title: 'Heading (cycle)', action: cycleHeading },
-  { key: 'code', icon: FaCode, title: 'Inline code', action: v => wrapSelection(v, '`') },
-  { key: 'highlight', icon: LuHighlighter, title: 'Highlight', action: v => wrapSelection(v, '==') },
-  { key: 'spoiler', icon: LuEyeOff, title: 'Spoiler', action: v => wrapSelection(v, '||') },
-  { key: 'link', icon: FaLink, title: 'Link', action: insertLink },
-  { key: 'ul', icon: FaListUl, title: 'Bullet list', action: v => toggleLinePrefix(v, '- ') },
-  { key: 'ol', icon: FaListOl, title: 'Numbered list', action: v => toggleLinePrefix(v, '1. ') },
-  { key: 'check', icon: MdCheckBox, title: 'Checkbox', action: v => toggleLinePrefix(v, '- [ ] ') },
-  { key: 'quote', icon: FaQuoteLeft, title: 'Blockquote', action: v => toggleLinePrefix(v, '> ') },
-  { key: 'hr', icon: MdHorizontalRule, title: 'Horizontal rule', action: insertHR },
-]
+// Dock buttons come from the shared command registry (editorCommands.js) so the
+// dock and the command palette can never drift. Formatting helpers themselves live
+// in cm/formatting.js, shared with the Ctrl+B/I/U/H/= keyboard shortcuts.
 
 const WIKILINK_TYPES = [
   { key: 'note', icon: LuStickyNote, label: 'Note', prefix: '' },
@@ -202,14 +125,14 @@ function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) 
         {dockVisible ? <LuChevronDown /> : <LuChevronUp />}
       </button>
       <div className={styles.dock} aria-hidden={!dockVisible}>
-        {/* Formatting buttons */}
-        {ACTIONS.map(({ key, icon: Icon, title, action }) => (
+        {/* Formatting buttons (from the shared registry) */}
+        {EDITOR_COMMANDS.map(({ id, icon: Icon, title, run }) => (
           <button
-            key={key}
+            key={id}
             className={styles.btn}
             title={title}
             aria-label={title}
-            onMouseDown={e => { e.preventDefault(); handleAction(action) }}
+            onMouseDown={e => { e.preventDefault(); handleAction(run) }}
           >
             {createElement(Icon)}
           </button>

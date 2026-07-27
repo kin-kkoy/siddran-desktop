@@ -23,6 +23,7 @@ import EditorDock from './EditorDock'
 import { useApi } from '../../contexts/ApiContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { readFolds, writeFolds } from '../../hooks/noteFoldsCache'
+import { setActiveEditor, clearActiveEditor } from './activeEditor'
 import styles from './CodeMirrorEditor.module.css'
 
 // Autosave cadence — a periodic save to the local Bag. In-session edits also live
@@ -217,6 +218,7 @@ function CodeMirrorEditor({
         event.preventDefault()
         return true
       },
+      focus: (_e, view) => { setActiveEditor(view); return false },
       blur: () => { saveBackend(); return false },
     })
 
@@ -330,6 +332,7 @@ function CodeMirrorEditor({
         const md = view.state.doc.toString()
         if (md !== lastSavedRef.current) { try { onSaveRef.current?.(md) } catch { /* ignore */ } }
       }
+      clearActiveEditor(view)
       view.destroy()
       viewRef.current = null
       if (editorViewRef) editorViewRef.current = null

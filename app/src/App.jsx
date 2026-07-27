@@ -31,6 +31,7 @@ import { PdfViewProvider } from "./contexts/PdfViewContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
+import CommandPalette from "./components/CommandPalette/CommandPalette.jsx"
 import logger from "./utils/logger.js"
 import BagPicker from "./pages/Bag/BagPicker.jsx"
 import SplashScreen from "./components/Splash/SplashScreen.jsx"
@@ -1012,6 +1013,9 @@ function App() {
 
         {/* Settings popup (rendered at app level, controlled by context) */}
         {unlocked && <SettingsPopup />}
+
+        {/* Command palette (Ctrl/Cmd+Shift+P) — inside Router for navigation commands */}
+        <CommandPalette />
 
         {/* Toast notifications (always available) */}
         <ToastContainer />
