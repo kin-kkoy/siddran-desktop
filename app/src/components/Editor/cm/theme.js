@@ -431,6 +431,9 @@ export const cinderTheme = EditorView.theme({
   // Editable-table wrapper + hover +/- controls (cm/tables.js). The controls sit
   // attached to the table's bottom and right edges (like the dock's show/hide tab),
   // straddling the border, and appear on hover.
+  // Full-width block row: catches clicks in the empty space beside the table so they
+  // can't place a caret next to it (see cm/tables.js toDOM).
+  '.cm-table-block': { width: '100%' },
   '.cm-table-wrap': { position: 'relative', width: 'fit-content', maxWidth: '100%' },
   '.cm-table-rowctl': {
     position: 'absolute', left: '0', right: '0', bottom: '0', transform: 'translateY(50%)',

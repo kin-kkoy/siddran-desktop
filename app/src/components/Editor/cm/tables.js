@@ -46,16 +46,23 @@ class TableWidget extends WidgetType {
   ignoreEvent() { return true }
 
   toDOM(view) {
+    // Two layers on purpose. `outer` spans the full block width so that clicks in the
+    // dead space beside the table still land on the WIDGET (CM ignores widget events)
+    // — otherwise they hit the line element and park the caret right after the table.
+    // `wrap` stays fit-content so the hover +/- controls hug the table's real edges.
+    const outer = document.createElement('div')
+    outer.className = 'cm-table-block'
+    // The whole widget is a non-editable island as far as CM is concerned. Form
+    // controls (the cell textarea and the +/- buttons) inside it still work — the
+    // browser handles them — but their keystrokes never reach CodeMirror.
+    outer.contentEditable = 'false'
     const wrap = document.createElement('div')
     wrap.className = 'cm-table-wrap'
-    // The whole widget is a non-editable island as far as CM is concerned. Form
-    // controls (the cell <input> and the +/- buttons) inside it still work — the
-    // browser handles them — but their keystrokes never reach CodeMirror.
-    wrap.contentEditable = 'false'
+    outer.appendChild(wrap)
 
     const table = renderTableDOM(this.md)
     wrap.appendChild(table)
-    if (!parseTable(this.md)) return wrap // malformed — no editing affordances
+    if (!parseTable(this.md)) return outer // malformed — no editing affordances
 
     // ── editing session ──────────────────────────────────────────────
     // Cell edits accumulate in `working` (a local copy of the markdown) and update
@@ -193,10 +200,11 @@ class TableWidget extends WidgetType {
       },
     })
 
-    // One handler for the whole widget: never let a click place a CM caret in the
-    // table (that was the "caret before/after the table" corruption). Clicks on a
-    // cell open its editor; clicks on an open input are left alone.
-    wrap.addEventListener('mousedown', (e) => {
+    // One handler for the whole block row: never let a click place a CM caret at the
+    // table (that was the "caret before/after the table" corruption). On `outer`, not
+    // `wrap`, so clicks in the empty space beside the table are swallowed too. Clicks
+    // on a cell open its editor; clicks on an open textarea or a control pass through.
+    outer.addEventListener('mousedown', (e) => {
       if (e.target.closest('.cm-table-btn') || e.target.tagName === 'TEXTAREA') return
       e.preventDefault()
       const cell = e.target.closest?.('th, td')
@@ -221,7 +229,7 @@ class TableWidget extends WidgetType {
     if (grid.headers.length > 1) colCtl.appendChild(mkBtn('−', 'Delete last column', () => applyStructural(removeColumn(working, parseTable(working).headers.length - 1))))
     wrap.appendChild(colCtl)
 
-    return wrap
+    return outer
   }
 }
 
