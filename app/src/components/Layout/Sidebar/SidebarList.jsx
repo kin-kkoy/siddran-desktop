@@ -7,7 +7,10 @@ import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 import { readCollapsedNotebooks, writeCollapsedNotebooks } from '../../../hooks/sidebarState'
 
 
-function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
+// hideTitle: drop the inner "List of Notes" heading when this list is rendered
+// inside the NotesHub accordion, whose own header already labels it (avoids a
+// redundant double label). The "No notes yet" empty state still shows.
+function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTitle = false }) {
 
     const split = useNoteSplit()
     // Notebook collapse state persists per Bag across remount + app restart.
@@ -68,7 +71,7 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
 
     return (
         <div className={styles.notesListContainer}>
-            <p className={styles.listTitle}>List of Notes</p>
+            {!hideTitle && <p className={styles.listTitle}>List of Notes</p>}
             <div className={styles.notesList}>
                 {notes.length === 0 ? (
                     <p className={styles.emptyMessage}>No notes yet</p>

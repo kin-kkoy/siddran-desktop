@@ -114,7 +114,7 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                                 size={16}
                                 className={`${styles.listChevron} ${listOpen ? '' : styles.listChevronCollapsed}`}
                             />
-                            <span>{listOpen && (notes?.length ?? 0) === 0 ? 'No notes yet' : 'List of Notes'}</span>
+                            <span>List of Notes</span>
                         </button>
                         {listOpen && (
                             <SidebarList
@@ -122,6 +122,7 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                                 notes={notes}
                                 notebooks={notebooks}
                                 currentNoteID={currentNoteID}
+                                hideTitle
                             />
                         )}
                     </div>
