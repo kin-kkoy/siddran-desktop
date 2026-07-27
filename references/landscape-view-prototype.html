@@ -135,9 +135,10 @@
   <div class="group" id="writeGroup">
     <span>Writing as</span>
     <div class="seg" id="writeSeg">
-      <button data-w="vertical" aria-pressed="true">Vertical pages</button>
-      <button data-w="freeze" aria-pressed="false">Book + freeze</button>
-      <button data-w="scroll" aria-pressed="false">Plain scroll</button>
+      <button data-w="bookflow" aria-pressed="true">Book · flow</button>
+      <button data-w="vertical" aria-pressed="false">Vertical</button>
+      <button data-w="freeze" aria-pressed="false">Book · freeze</button>
+      <button data-w="scroll" aria-pressed="false">Scroll</button>
     </div>
   </div>
 
@@ -266,7 +267,7 @@ const prevBtn = $('prev'), nextBtn = $('next'), pageno = $('pageno');
 
 let docHTML = NOTE;      // single source of truth, shared across the three views
 let editing = false;     // read | write
-let writeStyle = 'vertical';
+let writeStyle = 'bookflow';
 let turnStyle = 'slide';
 let spread = 0;
 let frozen = false, idleTimer = null;
@@ -274,7 +275,7 @@ let frozen = false, idleTimer = null;
 // ── which view is showing ──────────────────────────────────────────
 function currentView() {
   if (!editing) return 'book';
-  return writeStyle === 'freeze' ? 'book' : writeStyle; // 'vertical' | 'scroll' | 'book'
+  return (writeStyle === 'freeze' || writeStyle === 'bookflow') ? 'book' : writeStyle;
 }
 function activeDoc() {
   const v = currentView();
@@ -283,9 +284,10 @@ function activeDoc() {
 
 const EXPLAIN = {
   read: '<b>Read.</b> Book spread, two pages at a time. Try <b>Breaks</b> to switch between cutting mid-sentence and never splitting a block, and <b>Turn</b> to compare page-turn feels.',
-  vertical: '<b>Vertical pages.</b> Same page size, stacked top-to-bottom like Word. Typing pushes text <b>down</b>, so your caret stays put and nothing lurches sideways. Dashed lines mark where pages would break. <i>Prototype note: guides are drawn at exact page heights, so a line can straddle one — a real build would break cleanly.</i>',
-  freeze: '<b>Book + freeze.</b> While you type, pagination is suspended — the text just grows downward and nothing re-flows. When you pause (~0.8s) it re-settles into pages and jumps to your caret\'s page. Judge whether that <b>snap</b> is acceptable.',
-  scroll: '<b>Plain scroll.</b> Landscape becomes a reading-only presentation; writing stays today\'s continuous editor. Zero churn — the baseline to compare against.',
+  bookflow: '<b>Book · flow.</b> Type away — the text simply flows on, exactly like the vertical view, just displayed as two pages. Nothing recomputes or rebalances: no re-measuring per keystroke, no page-turn animation, and the spread only moves if your caret would leave the screen. <i>The one motion left is unavoidable: with two pages side by side, adding a line means the last line of the left page hops to the top of the right page. That hop is the thing to judge.</i>',
+  vertical: '<b>Vertical.</b> Same page size, stacked top-to-bottom like Word. Typing pushes text <b>down</b> — the same flow as Book · flow, but you never see the hand-off between pages. Dashed lines mark the breaks. <i>Prototype note: guides sit at exact page heights so a line can straddle one; a real build would break cleanly.</i>',
+  freeze: '<b>Book · freeze.</b> Pagination suspends while you type — text grows downward, nothing reflows — then re-settles on a ~0.8s pause and jumps to your caret\'s page. Judge whether that <b>snap</b> beats the small hop in Book · flow.',
+  scroll: '<b>Scroll.</b> Landscape becomes a reading-only presentation; writing stays today\'s continuous editor. Zero churn — the baseline.',
 };
 
 function setLayout(preserve = true) {
@@ -321,11 +323,16 @@ function metrics() {
   return { gap, step, total };
 }
 
+let placedAt = null; // last transform actually applied, so typing never re-lays-out
+
 function render(animate = true) {
   if (currentView() !== 'book' || frozen) return;
   const { step, total } = metrics();
   spread = Math.max(0, Math.min(spread, total - 1));
-  const place = () => { pages.style.transform = `translateX(${-spread * step}px)`; };
+  const offset = -spread * step;
+  const place = () => { pages.style.transform = `translateX(${offset}px)`; placedAt = offset; };
+  // Nothing moved: leave the DOM alone entirely (no transition, no restyle).
+  if (offset === placedAt && animate) { updateNav(total); return; }
 
   if (!animate || turnStyle === 'instant') {
     pages.style.transition = 'none'; pages.style.opacity = '1'; place();
@@ -344,6 +351,10 @@ function render(animate = true) {
     pages.style.opacity = '1'; place();
   }
 
+  updateNav(total);
+}
+
+function updateNav(total) {
   pageno.textContent = `${spread * 2 + 1}–${spread * 2 + 2} of ~${total * 2}`;
   prevBtn.disabled = spread === 0;
   nextBtn.disabled = spread >= total - 1;
@@ -367,6 +378,9 @@ function caretSpread() {
   const x = rect.left - viewport.getBoundingClientRect().left + spread * step;
   return Math.floor(x / step);
 }
+// Only acts when the caret has genuinely left the visible spread — typing inside the
+// two pages on screen never moves anything. The jump is instant (never animated), so
+// it reads as "the page turned because I wrote past the bottom", not as a transition.
 function followCaret() {
   if (currentView() !== 'book' || !editing || frozen) return;
   const s = caretSpread();
@@ -408,6 +422,8 @@ function drawGuides() {
 }
 
 // ── editing hooks ──────────────────────────────────────────────────
+let countTimer = null;
+
 function onInput() {
   const v = currentView();
   docHTML = activeDoc().innerHTML;
@@ -419,7 +435,13 @@ function onInput() {
     idleTimer = setTimeout(() => unfreeze(true), 800);
     return;
   }
-  render(false); followCaret();                           // (read mode never edits)
+  // Book · flow — the text just flows on. Deliberately NO re-measure, no transform
+  // rewrite, no animation per keystroke; the browser's column flow does the work.
+  // We only move the spread if the caret would otherwise be off-screen, and we
+  // refresh the page counter lazily so it can't cause churn while typing.
+  followCaret();
+  clearTimeout(countTimer);
+  countTimer = setTimeout(() => updateNav(metrics().total), 250);
 }
 [pages, vpages, scrollOuter].forEach((el) => {
   el.addEventListener('input', onInput);
