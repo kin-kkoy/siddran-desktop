@@ -62,10 +62,16 @@
     column-count: 2;
     column-gap: 64px;
     column-fill: auto;              /* fill page 1 fully before page 2 */
-    transition: transform .28s cubic-bezier(.22,.61,.36,1);
     outline: none;
   }
-  .pages.no-anim { transition: none; }
+  /* "Keep whole": never split a block across a page edge. Pages then end early with
+     white space instead of cutting mid-sentence. Toggled in read mode. */
+  .pages.keep-whole p,
+  .pages.keep-whole li,
+  .pages.keep-whole blockquote,
+  .pages.keep-whole table,
+  .pages.keep-whole h1,
+  .pages.keep-whole h2 { break-inside: avoid; }
   /* the "spine" between the two visible pages */
   .spine {
     position: absolute; top: 26px; bottom: 26px; left: 50%; width: 1px;
@@ -120,6 +126,21 @@
     <div class="seg" id="editSeg">
       <button data-edit="read" aria-pressed="true">Read</button>
       <button data-edit="write" aria-pressed="false">Write</button>
+    </div>
+  </div>
+  <div class="group">
+    <span>Breaks</span>
+    <div class="seg" id="breakSeg">
+      <button data-brk="flow" aria-pressed="true" title="Text cuts at the page edge and continues on the next page">Continue</button>
+      <button data-brk="keep" aria-pressed="false" title="Never split a paragraph, list item, or table across pages">Keep whole</button>
+    </div>
+  </div>
+  <div class="group">
+    <span>Turn</span>
+    <div class="seg" id="turnSeg">
+      <button data-turn="slide" aria-pressed="true">Slide</button>
+      <button data-turn="fade" aria-pressed="false">Fade</button>
+      <button data-turn="instant" aria-pressed="false">Instant</button>
     </div>
   </div>
   <div class="group">
@@ -243,15 +264,39 @@ function metrics() {
   return { gap, step, total };
 }
 
+let turnStyle = 'slide';
+
 function render(animate = true) {
   const { step, total } = metrics();
   spread = Math.max(0, Math.min(spread, total - 1));
-  pages.classList.toggle('no-anim', !animate);
-  pages.style.transform = `translateX(${-spread * step}px)`;
+  const place = () => { pages.style.transform = `translateX(${-spread * step}px)`; };
+
+  if (!animate || turnStyle === 'instant') {
+    pages.style.transition = 'none';
+    pages.style.opacity = '1';
+    place();
+    requestAnimationFrame(() => { pages.style.transition = ''; });
+  } else if (turnStyle === 'fade') {
+    // Cross-fade in place — reads as a cut rather than a pan.
+    pages.style.transition = 'opacity .11s linear';
+    pages.style.opacity = '0';
+    setTimeout(() => {
+      pages.style.transition = 'none';
+      place();
+      requestAnimationFrame(() => {
+        pages.style.transition = 'opacity .15s linear';
+        pages.style.opacity = '1';
+      });
+    }, 110);
+  } else {
+    pages.style.transition = 'transform .28s cubic-bezier(.22,.61,.36,1)';
+    pages.style.opacity = '1';
+    place();
+  }
+
   pageno.textContent = `${spread * 2 + 1}–${Math.min(spread * 2 + 2, total * 2)} of ~${total * 2}`;
   prevBtn.disabled = spread === 0;
   nextBtn.disabled = spread >= total - 1;
-  if (!animate) requestAnimationFrame(() => pages.classList.remove('no-anim'));
 }
 
 const go = (d) => { spread += d; render(); };
@@ -307,6 +352,19 @@ document.getElementById('editSeg').onclick = (e) => {
   pages.contentEditable = editing ? 'true' : 'false';
   scrollOuter.contentEditable = editing ? 'true' : 'false';
   if (editing) pages.focus();
+};
+
+document.getElementById('breakSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  pages.classList.toggle('keep-whole', b.dataset.brk === 'keep');
+  render(false);
+};
+
+document.getElementById('turnSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  turnStyle = b.dataset.turn;
 };
 
 function applySize() {
