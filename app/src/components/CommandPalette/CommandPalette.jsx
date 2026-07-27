@@ -69,13 +69,15 @@ export default function CommandPalette({ notes = [], tasks = [] }) {
     return [...noteCmds, ...taskCmds]
   }, [notes, tasks])
 
-  // Editor commands are shown but disabled with no focused editor, so the palette is
-  // always predictable. The per-note/task commands are only mixed in once you've
-  // typed something — otherwise an empty palette would list every note and task.
-  const pool = useMemo(
-    () => (query.trim() ? [...EDITOR_LIST, ...NAV_LIST, ...dynamic] : [...EDITOR_LIST, ...NAV_LIST]),
-    [query, dynamic],
-  )
+  // In-context: the formatting/insert commands only appear when a note editor was
+  // focused (i.e. you're editing a note). Navigation and "open note/task" commands
+  // are always available, so you can jump elsewhere from inside a note or from any
+  // other page. The per-note/task commands are mixed in only once you've typed,
+  // otherwise an empty palette would list every note and task.
+  const pool = useMemo(() => {
+    const base = [...(hasEditor ? EDITOR_LIST : []), ...NAV_LIST]
+    return query.trim() ? [...base, ...dynamic] : base
+  }, [query, dynamic, hasEditor])
   const results = useMemo(() => rankCommands(query, pool).slice(0, 50), [query, pool])
 
   // Keep the highlighted row in range as the list shrinks.
@@ -138,25 +140,18 @@ export default function CommandPalette({ notes = [], tasks = [] }) {
           />
           <ul className={styles.list} ref={listRef}>
             {results.length === 0 && <li className={styles.empty}>No matching commands</li>}
-            {results.map((cmd, i) => {
-              const disabled = cmd.kind === 'editor' && !hasEditor
-              return (
-                <li
-                  key={cmd.id}
-                  className={`${styles.item} ${i === active ? styles.active : ''} ${disabled ? styles.disabled : ''}`}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseDown={(e) => { e.preventDefault(); if (!disabled) runCommand(cmd) }}
-                  aria-disabled={disabled}
-                >
-                  <span className={styles.icon}>{cmd.icon ? createElement(cmd.icon, { size: 15 }) : null}</span>
-                  <span className={styles.title}>{cmd.title}</span>
-                  {disabled && <span className={styles.hint}>needs a note</span>}
-                  {!disabled && (cmd.hint || (cmd.kind === 'nav' ? 'go' : '')) && (
-                    <span className={styles.hint}>{cmd.hint || 'go'}</span>
-                  )}
-                </li>
-              )
-            })}
+            {results.map((cmd, i) => (
+              <li
+                key={cmd.id}
+                className={`${styles.item} ${i === active ? styles.active : ''}`}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={(e) => { e.preventDefault(); runCommand(cmd) }}
+              >
+                <span className={styles.icon}>{cmd.icon ? createElement(cmd.icon, { size: 15 }) : null}</span>
+                <span className={styles.title}>{cmd.title}</span>
+                {cmd.kind === 'nav' && <span className={styles.hint}>{cmd.hint || 'go'}</span>}
+              </li>
+            ))}
           </ul>
         </div>
       </div>
