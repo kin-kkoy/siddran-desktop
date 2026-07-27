@@ -50,6 +50,18 @@ export function NoteTabsProvider({ children }) {
     }
   }, [openTabs, activeId, navigate])
 
+  // Commit a drag-reordered tab order. Accepts only a permutation of the current
+  // tabs (guards against a stale order arriving mid open/close). Persists via the
+  // openTabs effect above.
+  const reorderTabs = useCallback((newOrder) => {
+    setOpenTabs(prev => {
+      if (newOrder.length !== prev.length) return prev
+      const seen = new Set(prev)
+      if (!newOrder.every(id => seen.has(String(id)))) return prev
+      return newOrder.map(String)
+    })
+  }, [])
+
   const cycleTab = useCallback((dir) => {
     if (openTabs.length < 2 || activeId == null) return
     const i = openTabs.indexOf(activeId)
@@ -72,8 +84,8 @@ export function NoteTabsProvider({ children }) {
   }, [cycleTab, closeTab, activeId])
 
   const value = useMemo(
-    () => ({ openTabs, activeId, activateTab, closeTab, cycleTab }),
-    [openTabs, activeId, activateTab, closeTab, cycleTab],
+    () => ({ openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs }),
+    [openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs],
   )
   return <NoteTabsContext.Provider value={value}>{children}</NoteTabsContext.Provider>
 }
