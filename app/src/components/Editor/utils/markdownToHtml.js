@@ -8,6 +8,7 @@ import rehypeStringify from 'rehype-stringify'
 import { visit } from 'unist-util-visit'
 import { remarkSpoiler } from './remarkSpoiler'
 import { remarkUnderline } from './remarkUnderline'
+import { remarkBr } from './remarkBr'
 import { remarkHighlight } from './remarkHighlight'
 import { remarkHashtag } from './remarkHashtag'
 import { remarkWikilinks } from './remarkWikilinks'
@@ -192,6 +193,7 @@ const processor = unified()
   .use(remarkPreserveBlankLines)
   .use(remarkSpoiler)
   .use(remarkUnderline)
+  .use(remarkBr)
   .use(remarkWikilinks)
   .use(remarkHighlight)
   .use(remarkHashtag)

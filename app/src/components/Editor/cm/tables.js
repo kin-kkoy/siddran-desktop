@@ -12,7 +12,7 @@
 // A table that doesn't parse cleanly is left as normal source (no widget), so it's
 // always still editable as raw text — the escape hatch.
 
-import { StateField } from '@codemirror/state'
+import { StateField, EditorState } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { renderTableDOM } from './tableRender'
@@ -75,7 +75,9 @@ class TableWidget extends WidgetType {
     const commitActive = () => {
       if (!active) return
       const { cell, line, col, input } = active
-      working = setCell(working, line, col, input.value)
+      // Cells can't hold a literal newline in markdown; store multi-line content as
+      // <br> (GFM/portable) — the reading view (remarkBr) renders it identically.
+      working = setCell(working, line, col, input.value.replace(/\n/g, '<br>'))
       active = null
       renderRendered(cell, line, col)
     }
@@ -96,21 +98,25 @@ class TableWidget extends WidgetType {
     const startEdit = (cell, line, col) => {
       if (active && active.cell === cell) return
       commitActive()
-      const input = document.createElement('input')
-      input.type = 'text'
+      const input = document.createElement('textarea')
       input.className = 'cm-cell-input'
-      input.value = cellRaw(line, col)
+      input.rows = 1
+      input.value = cellRaw(line, col).replace(/<br\s*\/?>/gi, '\n') // <br> shows as real lines while editing
       cell.textContent = ''
       cell.appendChild(input)
       cell.classList.add('cm-cell-editing')
+      const autosize = () => { input.style.height = 'auto'; input.style.height = `${input.scrollHeight}px` }
+      input.addEventListener('input', autosize)
       input.focus()
       const end = input.value.length // caret at end, not select-all (typing edits, not replaces)
       input.setSelectionRange(end, end)
+      autosize()
       active = { cell, line, col, input }
       input.addEventListener('keydown', (e) => {
         e.stopPropagation() // keep CM from acting on keys while a cell is being edited
-        if (e.key === 'Enter') { e.preventDefault(); endSession() }
-        else if (e.key === 'Escape') { e.preventDefault(); const a = active; active = null; renderRendered(a.cell, a.line, a.col) }
+        // Enter inserts a newline in the cell (textarea default). Commit happens when
+        // focus leaves the table, on Tab (next cell), or clicking away.
+        if (e.key === 'Escape') { e.preventDefault(); const a = active; active = null; renderRendered(a.cell, a.line, a.col) }
         else if (e.key === 'Tab') { e.preventDefault(); focusSibling(cell, e.shiftKey ? -1 : 1) }
       })
     }
@@ -193,6 +199,35 @@ function decoFrom(state, tables) {
 export function buildTableDeco(state) {
   return decoFrom(state, scanTables(state))
 }
+
+// Typing at a rendered table's edge (the caret can rest just before/after an atomic
+// table) would otherwise be swallowed into the table by GFM — the first char becomes
+// a new row, and following text gets pulled in. This filter catches a pure insertion
+// landing on a table's line range and redirects it to a SEPARATED line (a blank line
+// above or below), so the text lands as normal prose instead of corrupting the table.
+// It ignores deletions and our own table-rewrite dispatches (those are replacements,
+// not point insertions).
+export const tableTypingGuard = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr
+  const field = tr.startState.field(liveTables, false)
+  if (!field || !field.tables.length) return tr
+  const doc = tr.startState.doc
+  const blocks = field.tables.map((t) => ({ from: doc.lineAt(t.from).from, to: doc.lineAt(t.to).to }))
+
+  let redirect = null
+  tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    if (redirect || fromA !== toA || inserted.length === 0) return // pure insertions only
+    const text = inserted.toString()
+    for (const b of blocks) {
+      if (fromA < b.from || fromA > b.to) continue
+      if (fromA <= b.from) redirect = { from: b.from, insert: `${text}\n\n`, caret: b.from + text.length }
+      else redirect = { from: b.to, insert: `\n\n${text}`, caret: b.to + 2 + text.length }
+      return
+    }
+  })
+  if (!redirect) return tr
+  return { changes: { from: redirect.from, insert: redirect.insert }, selection: { anchor: redirect.caret } }
+})
 
 export const liveTables = StateField.define({
   create(state) {

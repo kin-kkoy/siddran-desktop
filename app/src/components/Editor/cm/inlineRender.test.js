@@ -72,6 +72,13 @@ describe('parseInline', () => {
     expect(types(n)).not.toContain('strong')
   })
 
+  it('parses <br> as a void break node (for multi-line cells)', () => {
+    const n = parseInline('line one<br>line two')
+    expect(types(n)).toEqual(['text', 'br', 'text'])
+    expect(n[1]).toEqual({ type: 'br' })
+    expect(parseInline('a<br/>b')[1].type).toBe('br')
+  })
+
   it('handles several marks in one string', () => {
     const n = parseInline('**b** and *i* and `c`')
     expect(types(n)).toEqual(['strong', 'text', 'em', 'text', 'code'])

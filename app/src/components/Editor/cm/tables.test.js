@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { buildTableDeco, liveTables } from './tables.js'
+import { buildTableDeco, liveTables, tableTypingGuard } from './tables.js'
 
 const mk = (doc, anchor = 0) => EditorState.create({
   doc,
@@ -98,5 +98,45 @@ describe('liveTables field — rebuild only on doc change', () => {
     expect(decoCount(state)).toBe(0)
     state = state.update({ changes: { from: state.doc.length, insert: '\n| A | B |\n| --- | --- |\n| 1 | 2 |\n' } }).state
     expect(decoCount(state)).toBe(1)
+  })
+})
+
+describe('tableTypingGuard — typing at a table edge does not corrupt it', () => {
+  const TABLE = '| A | B |\n| --- | --- |\n| 1 | 2 |'
+  const guarded = (doc, anchor) => EditorState.create({
+    doc,
+    selection: { anchor },
+    extensions: [markdown({ base: markdownLanguage, codeLanguages: languages }), liveTables, tableTypingGuard],
+  })
+  const tableEnd = TABLE.length      // end of the last row line
+  const tableStart = 0
+
+  it('typing at the end of the table lands on a separated line below', () => {
+    let state = guarded(TABLE, tableEnd)
+    state = state.update({ changes: { from: tableEnd, insert: 'x' }, selection: { anchor: tableEnd + 1 } }).state
+    // table markdown is untouched; 'x' is on its own line, separated by a blank line
+    expect(state.doc.toString()).toBe(`${TABLE}\n\nx`)
+    expect(state.selection.main.anchor).toBe(state.doc.length) // caret after the x
+  })
+
+  it('typing at the start of the table lands on a separated line above', () => {
+    let state = guarded(TABLE, tableStart)
+    state = state.update({ changes: { from: tableStart, insert: 'x' }, selection: { anchor: 1 } }).state
+    expect(state.doc.toString()).toBe(`x\n\n${TABLE}`)
+    expect(state.selection.main.anchor).toBe(1) // caret right after the x
+  })
+
+  it('a deletion at the edge is left alone', () => {
+    let state = guarded(`${TABLE}\n\ny`, TABLE.length)
+    const before = state.doc.toString()
+    state = state.update({ changes: { from: tableEnd, to: tableEnd + 1 } }).state // delete a char
+    // guard only touches pure insertions; deletion passes through
+    expect(state.doc.toString()).not.toBe(before)
+  })
+
+  it('a normal insertion away from any table is untouched', () => {
+    let state = guarded(`hello\n\n${TABLE}`, 0)
+    state = state.update({ changes: { from: 5, insert: '!' }, selection: { anchor: 6 } }).state
+    expect(state.doc.toString()).toBe(`hello!\n\n${TABLE}`)
   })
 })

@@ -402,7 +402,9 @@ export const cinderTheme = EditorView.theme({
     border: '1px solid var(--border-default)',
     padding: '6px 12px',
     color: 'var(--text-primary)',
-    cursor: 'text', // click a cell to edit it (drops the caret into that cell's source)
+    cursor: 'text', // click a cell to edit it
+    height: '1.9em', // min height so empty cells stay easy to click/type into
+    verticalAlign: 'top',
   },
   '.cm-live-table td:hover, .cm-live-table th:hover': { background: 'var(--bg-hover)' },
   '.cm-live-table th': { fontWeight: '700', background: 'var(--bg-elevated)' },
@@ -421,9 +423,10 @@ export const cinderTheme = EditorView.theme({
   // The cell editor: an <input> that fills the cell and inherits its look, so editing
   // stays visually in-place (only this cell shows its raw text).
   '.cm-cell-input': {
-    width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none',
+    display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none',
     background: 'transparent', color: 'var(--text-primary)', font: 'inherit',
-    padding: '6px 12px',
+    padding: '6px 12px', margin: '0', resize: 'none', overflow: 'hidden',
+    lineHeight: 'inherit', verticalAlign: 'top',
   },
   // Editable-table wrapper + hover +/- controls (cm/tables.js). The controls sit
   // attached to the table's bottom and right edges (like the dock's show/hide tab),

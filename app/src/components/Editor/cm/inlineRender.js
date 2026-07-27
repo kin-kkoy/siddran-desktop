@@ -9,6 +9,7 @@
 
 // Ordered longest-delimiter-first so `**` beats `*` and `__` beats `_` at the same spot.
 const RULES = [
+  { type: 'br', re: /<br\s*\/?>/i },
   { type: 'code', re: /`([^`]+)`/ },
   { type: 'link', re: /\[([^\]]+)\]\(([^)]+)\)/ },
   { type: 'strong', re: /\*\*([^*]+)\*\*/ },
@@ -37,6 +38,7 @@ export function parseInline(input) {
     if (m.index > 0) out.push({ type: 'text', value: rest.slice(0, m.index) })
     if (rule.type === 'code') out.push({ type: 'code', value: m[1] })
     else if (rule.type === 'link') out.push({ type: 'link', href: m[2], text: m[1] })
+    else if (rule.type === 'br') out.push({ type: 'br' }) // void element, no content
     else out.push({ type: rule.type, children: parseInline(m[1]) }) // recurse for nesting
     rest = rest.slice(m.index + m[0].length)
   }
@@ -47,6 +49,8 @@ function appendNodes(parent, nodes) {
   for (const n of nodes) {
     if (n.type === 'text') {
       parent.appendChild(document.createTextNode(n.value))
+    } else if (n.type === 'br') {
+      parent.appendChild(document.createElement('br'))
     } else if (n.type === 'code') {
       const c = document.createElement('code')
       c.textContent = n.value
