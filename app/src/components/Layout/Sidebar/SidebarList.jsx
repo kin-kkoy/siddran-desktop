@@ -4,12 +4,14 @@ import styles from './SidebarList.module.css'
 import { compareByOrder, compareByFavoriteThenOrder } from '../../../utils/noteSorting'
 import { HiChevronDown } from 'react-icons/hi'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
+import { readCollapsedNotebooks, writeCollapsedNotebooks } from '../../../hooks/sidebarState'
 
 
 function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
 
     const split = useNoteSplit()
-    const [collapsedIds, setCollapsedIds] = useState(() => new Set())
+    // Notebook collapse state persists per Bag across remount + app restart.
+    const [collapsedIds, setCollapsedIds] = useState(readCollapsedNotebooks)
 
     // Standard navigation handler.
     const handleSelect = (noteId) => (e) => {
@@ -21,11 +23,13 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
     const splitNoteId = split.splitTarget?.type === 'note' ? split.splitTarget.id : null
     const isActive = (noteId) => currentNoteID == noteId || splitNoteId == noteId
 
-    const toggleNotebook = (id) => {
+    const toggleNotebook = (rawId) => {
+        const id = String(rawId) // stored as strings so legacy-int and uuid ids agree
         setCollapsedIds(prev => {
             const next = new Set(prev)
             if (next.has(id)) next.delete(id)
             else next.add(id)
+            writeCollapsedNotebooks(next)
             return next
         })
     }
@@ -71,7 +75,7 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID }) {
                 ) : (
                     <>
                         {notebookGroups.map(group => {
-                            const isCollapsed = collapsedIds.has(group.notebook.id)
+                            const isCollapsed = collapsedIds.has(String(group.notebook.id))
 
                             return (
                             <div

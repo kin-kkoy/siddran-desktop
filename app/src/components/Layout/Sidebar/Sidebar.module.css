@@ -205,6 +205,33 @@
     overflow: hidden;
 }
 
+/* "List of Notes" accordion — shown on NotesHub. Header matches the nav buttons;
+   the body is the same SidebarList used on a note page. */
+.listAccordion {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.listAccordionHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    user-select: none;
+    transition: color 0.18s;
+}
+.listAccordionHeader:hover { color: var(--text-primary); }
+.listChevron { transition: transform 0.18s ease; flex-shrink: 0; }
+.listChevronCollapsed { transform: rotate(-90deg); }
+
 /* Bottom section */
 .bottomSection {
     margin-top: auto;

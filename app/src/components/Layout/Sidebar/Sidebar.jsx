@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from './Sidebar.module.css'
 import SidebarList from "./SidebarList";
 import ProfileDropdown from "../ProfileDropdown/ProfileDropdown";
-import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu";
+import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen, LuChevronDown } from "react-icons/lu";
+import { readListOpen, writeListOpen } from "../../../hooks/sidebarState";
 
 
 function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag }) {
@@ -11,6 +13,12 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
     const location = useLocation()
 
     const onNotePage = location.pathname.startsWith('/notes/') && location.pathname !== '/notes';
+    // NotesHub lives at both '/' and '/notes'. There the note list is offered as a
+    // collapsible accordion (persisted open/closed) rather than always-shown.
+    const onNotesHub = location.pathname === '/notes' || location.pathname === '/';
+
+    const [listOpen, setListOpen] = useState(readListOpen)
+    const toggleList = () => setListOpen(prev => { const next = !prev; writeListOpen(next); return next })
 
     // Close the current Bag. Desktop has no auth session, so this just flushes the
     // Bag to disk (via setIsAuthed → closeBag) and returns to the Bag picker.
@@ -92,6 +100,31 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                         notebooks={notebooks}
                         currentNoteID={currentNoteID}
                     />
+                )}
+                {onNotesHub && (
+                    <div className={styles.listAccordion}>
+                        <button
+                            type="button"
+                            className={styles.listAccordionHeader}
+                            onClick={toggleList}
+                            aria-expanded={listOpen}
+                            title={listOpen ? 'Collapse note list' : 'Expand note list'}
+                        >
+                            <LuChevronDown
+                                size={16}
+                                className={`${styles.listChevron} ${listOpen ? '' : styles.listChevronCollapsed}`}
+                            />
+                            <span>List of Notes</span>
+                        </button>
+                        {listOpen && (
+                            <SidebarList
+                                isCollapsed={isCollapsed}
+                                notes={notes}
+                                notebooks={notebooks}
+                                currentNoteID={currentNoteID}
+                            />
+                        )}
+                    </div>
                 )}
             </div>
 
