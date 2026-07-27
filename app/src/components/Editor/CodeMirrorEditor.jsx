@@ -7,6 +7,7 @@ import { syntaxHighlighting, indentUnit, foldEffect, unfoldEffect } from '@codem
 import { languages } from '@codemirror/language-data'
 import { livePreview } from './cm/livePreview'
 import { liveTables } from './cm/tables'
+import { collapseTableGap } from './cm/tableGap'
 import { domVerticalMotion } from './cm/verticalMotion'
 import { codeCopy } from './cm/codeCopy'
 import { imageExtensions } from './cm/imagePaste'
@@ -252,6 +253,7 @@ function CodeMirrorEditor({
           syntaxHighlighting(cinderHighlightStyle),
           livePreview,
           liveTables,
+          collapseTableGap,
           searchExtension,
           codeCopy,
           imageExtensions(() => ({ authFetch: authFetchRef.current, API: apiRef.current })),

@@ -1,105 +1,153 @@
-// Live-preview tables. A block-level StateField (block decorations must come from a
-// StateField, not a ViewPlugin — see the note in livePreview.js) that replaces each
-// GFM table with a rendered <table> widget WHEN the selection is not on it, and
-// reveals the raw markdown source for editing when the caret enters its lines.
+// Live-preview tables — rendered AND editable in place. A block-level StateField
+// (block decorations must come from a StateField, not a ViewPlugin) replaces each
+// well-formed GFM table with a rendered <table> widget. Unlike the inline marks, the
+// table does NOT reveal its raw `| --- |` markdown when the caret is near it — that
+// read as janky. Instead you edit it in place:
+//   • click a cell        → that one cell becomes editable (its raw text), commit on
+//                            blur/Enter; the rest of the table stays rendered.
+//   • hover the table      → +/- controls on the bottom (rows) and right (columns).
+// Every edit is applied by dispatching a replacement of the table's source range with
+// markdown rebuilt by the pure ops in tableModel.js.
 //
-// This mirrors the caret-reveal behaviour the inline plugin already uses for links,
-// extended to a multi-line block. The inline plugin skips the interior of a rendered
-// table (see the `Table` guard in livePreview.js), so the two never double-decorate.
-//
-// PERFORMANCE (matters on big notes): the field caches the table RANGES and only
-// re-walks the syntax tree when the document changes. A pure caret move reuses the
-// cached ranges and just re-decides which tables are revealed — O(#tables), no tree
-// walk. And even the doc-change walk skips descending into nodes that can't contain a
-// table (paragraphs, code, headings — the overwhelming majority of nodes), so it's
-// O(block structure), not O(every inline node).
+// A table that doesn't parse cleanly is left as normal source (no widget), so it's
+// always still editable as raw text — the escape hatch.
 
 import { StateField } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { renderTableDOM } from './tableRender'
-import { cellSourceOffset } from './tableModel'
+import { renderInlineInto } from './inlineRender'
+import { parseTable, setCell, insertRow, removeRow, insertColumn, removeColumn } from './tableModel'
 
-class TableWidget extends WidgetType {
-  // `from` = the table's start offset in the document, so a click on a rendered cell
-  // can map to that cell's exact source position. It's part of eq() so the widget
-  // re-renders when an edit above shifts the table (keeping `from` current).
-  constructor(md, from) { super(); this.md = md; this.from = from }
-  eq(other) { return other.md === this.md && other.from === this.from }
-  toDOM(view) {
-    const dom = renderTableDOM(this.md)
-    // Click a rendered cell → reveal the table's source with the caret dropped into
-    // exactly that cell (the field re-renders to source because the caret is now
-    // inside the table). Obsidian-style click-to-edit, reusing the caret-reveal.
-    dom.addEventListener('mousedown', (e) => {
-      const cell = e.target.closest?.('th, td')
-      if (!cell || cell.dataset.line == null) return
-      const off = cellSourceOffset(this.md, Number(cell.dataset.line), Number(cell.dataset.col))
-      if (off == null) return
-      e.preventDefault()
-      const pos = this.from + off
-      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
-      view.focus()
-    })
-    return dom
-  }
-  // Let our own mousedown handler run (and, as a fallback, clicks near the block
-  // edge still resolve to a table line, revealing source).
-  ignoreEvent() { return false }
+function mkBtn(label, title, onClick) {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'cm-table-btn'
+  b.textContent = label
+  b.title = title
+  b.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); onClick() })
+  return b
 }
 
-// Block nodes that can never contain a GFM table and that dominate the node count.
-// Skipping their subtrees keeps the doc-change scan off the inline-node hot path.
-// (Containers that CAN hold a table — Blockquote, ListItem, lists — are not listed,
-// so the walk still descends into them.)
+class TableWidget extends WidgetType {
+  // `from` = the table's start offset in the document; part of eq() so the widget
+  // re-renders (with a current `from`) when an edit above shifts the table.
+  constructor(md, from) { super(); this.md = md; this.from = from }
+  eq(other) { return other.md === this.md && other.from === this.from }
+  ignoreEvent() { return false } // we handle mousedown ourselves
+
+  // Replace the table's source range with rebuilt markdown.
+  apply(view, newMd) {
+    if (newMd && newMd !== this.md) {
+      view.dispatch({ changes: { from: this.from, to: this.from + this.md.length, insert: newMd } })
+      view.focus()
+    }
+  }
+
+  editCell(view, cell, grid) {
+    const line = Number(cell.dataset.line)
+    const col = Number(cell.dataset.col)
+    const raw = line === 0 ? (grid.headers[col] ?? '') : (grid.rows[line - 2]?.[col] ?? '')
+
+    cell.textContent = raw
+    cell.contentEditable = 'true'
+    cell.classList.add('cm-cell-editing')
+    cell.focus()
+    const sel = window.getSelection?.()
+    if (sel) { const r = document.createRange(); r.selectNodeContents(cell); sel.removeAllRanges(); sel.addRange(r) }
+
+    let done = false
+    const revert = () => {
+      cell.contentEditable = 'false'
+      cell.classList.remove('cm-cell-editing')
+      cell.textContent = ''
+      renderInlineInto(cell, raw)
+    }
+    const commit = () => {
+      if (done) return
+      done = true
+      const next = setCell(this.md, line, col, cell.textContent || '')
+      if (next !== this.md) this.apply(view, next) // dispatch → whole table re-renders
+      else revert()
+    }
+    cell.addEventListener('blur', commit, { once: true })
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); cell.blur() }
+      else if (e.key === 'Escape') { e.preventDefault(); done = true; revert() }
+    })
+  }
+
+  toDOM(view) {
+    const grid = parseTable(this.md)
+    const wrap = document.createElement('div')
+    wrap.className = 'cm-table-wrap'
+    const table = renderTableDOM(this.md)
+    wrap.appendChild(table)
+    if (!grid) return wrap // malformed — no editing affordances
+
+    table.addEventListener('mousedown', (e) => {
+      const cell = e.target.closest?.('th, td')
+      if (!cell || cell.dataset.line == null || cell.isContentEditable) return
+      e.preventDefault()
+      this.editCell(view, cell, grid)
+    })
+
+    // Row controls (bottom edge): add a row / delete the last row.
+    const rowCtl = document.createElement('div')
+    rowCtl.className = 'cm-table-rowctl'
+    rowCtl.appendChild(mkBtn('+', 'Add row', () => this.apply(view, insertRow(this.md, grid.rows.length - 1))))
+    if (grid.rows.length > 0) {
+      rowCtl.appendChild(mkBtn('−', 'Delete last row', () => this.apply(view, removeRow(this.md, grid.rows.length - 1))))
+    }
+    wrap.appendChild(rowCtl)
+
+    // Column controls (right edge): add a column / delete the last column.
+    const colCtl = document.createElement('div')
+    colCtl.className = 'cm-table-colctl'
+    colCtl.appendChild(mkBtn('+', 'Add column', () => this.apply(view, insertColumn(this.md, grid.headers.length - 1))))
+    if (grid.headers.length > 1) {
+      colCtl.appendChild(mkBtn('−', 'Delete last column', () => this.apply(view, removeColumn(this.md, grid.headers.length - 1))))
+    }
+    wrap.appendChild(colCtl)
+
+    return wrap
+  }
+}
+
+// Walk the tree once and collect every table's [from,to]. Only called on doc changes.
 const SKIP_SUBTREE = new Set([
   'Paragraph', 'FencedCode', 'CodeBlock', 'CommentBlock', 'HTMLBlock', 'LinkReference',
   'ATXHeading1', 'ATXHeading2', 'ATXHeading3', 'ATXHeading4', 'ATXHeading5', 'ATXHeading6',
 ])
-
-// Walk the tree once and collect every table's [from,to]. Only called on doc changes.
 function scanTables(state) {
   const tables = []
   syntaxTree(state).iterate({
     enter: (node) => {
       if (node.name === 'Table') { tables.push({ from: node.from, to: node.to }); return false }
-      if (SKIP_SUBTREE.has(node.name)) return false // prune: can't hold a table
-      return undefined // descend (Document + container blocks)
+      if (SKIP_SUBTREE.has(node.name)) return false
+      return undefined
     },
   })
   return tables
 }
 
-// A table is "rendered" (shown as a widget) when the selection touches none of its
-// lines. Shared shape with the inline plugin's guard so the two agree exactly.
-function selectionTouchesLines(state, from, to) {
-  const doc = state.doc
-  const a = doc.lineAt(from).number
-  const b = doc.lineAt(to).number
-  return state.selection.ranges.some((r) => {
-    const rf = doc.lineAt(r.from).number
-    const rt = doc.lineAt(r.to).number
-    return rf <= b && rt >= a
-  })
-}
-
-// Build the decoration set from cached table ranges + the current selection. Cheap:
-// O(#tables), no tree walk. Runs on every caret move.
+// Build the widget set from cached table ranges. Well-formed tables become a rendered
+// widget (always — no caret-reveal); a table that doesn't parse is left as source.
 function decoFrom(state, tables) {
   const doc = state.doc
   const widgets = []
   for (const t of tables) {
-    if (t.from > doc.length || t.to > doc.length) continue // stale guard
-    if (selectionTouchesLines(state, t.from, t.to)) continue // caret on it → source
+    if (t.from > doc.length || t.to > doc.length) continue
     const md = doc.sliceString(t.from, t.to)
-    const from = doc.lineAt(t.from).from // block replace must span whole lines; == t.from
+    if (!parseTable(md)) continue // malformed → leave editable as raw source
+    const from = doc.lineAt(t.from).from
     const to = doc.lineAt(t.to).to
     widgets.push(Decoration.replace({ widget: new TableWidget(md, from), block: true }).range(from, to))
   }
   return Decoration.set(widgets, true)
 }
 
-// Exported for direct unit testing (no DOM needed — decorations are plain objects).
+// Exported for unit testing.
 export function buildTableDeco(state) {
   return decoFrom(state, scanTables(state))
 }
@@ -110,14 +158,11 @@ export const liveTables = StateField.define({
     return { tables, deco: decoFrom(state, tables) }
   },
   update(value, tr) {
-    // Doc changed → table structure may have changed; re-walk. Selection changed →
-    // reuse cached ranges, just re-decide reveal. Neither → reuse everything.
+    // Table rendering no longer depends on the selection (always rendered), so only
+    // a document change can change anything.
     if (tr.docChanged) {
       const tables = scanTables(tr.state)
       return { tables, deco: decoFrom(tr.state, tables) }
-    }
-    if (tr.selection) {
-      return { tables: value.tables, deco: decoFrom(tr.state, value.tables) }
     }
     return value
   },

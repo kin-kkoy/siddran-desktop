@@ -59,6 +59,85 @@ export function parseTable(md) {
   return { headers, aligns, rows }
 }
 
+// ── Editing operations ─────────────────────────────────────────────
+// These parse the table into a grid, mutate it, and serialize back to canonical GFM
+// markdown. Serializing normalises spacing (`| a | b |`) but preserves alignment.
+// All pure — the widget dispatches the returned string as a CM change.
+
+const ALIGN_DELIM = { left: ':--', right: '--:', center: ':-:' }
+const delimFor = (a) => ALIGN_DELIM[a] || '---'
+const rowLine = (cells) => `| ${cells.join(' | ')} |`
+
+// Serialize a {headers, aligns, rows} grid back to GFM markdown (no trailing newline).
+export function serializeTable(grid) {
+  const cols = grid.headers.length
+  const lines = [
+    rowLine(grid.headers),
+    rowLine(grid.aligns.slice(0, cols).map(delimFor)),
+    ...grid.rows.map((r) => rowLine(padRow(r, cols))),
+  ]
+  return lines.join('\n')
+}
+
+const padRow = (row, cols) => {
+  const out = row.slice(0, cols)
+  while (out.length < cols) out.push('')
+  return out
+}
+
+// Map a source line index (0 = header, 2+ = body) to the grid + a setter target.
+function editGrid(md, mutate) {
+  const grid = parseTable(md)
+  if (!grid) return md
+  mutate(grid)
+  if (!grid.aligns) grid.aligns = grid.headers.map(() => null)
+  return serializeTable(grid)
+}
+
+// Replace one cell's text. `line`: 0 = header, 2+ = body row. Returns new markdown.
+export function setCell(md, line, col, text) {
+  return editGrid(md, (g) => {
+    const clean = String(text).replace(/[\r\n|]/g, ' ').trim() // a cell can't hold newlines or pipes
+    if (line === 0) { if (col < g.headers.length) g.headers[col] = clean }
+    else { const r = g.rows[line - 2]; if (r && col < r.length) r[col] = clean }
+  })
+}
+
+// Insert an empty body row. `afterBodyIndex` = -1 → top of body; else after that row.
+export function insertRow(md, afterBodyIndex) {
+  return editGrid(md, (g) => {
+    const blank = g.headers.map(() => '')
+    const at = Math.max(0, Math.min(g.rows.length, afterBodyIndex + 1))
+    g.rows.splice(at, 0, blank)
+  })
+}
+
+export function removeRow(md, bodyIndex) {
+  return editGrid(md, (g) => {
+    if (g.rows.length > 0 && bodyIndex >= 0 && bodyIndex < g.rows.length) g.rows.splice(bodyIndex, 1)
+  })
+}
+
+// Insert an empty column. `afterCol` = -1 → leftmost; else after that column.
+export function insertColumn(md, afterCol) {
+  return editGrid(md, (g) => {
+    const at = Math.max(0, Math.min(g.headers.length, afterCol + 1))
+    g.headers.splice(at, 0, '')
+    g.aligns.splice(at, 0, null)
+    g.rows.forEach((r) => r.splice(at, 0, ''))
+  })
+}
+
+export function removeColumn(md, col) {
+  return editGrid(md, (g) => {
+    if (g.headers.length <= 1) return // keep at least one column
+    if (col < 0 || col >= g.headers.length) return
+    g.headers.splice(col, 1)
+    g.aligns.splice(col, 1)
+    g.rows.forEach((r) => r.splice(col, 1))
+  })
+}
+
 // Char offset within the table markdown `md` of the START of the cell content at the
 // given source LINE index (0 = header, 1 = delimiter, 2+ = body rows) and column.
 // Used to drop the caret into the exact cell whose rendered cell was clicked.

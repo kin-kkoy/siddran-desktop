@@ -105,7 +105,10 @@
 .reading img { max-width: 100%; border-radius: 6px; display: block; margin: 0.4em 0 }
 .reading hr { border: none; border-top: 1px solid var(--border-strong); margin: 0.8em 0 }
 
-.reading table { border-collapse: collapse; margin: 0.8em 0 }
+.reading table { border-collapse: collapse; margin: 0.8em 0 0.2em }
+/* Option C: the source keeps its standard blank line (portable), but here text that
+   follows a table hugs it — the blank line is just a separator, not visible space. */
+.reading table + * { margin-top: 0 }
 .reading th, .reading td { border: 1px solid var(--border-default); padding: 6px 12px }
 .reading th { background: var(--bg-surface-alt); font-weight: 600 }
 

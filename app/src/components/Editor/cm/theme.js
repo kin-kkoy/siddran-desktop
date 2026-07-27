@@ -417,4 +417,35 @@ export const cinderTheme = EditorView.theme({
   '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: '2px' },
   '.cm-live-table del': { color: 'var(--text-muted)' },
   '.cm-live-table .cm-live-link': { color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'text' },
+  '.cm-live-table .cm-cell-editing': {
+    outline: '2px solid var(--accent-blue)',
+    outlineOffset: '-2px',
+    background: 'var(--bg-elevated)',
+    whiteSpace: 'pre-wrap',
+  },
+  // Editable-table wrapper + hover +/- controls (cm/tables.js).
+  '.cm-table-wrap': { position: 'relative', width: 'fit-content', maxWidth: '100%' },
+  '.cm-table-rowctl': {
+    position: 'absolute', left: '0', right: '0', bottom: '-13px',
+    display: 'flex', justifyContent: 'center', gap: '5px',
+    opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
+  },
+  '.cm-table-colctl': {
+    position: 'absolute', top: '0', bottom: '0', right: '-13px',
+    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '5px',
+    opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
+  },
+  '.cm-table-wrap:hover .cm-table-rowctl, .cm-table-wrap:hover .cm-table-colctl': {
+    opacity: '1', pointerEvents: 'auto',
+  },
+  '.cm-table-btn': {
+    width: '18px', height: '18px', padding: '0', borderRadius: '50%',
+    border: '1px solid var(--border-strong)', background: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  '.cm-table-btn:hover': { background: 'var(--bg-hover)', color: 'var(--text-primary)', borderColor: 'var(--accent-blue)' },
+  // Collapsed blank line after a table (cm/tableGap.js) — hugs the following text.
+  // Revealed at full height by the plugin when the caret lands on it.
+  '.cm-collapsed-gap': { height: '0', lineHeight: '0', fontSize: '0', overflow: 'hidden' },
 }, { dark: true })

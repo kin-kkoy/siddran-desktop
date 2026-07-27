@@ -182,3 +182,18 @@ Rationale: `exportVault()` deliberately excludes settings from sync, and per-dev
 UI state *should* stay per-device — a phone and a laptop want different tab sets and
 different screen brightness. This matches the existing pattern (`noteFoldsCache.js`,
 `cinder_cal_day_2col`, `tasksLayoutMode`).
+
+---
+
+## 💡 Idea parked 2026-07-21 — "Landscape view" (book/paginated note layout)
+
+User's idea, to design & build AFTER the table work and the current desktop backlog
+(before or around the mobile port — discuss timing later):
+
+- A reading/writing layout that, instead of one continuously-scrolling column, lays
+  the note out like an open **book**: two columns = a left "page" and a right "page".
+- **Prev/Next page arrows** at the bottom-left and bottom-right to page through the note.
+- Applies to reading and (ideally) writing.
+- NOT yet implemented — user flagged it early so it isn't forgotten. Talk through the
+  details (how pagination maps to a continuous markdown doc, where the editor caret
+  goes across page breaks, print/PDF interplay) before building.

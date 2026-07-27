@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTable, cellSourceOffset } from './tableModel.js'
+import { parseTable, cellSourceOffset, serializeTable, setCell, insertRow, removeRow, insertColumn, removeColumn } from './tableModel.js'
 
 describe('parseTable', () => {
   it('parses a standard table with outer pipes', () => {
@@ -56,6 +56,64 @@ describe('parseTable', () => {
     const t = parseTable('| Column 1 | Column 2 |\n| --- | --- |\n|  |  |')
     expect(t.headers).toEqual(['Column 1', 'Column 2'])
     expect(t.rows).toEqual([['', '']])
+  })
+})
+
+describe('table editing ops', () => {
+  const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |'
+
+  it('serialize round-trips a parsed grid (canonical spacing)', () => {
+    expect(serializeTable(parseTable(md))).toBe(md)
+  })
+
+  it('serialize preserves alignment', () => {
+    const src = '| A | B | C |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |'
+    expect(serializeTable(parseTable(src))).toBe(src)
+  })
+
+  it('setCell edits a header cell', () => {
+    expect(parseTable(setCell(md, 0, 1, 'Beta')).headers).toEqual(['A', 'Beta'])
+  })
+
+  it('setCell edits a body cell (line 2+)', () => {
+    expect(parseTable(setCell(md, 3, 0, 'x')).rows).toEqual([['1', '2'], ['x', '4']])
+  })
+
+  it('setCell strips newlines and pipes from the value', () => {
+    expect(parseTable(setCell(md, 2, 0, 'a|b\nc')).rows[0][0]).toBe('a b c')
+  })
+
+  it('insertRow adds an empty row after the given body index', () => {
+    expect(parseTable(insertRow(md, 0)).rows).toEqual([['1', '2'], ['', ''], ['3', '4']])
+  })
+
+  it('insertRow with -1 adds at the top of the body', () => {
+    expect(parseTable(insertRow(md, -1)).rows[0]).toEqual(['', ''])
+  })
+
+  it('removeRow deletes a body row', () => {
+    expect(parseTable(removeRow(md, 0)).rows).toEqual([['3', '4']])
+  })
+
+  it('insertColumn adds an empty column after the given index', () => {
+    const g = parseTable(insertColumn(md, 0))
+    expect(g.headers).toEqual(['A', '', 'B'])
+    expect(g.rows[0]).toEqual(['1', '', '2'])
+  })
+
+  it('removeColumn drops a column across header + body', () => {
+    const g = parseTable(removeColumn(md, 1))
+    expect(g.headers).toEqual(['A'])
+    expect(g.rows).toEqual([['1'], ['3']])
+  })
+
+  it('removeColumn refuses to drop the last column', () => {
+    const one = '| A |\n| --- |\n| 1 |'
+    expect(removeColumn(one, 0)).toBe(one)
+  })
+
+  it('ops on a non-table return the input unchanged', () => {
+    expect(setCell('nope', 0, 0, 'x')).toBe('nope')
   })
 })
 
