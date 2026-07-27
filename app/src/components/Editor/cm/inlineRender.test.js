@@ -65,11 +65,28 @@ describe('parseInline', () => {
     expect(n[0].text).toBe('**bold**')
   })
 
-  it('leaves unknown constructs as text', () => {
-    const n = parseInline('[[wikilink]] and ||spoiler||')
-    expect(n.every((x) => x.type === 'text' || x.type === 'link')).toBe(true)
-    // no strong/em/etc. spuriously created
-    expect(types(n)).not.toContain('strong')
+  it('parses an image before treating it as a link', () => {
+    const n = parseInline('![alt text](pics/a.png)')
+    expect(n[0]).toMatchObject({ type: 'image', alt: 'alt text', src: 'pics/a.png' })
+  })
+
+  it('parses a plain wikilink', () => {
+    expect(parseInline('[[My Note]]')[0]).toMatchObject({ type: 'wikilink', kind: 'note', text: 'My Note' })
+  })
+
+  it('wikilink alias wins over the target for display', () => {
+    expect(parseInline('[[My Note|shown]]')[0]).toMatchObject({ kind: 'note', text: 'shown' })
+  })
+
+  it('typed wikilinks report their kind and strip the prefix', () => {
+    expect(parseInline('[[task:abc]]')[0]).toMatchObject({ type: 'wikilink', kind: 'task', text: 'abc' })
+    expect(parseInline('[[sandbox:xyz|Board]]')[0]).toMatchObject({ kind: 'sandbox', text: 'Board' })
+  })
+
+  it('parses a spoiler and keeps its inner marks', () => {
+    const n = parseInline('||hidden **bold**||')
+    expect(n[0].type).toBe('spoiler')
+    expect(types(n[0].children)).toEqual(['text', 'strong'])
   })
 
   it('parses <br> as a void break node (for multi-line cells)', () => {

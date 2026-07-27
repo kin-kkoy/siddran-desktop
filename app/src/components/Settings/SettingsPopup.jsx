@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useSettings, THEMES } from '../../contexts/SettingsContext'
 import { DIRECTION_ANGLES } from '../Layout/StarCanvas/StarCanvas'
-import { LuRotateCcw } from 'react-icons/lu'
+import { LuRotateCcw, LuRefreshCw } from 'react-icons/lu'
+import { syncNow } from '../../desktop/sync/client'
+import { readSyncConfig, writeSyncConfig, readLastSync, writeLastSync } from '../../hooks/syncConfig'
 import styles from './SettingsPopup.module.css'
 
 function SettingsPopup() {
@@ -36,6 +38,12 @@ function SettingsPopup() {
               Interface
             </button>
             <button
+              className={`${styles.tab} ${activeTab === 'sync' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('sync')}
+            >
+              Sync
+            </button>
+            <button
               className={`${styles.tab} ${activeTab === 'account' ? styles.tabActive : ''}`}
               onClick={() => setActiveTab('account')}
             >
@@ -47,11 +55,119 @@ function SettingsPopup() {
           <div className={styles.content}>
             {activeTab === 'interface' ? (
               <InterfaceTab settings={settings} updateSetting={updateSetting} />
+            ) : activeTab === 'sync' ? (
+              <SyncTab />
             ) : (
               <div className={styles.placeholder}>To be implemented</div>
             )}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Sync Tab ───────────────────────────────────────────────────────
+// Manual push/pull against the sync Worker. Never automatic: sync is explicit, so it
+// can't sit in the path of a keystroke. Config is device-local (hooks/syncConfig.js).
+function SyncTab() {
+  const [cfg, setCfg] = useState(readSyncConfig)
+  const [status, setStatus] = useState({ state: 'idle', message: '' })
+  const [lastSync, setLastSync] = useState(readLastSync)
+
+  const save = (next) => { setCfg(next); writeSyncConfig(next) }
+
+  const runSync = async () => {
+    setStatus({ state: 'busy', message: 'Syncing…' })
+    try {
+      const res = await syncNow({ endpoint: cfg.endpoint, token: cfg.token })
+      const when = new Date().toISOString()
+      writeLastSync(when)
+      setLastSync(when)
+      const conflicts = res.conflicts?.length || 0
+      setStatus({
+        state: 'ok',
+        message: res.firstPush
+          ? 'Uploaded your vault for the first time.'
+          : conflicts
+            ? `Synced — ${conflicts} conflict${conflicts === 1 ? '' : 's'} resolved by most recent edit.`
+            : 'Synced.',
+      })
+    } catch (e) {
+      const map = {
+        'no-bag': 'Open a Bag first.',
+        'not-configured': 'Enter the endpoint and token above.',
+        unauthorized: 'The server rejected that token.',
+        'conflict-retry': 'The remote kept changing — try again.',
+      }
+      setStatus({ state: 'error', message: map[e?.code] || e?.message || 'Sync failed.' })
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 6,
+    border: '1px solid var(--border-default)', background: 'var(--bg-elevated)',
+    color: 'var(--text-primary)', font: 'inherit', fontSize: 13,
+  }
+  const statusColor = status.state === 'error' ? 'var(--accent-danger)'
+    : status.state === 'ok' ? 'var(--accent-success)' : 'var(--text-muted)'
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.settingBlock}>
+        <span className={styles.settingLabel}>Sync endpoint</span>
+        <span className={styles.settingDesc}>
+          Your deployed sync Worker URL. Tasks and calendar events sync; notes and
+          settings stay on this device.
+        </span>
+        <input
+          style={inputStyle}
+          type="text"
+          placeholder="https://siddran-sync.<you>.workers.dev"
+          value={cfg.endpoint}
+          onChange={(e) => save({ ...cfg, endpoint: e.target.value.trim() })}
+        />
+      </div>
+
+      <div className={styles.settingBlock}>
+        <span className={styles.settingLabel}>Sync token</span>
+        <span className={styles.settingDesc}>
+          The secret you set with <code>wrangler secret put SYNC_TOKEN</code>. Stored
+          on this device only — never written into your Bag.
+        </span>
+        <input
+          style={inputStyle}
+          type="password"
+          placeholder="••••••••"
+          value={cfg.token}
+          onChange={(e) => save({ ...cfg, token: e.target.value.trim() })}
+        />
+      </div>
+
+      <div className={styles.settingBlock}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            type="button"
+            onClick={runSync}
+            disabled={status.state === 'busy' || !cfg.endpoint || !cfg.token}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+              borderRadius: 6, border: '1px solid var(--border-strong)',
+              background: 'var(--bg-elevated)', color: 'var(--text-primary)',
+              font: 'inherit', fontSize: 13,
+              cursor: status.state === 'busy' || !cfg.endpoint || !cfg.token ? 'default' : 'pointer',
+              opacity: status.state === 'busy' || !cfg.endpoint || !cfg.token ? 0.55 : 1,
+            }}
+          >
+            <LuRefreshCw size={14} /> {status.state === 'busy' ? 'Syncing…' : 'Sync now'}
+          </button>
+          {status.message && (
+            <span style={{ fontSize: 12.5, color: statusColor }}>{status.message}</span>
+          )}
+        </div>
+        <span className={styles.settingDesc} style={{ marginTop: 8 }}>
+          {lastSync ? `Last synced ${new Date(lastSync).toLocaleString()}` : 'Never synced on this device.'}
+        </span>
       </div>
     </div>
   )

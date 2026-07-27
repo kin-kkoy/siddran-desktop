@@ -4,13 +4,20 @@
 //
 // The parse is a pure function (unit-tested); the DOM build is a thin walk over it.
 // Nesting works (bold inside a link text, italic inside bold, …) via recursion.
-// Scope: bold, italic, inline code, strikethrough, highlight, underline, and links.
-// Not handled (shows as raw source): wikilinks, images, spoilers — a known P2 limit.
+// Scope: bold, italic, inline code, strikethrough, highlight, underline, links,
+// images, wikilinks, spoilers, and <br>.
 
-// Ordered longest-delimiter-first so `**` beats `*` and `__` beats `_` at the same spot.
+import { resolveImageUrl } from '../../../utils/imageUpload'
+
+// Ordered longest-delimiter-first so `**` beats `*` and `__` beats `_` at the same
+// spot. `image` and `wikilink` precede `link` so `![a](b)` and `[[x]]` aren't
+// mis-matched as ordinary links.
 const RULES = [
   { type: 'br', re: /<br\s*\/?>/i },
   { type: 'code', re: /`([^`]+)`/ },
+  { type: 'image', re: /!\[([^\]]*)\]\(([^)]+)\)/ },
+  { type: 'wikilink', re: /\[\[([^\]]+)\]\]/ },
+  { type: 'spoiler', re: /\|\|([^|]+)\|\|/ },
   { type: 'link', re: /\[([^\]]+)\]\(([^)]+)\)/ },
   { type: 'strong', re: /\*\*([^*]+)\*\*/ },
   { type: 'strong', re: /__([^_]+)__/ },
@@ -39,6 +46,17 @@ export function parseInline(input) {
     if (rule.type === 'code') out.push({ type: 'code', value: m[1] })
     else if (rule.type === 'link') out.push({ type: 'link', href: m[2], text: m[1] })
     else if (rule.type === 'br') out.push({ type: 'br' }) // void element, no content
+    else if (rule.type === 'image') out.push({ type: 'image', alt: m[1], src: m[2] })
+    else if (rule.type === 'wikilink') {
+      // [[target]] | [[target|alias]] | [[task:id|alias]] — display the alias when
+      // present, else the target, with the type prefix stripped.
+      const raw = m[1]
+      const pipe = raw.indexOf('|')
+      const head = pipe >= 0 ? raw.slice(0, pipe) : raw
+      const alias = pipe >= 0 ? raw.slice(pipe + 1) : null
+      const km = /^(task|sandbox|bundle):(.*)$/.exec(head)
+      out.push({ type: 'wikilink', kind: km ? km[1] : 'note', text: alias || (km ? km[2] : head) })
+    }
     else out.push({ type: rule.type, children: parseInline(m[1]) }) // recurse for nesting
     rest = rest.slice(m.index + m[0].length)
   }
@@ -55,6 +73,30 @@ function appendNodes(parent, nodes) {
       const c = document.createElement('code')
       c.textContent = n.value
       parent.appendChild(c)
+    } else if (n.type === 'image') {
+      // Thumbnail inside the cell. Size fragments (#w=/#h=) are stripped — cell
+      // images are capped by CSS instead.
+      const img = document.createElement('img')
+      const src = n.src.replace(/#w=\d+(?:#h=\d+)?$/, '')
+      img.src = resolveImageUrl(src)
+      img.alt = n.alt || ''
+      img.className = 'cm-cell-img'
+      parent.appendChild(img)
+    } else if (n.type === 'wikilink') {
+      // Styled like the editor's internal links, but inert here (clicking a cell
+      // opens it for editing). Reading mode keeps the functional link.
+      const s = document.createElement('span')
+      const kindClass = n.kind === 'task' ? 'cm-task-link'
+        : n.kind === 'sandbox' ? 'cm-sandbox-link'
+          : n.kind === 'bundle' ? 'cm-bundle-link' : ''
+      s.className = `cm-internal-link ${kindClass}`.trim()
+      s.textContent = n.text
+      parent.appendChild(s)
+    } else if (n.type === 'spoiler') {
+      const s = document.createElement('span')
+      s.className = 'cm-spoiler' // same blocked-out style as the editor; hover reveals
+      appendNodes(s, n.children)
+      parent.appendChild(s)
     } else if (n.type === 'link') {
       // Styled like a link (title shows the target), but NOT a live navigation:
       // clicking a cell reveals the table's markdown source for editing instead.

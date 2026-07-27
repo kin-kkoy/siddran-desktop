@@ -419,6 +419,8 @@ export const cinderTheme = EditorView.theme({
   '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: '2px' },
   '.cm-live-table del': { color: 'var(--text-muted)' },
   '.cm-live-table .cm-live-link': { color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'text' },
+  // Images inside cells stay thumbnail-sized so one picture can't blow up the row.
+  '.cm-cell-img': { maxWidth: '140px', maxHeight: '90px', borderRadius: '4px', verticalAlign: 'middle', display: 'inline-block' },
   '.cm-live-table .cm-cell-editing': { background: 'var(--bg-elevated)', padding: '0' },
   // The cell editor: an <input> that fills the cell and inherits its look, so editing
   // stays visually in-place (only this cell shows its raw text).

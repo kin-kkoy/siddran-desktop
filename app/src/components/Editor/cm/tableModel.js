@@ -7,12 +7,27 @@
 // (`\|`) inside a cell are NOT yet handled — a known limitation, noted for P2.
 
 // Split one table row into trimmed cell strings, tolerating optional outer pipes.
+// A cell may contain a literal pipe escaped as `\|` (GFM) — needed for ||spoilers||
+// and [[wikilink|alias]] inside cells — so we split on UNESCAPED pipes only and
+// unescape afterwards.
 function splitRow(line) {
   let s = line.trim()
   if (s.startsWith('|')) s = s.slice(1)
-  if (s.endsWith('|')) s = s.slice(0, -1)
-  return s.split('|').map((c) => c.trim())
+  if (/(^|[^\\])\|$/.test(s)) s = s.slice(0, -1)
+  const cells = []
+  let cur = ''
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (ch === '\\' && s[i + 1] === '|') { cur += '|'; i++; continue } // escaped pipe
+    if (ch === '|') { cells.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  cells.push(cur)
+  return cells.map((c) => c.trim())
 }
+
+// Escape pipes (and strip newlines) when writing a cell back out.
+const escapeCell = (v) => String(v).replace(/\r?\n/g, ' ').replace(/\|/g, '\\|')
 
 // A delimiter cell is dashes with optional leading/trailing colons: --- :-- --: :-:
 function alignOf(cell) {
@@ -66,7 +81,7 @@ export function parseTable(md) {
 
 const ALIGN_DELIM = { left: ':--', right: '--:', center: ':-:' }
 const delimFor = (a) => ALIGN_DELIM[a] || '---'
-const rowLine = (cells) => `| ${cells.join(' | ')} |`
+const rowLine = (cells) => `| ${cells.map(escapeCell).join(' | ')} |`
 
 // Serialize a {headers, aligns, rows} grid back to GFM markdown (no trailing newline).
 export function serializeTable(grid) {
@@ -97,7 +112,9 @@ function editGrid(md, mutate) {
 // Replace one cell's text. `line`: 0 = header, 2+ = body row. Returns new markdown.
 export function setCell(md, line, col, text) {
   return editGrid(md, (g) => {
-    const clean = String(text).replace(/[\r\n|]/g, ' ').trim() // a cell can't hold newlines or pipes
+    // Newlines can't live in a cell (callers convert them to <br> first); pipes CAN,
+    // and are escaped on serialize — so ||spoilers|| and [[link|alias]] survive.
+    const clean = String(text).replace(/[\r\n]/g, ' ').trim()
     if (line === 0) { if (col < g.headers.length) g.headers[col] = clean }
     else { const r = g.rows[line - 2]; if (r && col < r.length) r[col] = clean }
   })

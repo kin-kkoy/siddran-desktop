@@ -79,8 +79,8 @@ describe('table editing ops', () => {
     expect(parseTable(setCell(md, 3, 0, 'x')).rows).toEqual([['1', '2'], ['x', '4']])
   })
 
-  it('setCell strips newlines and pipes from the value', () => {
-    expect(parseTable(setCell(md, 2, 0, 'a|b\nc')).rows[0][0]).toBe('a b c')
+  it('setCell strips newlines but KEEPS pipes (escaped on serialize)', () => {
+    expect(parseTable(setCell(md, 2, 0, 'a|b\nc')).rows[0][0]).toBe('a|b c')
   })
 
   it('insertRow adds an empty row after the given body index', () => {
@@ -114,6 +114,29 @@ describe('table editing ops', () => {
 
   it('ops on a non-table return the input unchanged', () => {
     expect(setCell('nope', 0, 0, 'x')).toBe('nope')
+  })
+
+  // Escaped pipes let a cell hold ||spoilers|| and [[link|alias]] — without them the
+  // pipe would be read as a cell delimiter and split the row.
+  it('parses an escaped pipe as cell content, not a delimiter', () => {
+    const t = parseTable('| A | B |\n| --- | --- |\n| a \\| b | c |')
+    expect(t.rows[0]).toEqual(['a | b', 'c'])
+  })
+
+  it('round-trips a cell containing pipes', () => {
+    const withSpoiler = setCell('| A | B |\n| --- | --- |\n| x | y |', 2, 0, '||secret||')
+    expect(withSpoiler).toContain('\\|\\|secret\\|\\|')       // escaped on disk
+    expect(parseTable(withSpoiler).rows[0][0]).toBe('||secret||') // unescaped on read
+  })
+
+  it('round-trips a wikilink alias in a cell', () => {
+    const md = setCell('| A |\n| --- |\n| x |', 2, 0, '[[Note|alias]]')
+    expect(parseTable(md).rows[0][0]).toBe('[[Note|alias]]')
+  })
+
+  it('still strips newlines from a cell value', () => {
+    const md = setCell('| A |\n| --- |\n| x |', 2, 0, 'a\nb')
+    expect(parseTable(md).rows[0][0]).toBe('a b')
   })
 })
 
