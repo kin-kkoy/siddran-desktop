@@ -110,7 +110,11 @@ class TableWidget extends WidgetType {
         view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
       } else {
         const line = st.doc.lineAt(Math.min(tableTo, st.doc.length))
-        const pos = line.number < st.doc.lines ? st.doc.line(line.number + 1).from : st.doc.length
+        let n = line.number + 1
+        // Step over the invisible Option-C gap line, so exiting downward doesn't park
+        // the caret on a zero-height line (which would reveal it).
+        if (n < st.doc.lines && st.doc.line(n).text.trim() === '') n++
+        const pos = n <= st.doc.lines ? st.doc.line(n).from : st.doc.length
         view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
       }
     }
@@ -292,7 +296,14 @@ function enterTable(view, dir) {
     const last = doc.lineAt(t.to)
     const beside = sel.head >= first.from && sel.head <= last.to // caret parked at the widget
     const lineAbove = caretLine.number + 1 === first.number
-    const lineBelow = caretLine.number - 1 === last.number
+    // Option C leaves a blank line right after a table which cm/tableGap.js renders
+    // at zero height. It's invisible, so arrowing up from the text below must step
+    // straight over it into the table rather than stopping on (and revealing) it.
+    const prevNum = caretLine.number - 1
+    const overGap = prevNum >= 1
+      && doc.line(prevNum).text.trim() === ''
+      && prevNum - 1 === last.number
+    const lineBelow = caretLine.number - 1 === last.number || overGap
 
     const goTop = (dir === 'down' && (lineAbove || sel.head <= first.from))
       || (dir === 'right' && ((beside && sel.head <= first.from) || (lineAbove && sel.head === caretLine.to)))
