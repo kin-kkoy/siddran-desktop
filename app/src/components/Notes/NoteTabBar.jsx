@@ -29,7 +29,7 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
   // Drag-to-reorder the tabs. Disabled during a split view, where two tabs fold
   // into one combined tab and reordering would be ambiguous. `tabDrag.order` is the
   // live sequence (reshuffled as you drag); it stays synced with openTabs otherwise.
-  const tabDrag = useDragReorder(openTabs, reorderTabs, !isSplitPair, 'note-tabs', { animate: true })
+  const tabDrag = useDragReorder(openTabs, reorderTabs, !isSplitPair, 'note-tabs', { animate: true, axis: 'x' })
 
   return (
     <div className={styles.tabBar}>

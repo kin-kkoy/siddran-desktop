@@ -12,16 +12,18 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 // changes (browser-tab feel) instead of snapping. Off by default so existing callers
 // (the vertical note/notebook lists) keep their current instant behaviour untouched.
 export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reorder', opts = {}) {
-  const { animate = false } = opts
+  const { animate = false, axis = 'both' } = opts
   const [order, setOrder] = useState(ids)
   const [activeId, setActiveId] = useState(null)
   const reactId = useId()
   const groupId = `${groupName}-${reactId.replace(/:/g, '')}`
-  const drag = useRef({ id: null, pointerId: null, active: false, x0: 0, y0: 0, captured: null })
+  const drag = useRef({ id: null, pointerId: null, active: false, x0: 0, y0: 0, grabDX: 0, grabDY: 0, captured: null })
   const itemRefs = useRef(new Map())
   const orderRef = useRef(ids)
   const onReorderRef = useRef(onReorder)
   const suppressClickRef = useRef(false)
+  const pointerRef = useRef({ x: 0, y: 0 })   // latest pointer, for cursor-glue
+  const prevRects = useRef(new Map())          // last measured item positions, for FLIP
   onReorderRef.current = onReorder
 
   // Resync the display order with incoming ids whenever we're not mid-drag
@@ -81,6 +83,26 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
     })
   }, [])
 
+  // Glue the actively-dragged item to the cursor. We clear its transform, read its
+  // TRUE laid-out slot (which shifts as siblings reorder around it), then translate it
+  // so the point the user grabbed stays under the pointer. Because we re-measure each
+  // call, it stays correct no matter how the slot moved. `axis` pins it to one axis
+  // (tabs: 'x'), so a tab doesn't fly out of the strip.
+  const glueActive = useCallback(() => {
+    const d = drag.current
+    if (!animate || !d.active || d.id == null) return
+    const el = itemRefs.current.get(String(d.id))
+    if (!el) return
+    el.style.transition = 'none'
+    el.style.transform = ''
+    const base = el.getBoundingClientRect()
+    const { x, y } = pointerRef.current
+    const tx = axis === 'y' ? 0 : (x - d.grabDX) - base.left
+    const ty = axis === 'x' ? 0 : (y - d.grabDY) - base.top
+    el.style.transform = `translate(${tx}px, ${ty}px)`
+    el.style.zIndex = '6'
+  }, [animate, axis])
+
   useEffect(() => {
     const move = (e) => {
       const d = drag.current
@@ -95,7 +117,9 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
         document.body.style.cursor = 'grabbing'
       }
       e.preventDefault()
+      pointerRef.current = { x: e.clientX, y: e.clientY }
       reorderAtPoint(d.id, e.clientX, e.clientY)
+      glueActive() // follow the cursor even when the pointer moves without a reorder
     }
     const up = (e) => {
       const d = drag.current
@@ -103,10 +127,21 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       if (d.active) {
         e.preventDefault()
         onReorderRef.current(orderRef.current)
+        if (animate) {
+          // Settle the lifted item into its committed slot, then let the next FLIP
+          // pass treat it as fresh (drop its stale rect so it doesn't jump).
+          const el = itemRefs.current.get(String(d.id))
+          if (el) {
+            el.style.transition = 'transform 0.16s ease'
+            el.style.transform = ''
+            el.style.zIndex = ''
+            prevRects.current.delete(String(d.id))
+          }
+        }
         setTimeout(() => { suppressClickRef.current = false }, 0)
       }
       try { d.captured?.releasePointerCapture?.(d.pointerId) } catch { /* ignore */ }
-      drag.current = { id: null, pointerId: null, active: false, x0: 0, y0: 0, captured: null }
+      drag.current = { id: null, pointerId: null, active: false, x0: 0, y0: 0, grabDX: 0, grabDY: 0, captured: null }
       setActiveId(null)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
@@ -119,18 +154,19 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
-  }, [reorderAtPoint])
+  }, [reorderAtPoint, glueActive, animate])
 
-  // FLIP: after each reorder, measure where every item ended up, snap it back to its
-  // previous spot with no transition, then release it on the next frame so it slides
-  // into place. Runs on every render (cheap — only for `animate` callers, a handful of
-  // items). No transform is ever touched when animate is off.
-  const prevRects = useRef(new Map())
+  // FLIP for the NON-dragged items: after each reorder, measure where each landed,
+  // snap it back to its previous spot with no transition, then release it next frame
+  // so it slides. The dragged item is glued to the cursor instead (skipped here).
+  // Runs only for `animate` callers (a handful of items); never touches transform off.
   useLayoutEffect(() => {
     if (!animate) { prevRects.current = new Map(); return }
+    const activeKey = drag.current.active ? String(drag.current.id) : null
     const next = new Map()
     for (const [key, el] of itemRefs.current) {
       if (!el) continue
+      if (key === activeKey) { glueActive(); continue } // cursor-glued, not FLIP'd
       const rect = el.getBoundingClientRect()
       next.set(key, { left: rect.left, top: rect.top })
       const prev = prevRects.current.get(key)
@@ -157,7 +193,10 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       // a real drag suppresses the follow-up click, while a normal click still opens.
       if (!enabled || e.button !== 0 || e.target?.closest?.('button, input, textarea, select')) return
       suppressClickRef.current = false
-      drag.current = { id, pointerId: e.pointerId, active: false, x0: e.clientX, y0: e.clientY, captured: e.currentTarget }
+      // grabD* = where inside the item the pointer landed, so cursor-glue keeps that
+      // exact point under the pointer rather than snapping the item's corner to it.
+      const r = e.currentTarget.getBoundingClientRect()
+      drag.current = { id, pointerId: e.pointerId, active: false, x0: e.clientX, y0: e.clientY, grabDX: e.clientX - r.left, grabDY: e.clientY - r.top, captured: e.currentTarget }
     },
     onClickCapture: (e) => {
       if (!suppressClickRef.current) return

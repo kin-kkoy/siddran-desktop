@@ -2,9 +2,9 @@
 .sidebar {
     width: 220px;
     height: 100vh;
-    /* var (not a hardcoded rgba) so the background-brightness setting reaches the
-       sidebar too. --bg-primary is ~the same near-black it used before. */
-    background: var(--bg-primary);
+    /* Fixed dark background — deliberately NOT the brightness-shifted --bg vars, so
+       the sidebar (and its icons) stay readable at any background-brightness setting. */
+    background: rgba(11, 11, 18, 0.98);
     border-right: 1px solid var(--border-default);
     display: flex;
     flex-direction: column;
@@ -217,8 +217,10 @@
 .listAccordionHeader {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.45rem 0.75rem;
+    gap: 0.65rem;
+    /* left inset matches the nav icons: navSection 0.9rem + menuBtn 0.75rem = 1.65rem,
+       so the chevron lines up under the sidebar's Notes/Tasks/etc. icons. */
+    padding: 0.45rem 0.75rem 0.45rem 1.65rem;
     background: transparent;
     border: none;
     cursor: pointer;
