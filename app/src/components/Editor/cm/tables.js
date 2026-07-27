@@ -18,14 +18,33 @@ import { StateField } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { renderTableDOM } from './tableRender'
+import { cellSourceOffset } from './tableModel'
 
 class TableWidget extends WidgetType {
-  constructor(md) { super(); this.md = md }
-  // Re-render only when the source text changes — cheap identity for the diff.
-  eq(other) { return other.md === this.md }
-  toDOM() { return renderTableDOM(this.md) }
-  // Don't swallow events: a click resolves to the block's edge, which lands the
-  // caret on a table line, which flips this table back to source for editing.
+  // `from` = the table's start offset in the document, so a click on a rendered cell
+  // can map to that cell's exact source position. It's part of eq() so the widget
+  // re-renders when an edit above shifts the table (keeping `from` current).
+  constructor(md, from) { super(); this.md = md; this.from = from }
+  eq(other) { return other.md === this.md && other.from === this.from }
+  toDOM(view) {
+    const dom = renderTableDOM(this.md)
+    // Click a rendered cell → reveal the table's source with the caret dropped into
+    // exactly that cell (the field re-renders to source because the caret is now
+    // inside the table). Obsidian-style click-to-edit, reusing the caret-reveal.
+    dom.addEventListener('mousedown', (e) => {
+      const cell = e.target.closest?.('th, td')
+      if (!cell || cell.dataset.line == null) return
+      const off = cellSourceOffset(this.md, Number(cell.dataset.line), Number(cell.dataset.col))
+      if (off == null) return
+      e.preventDefault()
+      const pos = this.from + off
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+      view.focus()
+    })
+    return dom
+  }
+  // Let our own mousedown handler run (and, as a fallback, clicks near the block
+  // edge still resolve to a table line, revealing source).
   ignoreEvent() { return false }
 }
 
@@ -73,9 +92,9 @@ function decoFrom(state, tables) {
     if (t.from > doc.length || t.to > doc.length) continue // stale guard
     if (selectionTouchesLines(state, t.from, t.to)) continue // caret on it → source
     const md = doc.sliceString(t.from, t.to)
-    const from = doc.lineAt(t.from).from // block replace must span whole lines
+    const from = doc.lineAt(t.from).from // block replace must span whole lines; == t.from
     const to = doc.lineAt(t.to).to
-    widgets.push(Decoration.replace({ widget: new TableWidget(md), block: true }).range(from, to))
+    widgets.push(Decoration.replace({ widget: new TableWidget(md, from), block: true }).range(from, to))
   }
   return Decoration.set(widgets, true)
 }

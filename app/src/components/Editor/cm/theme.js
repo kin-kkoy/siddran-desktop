@@ -402,7 +402,9 @@ export const cinderTheme = EditorView.theme({
     border: '1px solid var(--border-default)',
     padding: '6px 12px',
     color: 'var(--text-primary)',
+    cursor: 'text', // click a cell to edit it (drops the caret into that cell's source)
   },
+  '.cm-live-table td:hover, .cm-live-table th:hover': { background: 'var(--bg-hover)' },
   '.cm-live-table th': { fontWeight: '700', background: 'var(--bg-elevated)' },
   // inline marks rendered inside cells (cm/inlineRender.js)
   '.cm-live-table code': {

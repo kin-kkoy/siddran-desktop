@@ -28,6 +28,8 @@ export function renderTableDOM(md) {
   model.headers.forEach((h, i) => {
     const th = document.createElement('th')
     renderInlineInto(th, h)
+    th.dataset.line = '0'          // header is source line 0
+    th.dataset.col = String(i)
     if (model.aligns[i]) th.style.textAlign = model.aligns[i]
     htr.appendChild(th)
   })
@@ -36,11 +38,13 @@ export function renderTableDOM(md) {
 
   if (model.rows.length) {
     const tbody = document.createElement('tbody')
-    model.rows.forEach((row) => {
+    model.rows.forEach((row, r) => {
       const tr = document.createElement('tr')
       row.forEach((cell, i) => {
         const td = document.createElement('td')
         renderInlineInto(td, cell)
+        td.dataset.line = String(r + 2) // body rows start at source line 2 (after delimiter)
+        td.dataset.col = String(i)
         if (model.aligns[i]) td.style.textAlign = model.aligns[i]
         tr.appendChild(td)
       })

@@ -81,7 +81,10 @@ export function insertTable(view) {
   const { from } = view.state.selection.main
   const line = view.state.doc.lineAt(from)
   const lead = line.text.length ? '\n' : ''
-  const table = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n'
+  // Trailing blank line: in GFM a table only ends at a blank line, so without this a
+  // line typed right below would be absorbed as a table row. The blank line gives a
+  // ready separator so text written after the table stays out of it.
+  const table = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n\n'
   const insert = lead + table
   // caret onto "Column 1" (select it): after lead + '| '
   const cellStart = line.to + lead.length + 2

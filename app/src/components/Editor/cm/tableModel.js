@@ -58,3 +58,28 @@ export function parseTable(md) {
 
   return { headers, aligns, rows }
 }
+
+// Char offset within the table markdown `md` of the START of the cell content at the
+// given source LINE index (0 = header, 1 = delimiter, 2+ = body rows) and column.
+// Used to drop the caret into the exact cell whose rendered cell was clicked.
+// Returns null if the line/column is out of range.
+export function cellSourceOffset(md, lineIndex, col) {
+  const lines = String(md).split('\n')
+  if (lineIndex < 0 || lineIndex >= lines.length || col < 0) return null
+  let base = 0
+  for (let i = 0; i < lineIndex; i++) base += lines[i].length + 1 // + '\n'
+  const line = lines[lineIndex]
+  let i = line[0] === '|' ? 1 : 0 // skip a leading outer pipe
+  let c = 0
+  while (i <= line.length) {
+    if (c === col) {
+      while (i < line.length && line[i] === ' ') i++ // land on the first non-space
+      return base + i
+    }
+    const p = line.indexOf('|', i)
+    if (p === -1) return null // fewer columns than requested
+    i = p + 1
+    c++
+  }
+  return null
+}
