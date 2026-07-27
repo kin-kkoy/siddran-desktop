@@ -2,10 +2,11 @@
 // table widget. Cells are set via textContent (never innerHTML) so note content
 // can't inject markup — XSS-safe by construction.
 //
-// Phase 1 renders cell text literally: inline markdown inside a cell (bold, links)
-// shows as raw source. Rendering inline marks per cell is a Phase 2 refinement.
+// Cells render inline markdown (bold/italic/code/strike/highlight/underline/links)
+// via renderInlineInto — DOM-built, never innerHTML, so it stays XSS-safe.
 
 import { parseTable } from './tableModel'
+import { renderInlineInto } from './inlineRender'
 
 export function renderTableDOM(md) {
   const wrap = document.createElement('div')
@@ -26,7 +27,7 @@ export function renderTableDOM(md) {
   const htr = document.createElement('tr')
   model.headers.forEach((h, i) => {
     const th = document.createElement('th')
-    th.textContent = h
+    renderInlineInto(th, h)
     if (model.aligns[i]) th.style.textAlign = model.aligns[i]
     htr.appendChild(th)
   })
@@ -39,7 +40,7 @@ export function renderTableDOM(md) {
       const tr = document.createElement('tr')
       row.forEach((cell, i) => {
         const td = document.createElement('td')
-        td.textContent = cell
+        renderInlineInto(td, cell)
         if (model.aligns[i]) td.style.textAlign = model.aligns[i]
         tr.appendChild(td)
       })

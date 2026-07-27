@@ -404,4 +404,15 @@ export const cinderTheme = EditorView.theme({
     color: 'var(--text-primary)',
   },
   '.cm-live-table th': { fontWeight: '700', background: 'var(--bg-elevated)' },
+  // inline marks rendered inside cells (cm/inlineRender.js)
+  '.cm-live-table code': {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '0.88em',
+    background: 'var(--bg-elevated)',
+    borderRadius: '4px',
+    padding: '0 4px',
+  },
+  '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: '2px' },
+  '.cm-live-table del': { color: 'var(--text-muted)' },
+  '.cm-live-table .cm-live-link': { color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'text' },
 }, { dark: true })
