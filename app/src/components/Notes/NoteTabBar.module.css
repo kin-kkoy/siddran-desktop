@@ -68,8 +68,14 @@
 }
 .tab:hover { background: var(--bg-surface); color: var(--text-secondary); }
 
-/* The tab being drag-reordered: lifted look while the pointer carries it. */
-.dragging { opacity: 0.6; cursor: grabbing; }
+/* The tab being drag-reordered: a lifted look (shadow + slight fade). No transform
+   here — the FLIP animation in useDragReorder owns transform while dragging. */
+.dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+  box-shadow: 0 4px 14px var(--shadow-color);
+  z-index: 3;
+}
 
 /* Active tab = Edge/Obsidian shape: a filled tab whose bottom corners flare out
    into the bar via two radial-gradient "ears" (concave curves). */

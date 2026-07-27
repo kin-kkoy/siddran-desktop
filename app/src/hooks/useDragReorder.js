@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 // Pointer-based drag-to-reorder with LIVE reflow. We use pointer events (not
 // HTML5 drag-and-drop) because Tauri/WebKitGTK swallows the DOM `drop` event when
@@ -8,7 +8,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 // through item geometry, so surrounding items visibly make room. On release the
 // final order is committed via onReorder(). Spread `dragProps(id)` onto each
 // item's wrapper.
-export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reorder') {
+// opts.animate — when true, items SLIDE to their new positions via FLIP as the order
+// changes (browser-tab feel) instead of snapping. Off by default so existing callers
+// (the vertical note/notebook lists) keep their current instant behaviour untouched.
+export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reorder', opts = {}) {
+  const { animate = false } = opts
   const [order, setOrder] = useState(ids)
   const [activeId, setActiveId] = useState(null)
   const reactId = useId()
@@ -116,6 +120,31 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       window.removeEventListener('pointercancel', up)
     }
   }, [reorderAtPoint])
+
+  // FLIP: after each reorder, measure where every item ended up, snap it back to its
+  // previous spot with no transition, then release it on the next frame so it slides
+  // into place. Runs on every render (cheap — only for `animate` callers, a handful of
+  // items). No transform is ever touched when animate is off.
+  const prevRects = useRef(new Map())
+  useLayoutEffect(() => {
+    if (!animate) { prevRects.current = new Map(); return }
+    const next = new Map()
+    for (const [key, el] of itemRefs.current) {
+      if (!el) continue
+      const rect = el.getBoundingClientRect()
+      next.set(key, { left: rect.left, top: rect.top })
+      const prev = prevRects.current.get(key)
+      if (prev && (prev.left !== rect.left || prev.top !== rect.top)) {
+        el.style.transition = 'none'
+        el.style.transform = `translate(${prev.left - rect.left}px, ${prev.top - rect.top}px)`
+        requestAnimationFrame(() => {
+          el.style.transition = 'transform 0.16s ease'
+          el.style.transform = ''
+        })
+      }
+    }
+    prevRects.current = next
+  })
 
   const dragProps = (id) => ({
     ref: (node) => setItemRef(id, node),

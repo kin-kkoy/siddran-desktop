@@ -223,16 +223,24 @@ function shiftLightness(hex, delta) {
 
 // Return a copy of the palette with every background tier lightened/darkened by the
 // same amount, so the whole background hierarchy shifts together while keeping the
-// relative spacing between tiers. Only the bg-* tiers move — text and borders keep
-// their values (and thus their contrast). Recomputed from the base palette each
-// time, so it never compounds. Non-hex values are left untouched.
+// relative spacing between tiers. On a LIGHTENED background (positive delta) the
+// text tiers are nudged darker by a fraction so they stay readable — a darkened
+// background (negative delta) keeps light text readable, so text is left alone
+// there. Recomputed from the base palette each time, so it never compounds.
 const BG_TIERS = ['--bg-primary', '--bg-surface', '--bg-surface-alt', '--bg-elevated', '--bg-hover']
+const TEXT_TIERS = ['--text-primary', '--text-secondary', '--text-muted', '--text-dim', '--text-faint']
+const isHex6 = (v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)
 function withBrightness(palette, delta) {
   if (!delta) return palette
   const out = { ...palette }
   for (const key of BG_TIERS) {
-    const v = out[key]
-    if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) out[key] = shiftLightness(v, delta)
+    if (isHex6(out[key])) out[key] = shiftLightness(out[key], delta)
+  }
+  if (delta > 0) {
+    const textShift = -delta * 0.7 // darken text ~70% of the bg brightening
+    for (const key of TEXT_TIERS) {
+      if (isHex6(out[key])) out[key] = shiftLightness(out[key], textShift)
+    }
   }
   return out
 }

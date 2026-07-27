@@ -111,10 +111,10 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                             title={listOpen ? 'Collapse note list' : 'Expand note list'}
                         >
                             <LuChevronDown
-                                size={16}
+                                size={14}
                                 className={`${styles.listChevron} ${listOpen ? '' : styles.listChevronCollapsed}`}
                             />
-                            <span>List of Notes</span>
+                            <span>{listOpen && (notes?.length ?? 0) === 0 ? 'No notes yet' : 'List of Notes'}</span>
                         </button>
                         {listOpen && (
                             <SidebarList
