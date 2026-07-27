@@ -393,4 +393,15 @@ export const cinderTheme = EditorView.theme({
     color: 'var(--text-primary)',
   },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--accent-blue)', color: '#fff' },
+
+  // Live-preview table widget (cm/tables.js). Matches the reading view's table
+  // styling (ReadingView.module.css) so a rendered table looks the same in both.
+  '.cm-live-table': { margin: '0.4em 0' },
+  '.cm-live-table table': { borderCollapse: 'collapse', width: 'auto' },
+  '.cm-live-table th, .cm-live-table td': {
+    border: '1px solid var(--border-default)',
+    padding: '6px 12px',
+    color: 'var(--text-primary)',
+  },
+  '.cm-live-table th': { fontWeight: '700', background: 'var(--bg-elevated)' },
 }, { dark: true })

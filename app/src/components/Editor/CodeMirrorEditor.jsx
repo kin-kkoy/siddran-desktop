@@ -6,6 +6,7 @@ import { markdown, markdownLanguage, deleteMarkupBackward } from '@codemirror/la
 import { syntaxHighlighting, indentUnit, foldEffect, unfoldEffect } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { livePreview } from './cm/livePreview'
+import { liveTables } from './cm/tables'
 import { domVerticalMotion } from './cm/verticalMotion'
 import { codeCopy } from './cm/codeCopy'
 import { imageExtensions } from './cm/imagePaste'
@@ -250,6 +251,7 @@ function CodeMirrorEditor({
           markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [wikilinkMarkdownExtension, obsidianSyntax, { remove: ['SetextHeading', 'IndentedCode'] }] }),
           syntaxHighlighting(cinderHighlightStyle),
           livePreview,
+          liveTables,
           searchExtension,
           codeCopy,
           imageExtensions(() => ({ authFetch: authFetchRef.current, API: apiRef.current })),

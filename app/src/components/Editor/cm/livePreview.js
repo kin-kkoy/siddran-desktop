@@ -98,6 +98,11 @@ function scanInline(state, ranges) {
 
   const enter = (node) => {
     const name = node.name, nf = node.from, nt = node.to
+    // Tables are owned by the block-level StateField (cm/tables.js): when rendered
+    // it replaces the whole block with a <table> widget, and when the caret is on it
+    // the raw source shows. Either way the inline pass must not touch the interior,
+    // so skip the whole subtree here.
+    if (name === 'Table') return false
     switch (name) {
       case 'StrongEmphasis':
       case 'Emphasis':
