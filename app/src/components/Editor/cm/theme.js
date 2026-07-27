@@ -417,31 +417,35 @@ export const cinderTheme = EditorView.theme({
   '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: '2px' },
   '.cm-live-table del': { color: 'var(--text-muted)' },
   '.cm-live-table .cm-live-link': { color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'text' },
-  '.cm-live-table .cm-cell-editing': {
-    outline: '2px solid var(--accent-blue)',
-    outlineOffset: '-2px',
-    background: 'var(--bg-elevated)',
-    whiteSpace: 'pre-wrap',
+  '.cm-live-table .cm-cell-editing': { background: 'var(--bg-elevated)', padding: '0' },
+  // The cell editor: an <input> that fills the cell and inherits its look, so editing
+  // stays visually in-place (only this cell shows its raw text).
+  '.cm-cell-input': {
+    width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none',
+    background: 'transparent', color: 'var(--text-primary)', font: 'inherit',
+    padding: '6px 12px',
   },
-  // Editable-table wrapper + hover +/- controls (cm/tables.js).
+  // Editable-table wrapper + hover +/- controls (cm/tables.js). The controls sit
+  // attached to the table's bottom and right edges (like the dock's show/hide tab),
+  // straddling the border, and appear on hover.
   '.cm-table-wrap': { position: 'relative', width: 'fit-content', maxWidth: '100%' },
   '.cm-table-rowctl': {
-    position: 'absolute', left: '0', right: '0', bottom: '-13px',
-    display: 'flex', justifyContent: 'center', gap: '5px',
+    position: 'absolute', left: '0', right: '0', bottom: '0', transform: 'translateY(50%)',
+    display: 'flex', justifyContent: 'center', gap: '4px',
     opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
   },
   '.cm-table-colctl': {
-    position: 'absolute', top: '0', bottom: '0', right: '-13px',
-    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '5px',
+    position: 'absolute', top: '0', bottom: '0', right: '0', transform: 'translateX(50%)',
+    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px',
     opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
   },
   '.cm-table-wrap:hover .cm-table-rowctl, .cm-table-wrap:hover .cm-table-colctl': {
     opacity: '1', pointerEvents: 'auto',
   },
   '.cm-table-btn': {
-    width: '18px', height: '18px', padding: '0', borderRadius: '50%',
-    border: '1px solid var(--border-strong)', background: 'var(--bg-elevated)',
-    color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
+    width: '20px', height: '16px', padding: '0', borderRadius: '4px',
+    border: '1px solid var(--border-strong)', background: 'var(--bg-surface)',
+    color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   '.cm-table-btn:hover': { background: 'var(--bg-hover)', color: 'var(--text-primary)', borderColor: 'var(--accent-blue)' },

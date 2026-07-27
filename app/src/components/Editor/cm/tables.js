@@ -25,7 +25,9 @@ function mkBtn(label, title, onClick) {
   b.className = 'cm-table-btn'
   b.textContent = label
   b.title = title
-  b.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); onClick() })
+  // pointerdown (not mousedown) + preventDefault keeps focus off CM and out of any
+  // active cell input, so the button fires without ending the edit session oddly.
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); onClick() })
   return b
 }
 
@@ -34,80 +36,115 @@ class TableWidget extends WidgetType {
   // re-renders (with a current `from`) when an edit above shifts the table.
   constructor(md, from) { super(); this.md = md; this.from = from }
   eq(other) { return other.md === this.md && other.from === this.from }
-  ignoreEvent() { return false } // we handle mousedown ourselves
-
-  // Replace the table's source range with rebuilt markdown.
-  apply(view, newMd) {
-    if (newMd && newMd !== this.md) {
-      view.dispatch({ changes: { from: this.from, to: this.from + this.md.length, insert: newMd } })
-      view.focus()
-    }
-  }
-
-  editCell(view, cell, grid) {
-    const line = Number(cell.dataset.line)
-    const col = Number(cell.dataset.col)
-    const raw = line === 0 ? (grid.headers[col] ?? '') : (grid.rows[line - 2]?.[col] ?? '')
-
-    cell.textContent = raw
-    cell.contentEditable = 'true'
-    cell.classList.add('cm-cell-editing')
-    cell.focus()
-    const sel = window.getSelection?.()
-    if (sel) { const r = document.createRange(); r.selectNodeContents(cell); sel.removeAllRanges(); sel.addRange(r) }
-
-    let done = false
-    const revert = () => {
-      cell.contentEditable = 'false'
-      cell.classList.remove('cm-cell-editing')
-      cell.textContent = ''
-      renderInlineInto(cell, raw)
-    }
-    const commit = () => {
-      if (done) return
-      done = true
-      const next = setCell(this.md, line, col, cell.textContent || '')
-      if (next !== this.md) this.apply(view, next) // dispatch → whole table re-renders
-      else revert()
-    }
-    cell.addEventListener('blur', commit, { once: true })
-    cell.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); cell.blur() }
-      else if (e.key === 'Escape') { e.preventDefault(); done = true; revert() }
-    })
-  }
+  ignoreEvent() { return false } // we handle the widget's own events
 
   toDOM(view) {
-    const grid = parseTable(this.md)
     const wrap = document.createElement('div')
     wrap.className = 'cm-table-wrap'
+    // The whole widget is a non-editable island as far as CM is concerned. Form
+    // controls (the cell <input> and the +/- buttons) inside it still work — the
+    // browser handles them — but their keystrokes never reach CodeMirror.
+    wrap.contentEditable = 'false'
+
     const table = renderTableDOM(this.md)
     wrap.appendChild(table)
-    if (!grid) return wrap // malformed — no editing affordances
+    if (!parseTable(this.md)) return wrap // malformed — no editing affordances
 
-    table.addEventListener('mousedown', (e) => {
-      const cell = e.target.closest?.('th, td')
-      if (!cell || cell.dataset.line == null || cell.isContentEditable) return
+    // ── editing session ──────────────────────────────────────────────
+    // Cell edits accumulate in `working` (a local copy of the markdown) and update
+    // the DOM in place, WITHOUT touching the document — so the widget isn't recreated
+    // mid-edit and you can move between cells freely. The whole session is written
+    // back to the document in one transaction when focus leaves the table.
+    let working = this.md
+    let active = null // { cell, line, col, input }
+    const self = this
+
+    const cellRaw = (line, col) => {
+      const g = parseTable(working)
+      if (!g) return ''
+      return line === 0 ? (g.headers[col] ?? '') : (g.rows[line - 2]?.[col] ?? '')
+    }
+    const renderRendered = (cell, line, col) => {
+      cell.textContent = ''
+      renderInlineInto(cell, cellRaw(line, col))
+      cell.classList.remove('cm-cell-editing')
+    }
+    const commitActive = () => {
+      if (!active) return
+      const { cell, line, col, input } = active
+      working = setCell(working, line, col, input.value)
+      active = null
+      renderRendered(cell, line, col)
+    }
+    const endSession = () => {
+      commitActive()
+      if (working !== self.md) {
+        view.dispatch({ changes: { from: self.from, to: self.from + self.md.length, insert: working } })
+      }
+      view.focus()
+    }
+    const applyStructural = (newMd) => {
+      // +/- controls: fold in any active edit, then dispatch the structural change.
+      commitActive()
+      working = newMd
+      endSession()
+    }
+
+    const startEdit = (cell, line, col) => {
+      if (active && active.cell === cell) return
+      commitActive()
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'cm-cell-input'
+      input.value = cellRaw(line, col)
+      cell.textContent = ''
+      cell.appendChild(input)
+      cell.classList.add('cm-cell-editing')
+      input.focus()
+      input.select()
+      active = { cell, line, col, input }
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); endSession() }
+        else if (e.key === 'Escape') { e.preventDefault(); const a = active; active = null; renderRendered(a.cell, a.line, a.col) }
+        else if (e.key === 'Tab') { e.preventDefault(); focusSibling(cell, e.shiftKey ? -1 : 1) }
+      })
+    }
+
+    const cellsInOrder = () => Array.from(table.querySelectorAll('th, td'))
+    const focusSibling = (cell, dir) => {
+      const cells = cellsInOrder()
+      const i = cells.indexOf(cell)
+      const next = cells[i + dir]
+      if (next) startEdit(next, Number(next.dataset.line), Number(next.dataset.col))
+      else endSession()
+    }
+
+    // One handler for the whole widget: never let a click place a CM caret in the
+    // table (that was the "caret before/after the table" corruption). Clicks on a
+    // cell open its editor; clicks on an open input are left alone.
+    wrap.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.cm-table-btn') || e.target.tagName === 'INPUT') return
       e.preventDefault()
-      this.editCell(view, cell, grid)
+      const cell = e.target.closest?.('th, td')
+      if (cell && cell.dataset.line != null) startEdit(cell, Number(cell.dataset.line), Number(cell.dataset.col))
     })
 
-    // Row controls (bottom edge): add a row / delete the last row.
+    // Focus left the whole table → commit the session to the document.
+    wrap.addEventListener('focusout', () => {
+      setTimeout(() => { if (active && !wrap.contains(document.activeElement)) endSession() }, 0)
+    })
+
+    const grid = parseTable(this.md)
     const rowCtl = document.createElement('div')
     rowCtl.className = 'cm-table-rowctl'
-    rowCtl.appendChild(mkBtn('+', 'Add row', () => this.apply(view, insertRow(this.md, grid.rows.length - 1))))
-    if (grid.rows.length > 0) {
-      rowCtl.appendChild(mkBtn('−', 'Delete last row', () => this.apply(view, removeRow(this.md, grid.rows.length - 1))))
-    }
+    rowCtl.appendChild(mkBtn('+', 'Add row', () => applyStructural(insertRow(working, parseTable(working).rows.length - 1))))
+    if (grid.rows.length > 0) rowCtl.appendChild(mkBtn('−', 'Delete last row', () => applyStructural(removeRow(working, parseTable(working).rows.length - 1))))
     wrap.appendChild(rowCtl)
 
-    // Column controls (right edge): add a column / delete the last column.
     const colCtl = document.createElement('div')
     colCtl.className = 'cm-table-colctl'
-    colCtl.appendChild(mkBtn('+', 'Add column', () => this.apply(view, insertColumn(this.md, grid.headers.length - 1))))
-    if (grid.headers.length > 1) {
-      colCtl.appendChild(mkBtn('−', 'Delete last column', () => this.apply(view, removeColumn(this.md, grid.headers.length - 1))))
-    }
+    colCtl.appendChild(mkBtn('+', 'Add column', () => applyStructural(insertColumn(working, parseTable(working).headers.length - 1))))
+    if (grid.headers.length > 1) colCtl.appendChild(mkBtn('−', 'Delete last column', () => applyStructural(removeColumn(working, parseTable(working).headers.length - 1))))
     wrap.appendChild(colCtl)
 
     return wrap
@@ -166,5 +203,11 @@ export const liveTables = StateField.define({
     }
     return value
   },
-  provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
+  provide: (f) => [
+    EditorView.decorations.from(f, (v) => v.deco),
+    // Atomic: the caret can't land inside (or at the raw edges of) a rendered table,
+    // so you can't accidentally type into the table's line and corrupt it. Editing
+    // happens only through the widget's cell inputs / +- controls.
+    EditorView.atomicRanges.of((view) => view.state.field(liveTables).deco),
+  ],
 })
