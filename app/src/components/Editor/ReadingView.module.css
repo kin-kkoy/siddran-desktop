@@ -110,6 +110,9 @@
 .reading th { background: var(--bg-surface-alt); font-weight: 600 }
 
 .reading u { text-decoration: underline }
+/* Match the editor's muted strikethrough colour (.cm-strike in cm/theme.js) so
+   struck-through text reads the same greyed-out in read mode as in write mode. */
+.reading del, .reading s { color: var(--text-muted) }
 .reading mark { background: rgba(240, 184, 64, 0.22); color: inherit; border-radius: 3px; padding: 0 2px }
 
 :global(.rv-blank) { margin: 0 }
