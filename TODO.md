@@ -158,3 +158,27 @@ A running list of what's implemented and what's planned. Add freely.
 ## ❓ Things to verify in `tauri:dev`
 - [x] PDF renders in the iframe (✅ confirmed working) — if a future PDF fails, may need pdf.js.
 - [ ] Rust `bag_read_bytes` compiles + reads (used by PDF/image picker attach).
+
+---
+
+## 🔜 Requested 2026-07-21 — deferred until after the Android app
+
+Queued deliberately: all four are Notes/theme features, and Notes are out of scope
+for mobile (tasks + calendar only), so none of them block or are blocked by the
+phone work.
+
+- [ ] **Notes list as a sidebar accordion** — when in NotesHub, the note list shows
+      as a dropdown/accordion in the sidebar; expanding it gives the same view you
+      get inside a NotePage.
+- [ ] **Draggable / re-orderable note tabs** in NotePage. (`useDragReorder.js`
+      already exists and is used by NotesHub — likely reusable here.)
+- [ ] **Persist accordion expand/collapse state** across remount *and* app restart.
+- [ ] **Background-brightness slider** in the Settings modal themes section,
+      applying on every page (NotesHub, NotePage, TasksHub, Calendar, …).
+
+**Decide once, when starting these:** put the new persisted UI state (accordion
+open/closed, tab order, brightness) in **localStorage**, not `settings.siddran`.
+Rationale: `exportVault()` deliberately excludes settings from sync, and per-device
+UI state *should* stay per-device — a phone and a laptop want different tab sets and
+different screen brightness. This matches the existing pattern (`noteFoldsCache.js`,
+`cinder_cal_day_2col`, `tasksLayoutMode`).
