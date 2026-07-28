@@ -110,12 +110,12 @@ function Backpack() {
       <path className={styles.body}
         d="M78 152 Q78 126 106 126 H194 Q222 126 222 152 L230 278 Q232 310 198 310 H102 Q68 310 70 278 Z" />
 
-      {/* Lid seam + zipper. No hover animation: the pull used to slide straight
-          left while the seam curves, so it left its own line. It now sits fixed at
-          the seam's midpoint, which is exactly on the curve. */}
+      {/* Lid seam + zipper. The pull rests at the LEFT end and travels the full seam
+          on hover. It rides the curve via CSS offset-path (see the module CSS) rather
+          than a straight translate, which is what used to make it leave its own line. */}
       <path className={styles.zipTrack} d="M80 158 Q150 186 220 158" />
       <path className={styles.zipTeeth} d="M80 158 Q150 186 220 158" />
-      <g transform="translate(150 172)">
+      <g className={styles.pull}>
         <circle r="6.5" fill="none" stroke="url(#amber)" strokeWidth="3" />
         <rect x="-3" y="7" width="6" height="15" rx="3" fill="url(#amber)" />
       </g>
@@ -124,6 +124,10 @@ function Backpack() {
       <path className={styles.pocket}
         d="M106 232 H194 Q208 232 208 246 V276 Q208 292 192 292 H108 Q92 292 92 276 V246 Q92 232 106 232 Z" />
       <rect className={styles.clasp} x="140" y="224" width="20" height="13" rx="4" />
+      {/* star badge, centred on the pocket */}
+      <path className={styles.star}
+        d="M150 249 L153.2 257.6 L162.4 258 L155.1 263.7 L157.6 272.5 L150 267.4
+           L142.4 272.5 L144.9 263.7 L137.6 258 L146.8 257.6 Z" />
     </svg>
   )
 }

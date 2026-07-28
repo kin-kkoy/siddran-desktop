@@ -50,6 +50,22 @@
 /* zipper */
 .zipTrack { fill: none; stroke: #0c0c16; stroke-width: 7; stroke-linecap: round; }
 .zipTeeth { fill: none; stroke: #6b6b8f; stroke-width: 5; stroke-dasharray: 1.5 4; stroke-linecap: round; }
+.star { fill: var(--amber); }
+
+/* The pull rides the seam itself: offset-path puts it ON the curve, so travelling
+   0% -> 100% traces the zipper exactly instead of cutting a straight chord. */
+.pull {
+  offset-path: path('M80 158 Q150 186 220 158');
+  offset-rotate: 0deg;
+  offset-distance: 0%;
+  transition: offset-distance .65s cubic-bezier(.34, 1.1, .5, 1);
+}
+.pack:hover .pull { offset-distance: 100%; }
+/* Without offset-path support, park it at the seam's left end rather than at 0,0. */
+@supports not (offset-path: path('M0 0')) {
+  .pull { transform: translate(80px, 158px); }
+  .pack:hover .pull { transform: translate(220px, 158px); }
+}
 
 
 /* ── header ─────────────────────────────────────────────────────── */
@@ -234,5 +250,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .primary, .ghost, .bagRow, .bagGo { transition: none; }
+  .primary, .ghost, .bagRow, .bagGo, .pull { transition: none; }
+  .pack:hover .pull { offset-distance: 0%; }
 }

@@ -1014,6 +1014,23 @@ function App() {
         {/* Settings popup (rendered at app level, controlled by context) */}
         {unlocked && <SettingsPopup />}
 
+        {/* TEMPORARY — replays the launch splash on demand so it can be reviewed in
+            the browser (it normally only plays once per session, on app start).
+            Remove once the splash artwork is settled. */}
+        <button
+          type="button"
+          onClick={() => { try { sessionStorage.removeItem('siddran_splash_shown') } catch { /* ignore */ } setShowSplash(true) }}
+          title="Replay the launch animation (temporary)"
+          style={{
+            position: 'fixed', left: 12, bottom: 12, zIndex: 1500,
+            padding: '6px 11px', borderRadius: 7, cursor: 'pointer',
+            border: '1px dashed var(--border-strong)', background: 'var(--bg-elevated)',
+            color: 'var(--text-muted)', font: 'inherit', fontSize: 12,
+          }}
+        >
+          ▶ Replay splash
+        </button>
+
         {/* Command palette (Ctrl/Cmd+Shift+P) — inside Router for navigation commands */}
         <CommandPalette notes={notes} tasks={tasks} addNote={addNote} closeBag={closeBag} />
 
