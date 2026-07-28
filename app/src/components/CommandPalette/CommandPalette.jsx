@@ -35,7 +35,7 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { openSettings } = useSettings()
+  const { openSettings, settings, updateSetting } = useSettings()
   const { collapsed, setCollapsed } = useSidebar()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -111,6 +111,12 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
         run: () => { navigate('/tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('siddran:new-task')), 80) },
       },
       {
+        id: 'app-note-layout',
+        title: settings.noteLayout === 'book' ? 'Note layout: switch to Scroll' : 'Note layout: switch to Book',
+        keywords: 'landscape pages spread reading columns', icon: LuBookOpen, kind: 'nav', hint: 'app',
+        run: () => updateSetting('noteLayout', settings.noteLayout === 'book' ? 'scroll' : 'book'),
+      },
+      {
         id: 'app-sidebar', title: collapsed ? 'Show sidebar' : 'Hide sidebar',
         keywords: 'toggle panel', icon: LuPanelLeft, kind: 'nav', hint: 'app', run: () => setCollapsed(!collapsed),
       },
@@ -127,7 +133,7 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
       })
     }
     return cmds
-  }, [openSettings, collapsed, setCollapsed, closeBag, navigate, onNotePage, runSync, newNote, toggleViewMode])
+  }, [openSettings, settings.noteLayout, updateSetting, collapsed, setCollapsed, closeBag, navigate, onNotePage, runSync, newNote, toggleViewMode])
 
   // "Open note/task: <title>" commands, built from the live note/task lists. Opening
   // a note routes to it; opening a task uses the ?task= deep-link TasksHub already

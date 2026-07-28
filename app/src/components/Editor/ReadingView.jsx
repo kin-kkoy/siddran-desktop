@@ -1,4 +1,6 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
+import { useSettings } from '../../contexts/SettingsContext'
 import { markdownToHtml } from './utils/markdownToHtml'
 import { CHEVRON_SVG } from './cm/fold'
 import { readFolds, writeFolds } from '../../hooks/noteFoldsCache'
@@ -42,6 +44,66 @@ function highlightComments(root, threads, cleanups) {
 function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink, onCheckboxToggle, comments, onCommentClick }) {
   const ref = useRef(null)
   const html = useMemo(() => markdownToHtml(markdown || ''), [markdown])
+
+  // ── Book layout ──────────────────────────────────────────────────
+  // Two pages side by side, fixed height, paged a spread at a time. The browser's
+  // multi-column engine does the flow (including cutting mid-sentence at a page
+  // edge); paging is just a horizontal shift of that column strip.
+  const { settings } = useSettings()
+  const book = settings.noteLayout === 'book'
+  const pageH = settings.bookPageHeight || 620
+  const turn = settings.bookTurn || 'fade'
+  const [spread, setSpread] = useState(0)
+  const [step, setStep] = useState(0)
+  const [total, setTotal] = useState(1)
+  const [fading, setFading] = useState(false)
+
+  // Re-measure whenever the content or the page box changes.
+  useLayoutEffect(() => {
+    if (!book) { setStep(0); setTotal(1); return }
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0
+      const s = el.clientWidth + gap
+      if (!s) return
+      setStep(s)
+      setTotal(Math.max(1, Math.round((el.scrollWidth + gap) / s)))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [book, html, pageH, settings.noteEditorWidth])
+
+  useLayoutEffect(() => { setSpread(0) }, [noteId, book])
+  useEffect(() => { setSpread((s) => Math.min(s, Math.max(0, total - 1))) }, [total])
+
+  const go = useCallback((d) => {
+    setSpread((cur) => {
+      const next = Math.max(0, Math.min(cur + d, total - 1))
+      if (next === cur) return cur
+      if (turn === 'fade') {
+        // Cross-fade in place rather than panning — a pan reads as a filmstrip.
+        setFading(true)
+        setTimeout(() => { setSpread(next); setFading(false) }, 110)
+        return cur
+      }
+      return next
+    })
+  }, [total, turn])
+
+  useEffect(() => {
+    if (!book) return
+    const onKey = (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(e.key)) return
+      if (e.target?.closest?.('input, textarea, [contenteditable="true"]')) return
+      e.preventDefault()
+      go(e.key === 'ArrowRight' || e.key === 'PageDown' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [book, go])
 
   const handleClick = (e) => {
     const cm = e.target.closest?.('.rv-comment')
@@ -192,7 +254,34 @@ function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink,
     return () => cleanups.forEach((fn) => fn())
   })
 
-  return <div ref={ref} className={styles.reading} onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />
+  const content = (
+    <div
+      ref={ref}
+      className={`${styles.reading} ${book ? styles.pages : ''} ${fading ? styles.fading : ''}`}
+      style={book ? { height: pageH, transform: `translateX(${-spread * step}px)` } : undefined}
+      onClick={handleClick}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+  if (!book) return content
+
+  return (
+    <div className={styles.bookOuter}>
+      <div className={styles.viewport} style={{ height: pageH }}>
+        {content}
+        <div className={styles.spine} aria-hidden="true" />
+      </div>
+      <div className={styles.bookNav}>
+        <button type="button" className={styles.pageBtn} onClick={() => go(-1)} disabled={spread === 0} aria-label="Previous page">
+          <LuChevronLeft size={15} /> Previous
+        </button>
+        <span className={styles.pageNo}>{spread * 2 + 1}–{spread * 2 + 2} of ~{total * 2}</span>
+        <button type="button" className={styles.pageBtn} onClick={() => go(1)} disabled={spread >= total - 1} aria-label="Next page">
+          Next <LuChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default ReadingView

@@ -32,6 +32,9 @@ const DEFAULTS = {
   rememberNoteState: true,
   centerNowLine: true,
   bgBrightness: 0, // background lightness offset, applied on every page; -20..+20
+  noteLayout: 'scroll', // reading-view layout: 'scroll' (continuous) | 'book' (two pages)
+  bookPageHeight: 620,  // page height in book layout
+  bookTurn: 'fade',     // page-turn style: 'fade' | 'instant'
 }
 
 // ── Color utilities ────────────────────────────────────────────────

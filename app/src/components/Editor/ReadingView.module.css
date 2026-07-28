@@ -256,3 +256,75 @@
 }
 :global(.rv-pre):hover :global(.rv-copy-btn) { opacity: 1 }
 :global(.rv-copy-btn):hover { color: var(--text-primary) }
+
+/* ── Book layout ──────────────────────────────────────────────────────
+   Two pages side by side at a fixed height. The browser's multi-column engine
+   handles the flow; paging shifts the whole column strip horizontally. */
+.bookOuter { width: 100%; }
+
+.viewport {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 28px 34px;
+  background: var(--bg-surface);
+}
+
+.pages {
+  column-count: 2;
+  column-gap: 56px;
+  column-fill: auto;              /* fill the left page before the right */
+  transition: opacity .12s linear;
+}
+.pages.fading { opacity: 0; }
+
+/* Split at ANY visual line. Browsers default to orphans/widows: 2, which refuses to
+   leave a lone line at a page bottom and shunts the whole paragraph forward instead,
+   leaving odd white space. 1/1 lets a paragraph break exactly where the page fills. */
+.pages, .pages p, .pages li, .pages blockquote { orphans: 1; widows: 1; }
+
+/* Don't strand a heading at the foot of a page, and keep a table intact. */
+.pages h1, .pages h2, .pages h3 { break-after: avoid; }
+.pages table, .pages pre { break-inside: avoid; }
+
+.spine {
+  position: absolute;
+  top: 22px; bottom: 22px; left: 50%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--border-default) 12%, var(--border-default) 88%, transparent);
+  pointer-events: none;
+}
+
+.bookNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.pageBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pageBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+.pageBtn:disabled { opacity: .35; cursor: default; }
+
+.pageNo {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}

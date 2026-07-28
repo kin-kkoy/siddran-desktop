@@ -258,6 +258,51 @@ function InterfaceTab({ settings, updateSetting }) {
         </div>
       </SettingRow>
 
+      {/* Reading layout: continuous scroll vs two-page book */}
+      <SettingRow
+        label="Note Layout"
+        description="How a note is laid out in reading mode — one continuous column, or two pages side by side like a book."
+      >
+        <SegmentedControl
+          options={[
+            { value: 'scroll', label: 'Scroll' },
+            { value: 'book', label: 'Book' },
+          ]}
+          value={settings.noteLayout ?? 'scroll'}
+          onChange={(v) => updateSetting('noteLayout', v)}
+        />
+      </SettingRow>
+
+      {settings.noteLayout === 'book' && (
+        <>
+          <SettingRow label="Page Height" description="Height of a page in book layout.">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="range"
+                className={styles.starSlider}
+                min={360} max={900} step={20}
+                value={settings.bookPageHeight ?? 620}
+                onChange={e => updateSetting('bookPageHeight', parseInt(e.target.value, 10))}
+              />
+              <span style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: 13 }}>
+                {settings.bookPageHeight ?? 620}px
+              </span>
+            </div>
+          </SettingRow>
+
+          <SettingRow label="Page Turn" description="How turning to the next spread animates.">
+            <SegmentedControl
+              options={[
+                { value: 'fade', label: 'Fade' },
+                { value: 'instant', label: 'Instant' },
+              ]}
+              value={settings.bookTurn ?? 'fade'}
+              onChange={(v) => updateSetting('bookTurn', v)}
+            />
+          </SettingRow>
+        </>
+      )}
+
       {/* Note editor width */}
       <SettingRow
         label="Note Editor Width"
