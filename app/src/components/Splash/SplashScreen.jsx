@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_TIMING, computeVars, totalDuration } from './splashTiming'
 import styles from './SplashScreen.module.css'
 
-// Launch animation: a zippered Bag drops in, the zipper pull slides across, and a
-// burst of sparkles and arcs flies up out of the opened mouth — then the whole scene
-// fades to reveal the app. (No zoom-into-the-bag; that read as disorienting.)
+// Launch animation: a zippered Bag drops in, the zipper pull slides across, the mouth
+// lights up, and a burst of sparkles flies up out of it — then the whole scene fades
+// to reveal the app. (No zoom-into-the-bag; that read as disorienting.)
 // Plays once per app session (gated by the caller via sessionStorage).
+//
+// Timing is fully parameterized (see splashTiming.js) and applied as CSS variables so
+// the dev tuner (SplashDevPanel) can tweak the feel live. All values are milliseconds.
 
 // Sparkle burst. Each particle flies from the bag's mouth along its own vector, with
 // its own delay/size/spin, so the group reads as a firework rather than one shape
-// scaling up. `arc` particles are the curved streaks; the rest are 4-point sparkles.
+// scaling up. All particles are 4-point sparkles.
 const STAR = 'M0 -9 C0.9 -3 3 -0.9 9 0 C3 0.9 0.9 3 0 9 C-0.9 3 -3 0.9 -9 0 C-3 -0.9 -0.9 -3 0 -9 Z'
-const ARC = 'M-3 7 Q3 -5 1 -19'
 const AMBER = '#f0b840'
 const CREAM = '#ffe9b0'
 const VIOLET = '#c9a2ff'
@@ -19,29 +21,26 @@ const VIOLET = '#c9a2ff'
 const PARTICLES = [
   // outer ring — the big, far-flung ones
   { dx: -126, dy: -58, sc: 1.7, rot: -35, d: 0, fill: AMBER },
-  { dx: -96, dy: -108, sc: 1.3, rot: 25, d: 90, arc: true, stroke: CREAM },
+  { dx: -96, dy: -108, sc: 1.3, rot: 25, d: 90, fill: CREAM },
   { dx: -68, dy: -138, sc: 2.1, rot: 15, d: 40, fill: CREAM },
-  { dx: -36, dy: -156, sc: 1.4, rot: -10, d: 130, arc: true, stroke: AMBER },
+  { dx: -36, dy: -156, sc: 1.4, rot: -10, d: 130, fill: AMBER },
   { dx: -6, dy: -164, sc: 2.3, rot: 20, d: 20, fill: AMBER },
-  { dx: 26, dy: -156, sc: 1.3, rot: -22, d: 120, arc: true, stroke: VIOLET },
+  { dx: 26, dy: -156, sc: 1.3, rot: -22, d: 120, fill: VIOLET },
   { dx: 56, dy: -140, sc: 1.9, rot: 35, d: 60, fill: CREAM },
-  { dx: 88, dy: -114, sc: 1.4, rot: -30, d: 150, arc: true, stroke: AMBER },
+  { dx: 88, dy: -114, sc: 1.4, rot: -30, d: 150, fill: AMBER },
   { dx: 114, dy: -84, sc: 1.8, rot: 40, d: 70, fill: VIOLET },
   { dx: 134, dy: -46, sc: 1.3, rot: -45, d: 170, fill: AMBER },
   // low, wide pair
   { dx: -142, dy: -16, sc: 1.2, rot: 45, d: 200, fill: CREAM },
   { dx: 146, dy: -12, sc: 1.25, rot: -40, d: 190, fill: CREAM },
   // inner ring — smaller, closer, filling the gaps
-  { dx: -58, dy: -92, sc: 1.1, rot: 12, d: 230, arc: true, stroke: VIOLET },
-  { dx: -24, dy: -112, sc: 1.35, rot: -18, d: 100, arc: true, stroke: CREAM },
+  { dx: -58, dy: -92, sc: 1.1, rot: 12, d: 230, fill: VIOLET },
+  { dx: -24, dy: -112, sc: 1.35, rot: -18, d: 100, fill: CREAM },
   { dx: 12, dy: -104, sc: 1.15, rot: 30, d: 260, fill: AMBER },
   { dx: 44, dy: -96, sc: 1.5, rot: -25, d: 180, fill: AMBER },
   { dx: -90, dy: -60, sc: 1.2, rot: 20, d: 250, fill: VIOLET },
-  { dx: 92, dy: -58, sc: 1.3, rot: -12, d: 215, arc: true, stroke: CREAM },
+  { dx: 92, dy: -58, sc: 1.3, rot: -12, d: 215, fill: CREAM },
 ]
-//
-// Timing is fully parameterized (see splashTiming.js) and applied as CSS variables so
-// the dev tuner (SplashDevPanel) can tweak the feel live. All values are milliseconds.
 
 export default function SplashScreen({ onDone, timing }) {
   const t = { ...DEFAULT_TIMING, ...(timing || {}) }
@@ -84,10 +83,24 @@ export default function SplashScreen({ onDone, timing }) {
               <stop offset="0.35" stopColor="#f0b840" />
               <stop offset="1" stopColor="#f0b840" stopOpacity="0" />
             </radialGradient>
+            {/* soft bloom for the mouth — the sparkles read as coming OUT of light */}
+            <filter id="siddran-mouth-bloom" x="-120%" y="-260%" width="340%" height="620%">
+              <feGaussianBlur stdDeviation="9" />
+            </filter>
+            <filter id="siddran-core-bloom" x="-80%" y="-300%" width="260%" height="700%">
+              <feGaussianBlur stdDeviation="3.5" />
+            </filter>
           </defs>
 
-          {/* interior glow — revealed as the mouth opens, then blooms for the dive */}
-          <ellipse className={styles.glow} cx="120" cy="104" rx="66" ry="20" fill="url(#siddran-bag-glow)" />
+          {/* Mouth light, in three layers: a wide blurred halo above the opening, a
+              tighter interior glow, and a hot core right along the seam. */}
+          <g className={styles.glow}>
+            <ellipse cx="120" cy="100" rx="86" ry="30" fill="url(#siddran-bag-glow)"
+              filter="url(#siddran-mouth-bloom)" opacity="0.85" />
+            <ellipse cx="120" cy="104" rx="62" ry="17" fill="url(#siddran-bag-glow)" />
+            <path d="M62 105 H178" stroke="#fff6dd" strokeWidth="5" strokeLinecap="round"
+              filter="url(#siddran-core-bloom)" opacity="0.95" />
+          </g>
 
           {/* Carry handle — feet land on the body's top edge so it reads attached. */}
           <path className={styles.handle} d="M98 88 C98 54 142 54 142 88"
@@ -122,9 +135,7 @@ export default function SplashScreen({ onDone, timing }) {
                 className={styles.burst}
                 style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--sc': p.sc, '--rot': `${p.rot}deg`, '--pd': `${p.d}ms` }}
               >
-                {p.arc
-                  ? <path d={ARC} fill="none" stroke={p.stroke} strokeWidth="3" strokeLinecap="round" />
-                  : <path d={STAR} fill={p.fill} />}
+                <path d={STAR} fill={p.fill} />
               </g>
             ))}
           </g>

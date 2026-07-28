@@ -67,10 +67,10 @@
 }
 
 @keyframes splashGlow {
-  0%   { opacity: 0; transform: scaleY(0.15); }
-  40%  { opacity: 0.95; transform: scaleY(1); }
-  70%  { opacity: 0.8; transform: scale(1.15); }
-  100% { opacity: 0.5; transform: scale(1.05); }
+  0%   { opacity: 0; transform: scaleY(0.08); }
+  35%  { opacity: 1; transform: scaleY(1); }
+  55%  { opacity: 1; transform: scale(1.16); }   /* flares as the sparkles leave */
+  100% { opacity: 0.85; transform: scale(1.04); }
 }
 
 @keyframes splashLip {
