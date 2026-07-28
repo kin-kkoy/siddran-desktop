@@ -7,8 +7,11 @@ import { readSyncConfig, writeSyncConfig, readLastSync, writeLastSync } from '..
 import styles from './SettingsPopup.module.css'
 
 function SettingsPopup() {
-  const { settings, updateSetting, isSettingsOpen, closeSettings } = useSettings()
-  const [activeTab, setActiveTab] = useState('interface')
+  // The active tab lives in context so the command palette can open Settings
+  // straight to a section ("Settings: Sync").
+  const { settings, updateSetting, isSettingsOpen, closeSettings, settingsTab, setSettingsTab } = useSettings()
+  const activeTab = settingsTab
+  const setActiveTab = setSettingsTab
 
   if (!isSettingsOpen) return null
 

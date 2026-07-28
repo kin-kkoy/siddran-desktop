@@ -1015,7 +1015,7 @@ function App() {
         {unlocked && <SettingsPopup />}
 
         {/* Command palette (Ctrl/Cmd+Shift+P) — inside Router for navigation commands */}
-        <CommandPalette notes={notes} tasks={tasks} />
+        <CommandPalette notes={notes} tasks={tasks} addNote={addNote} closeBag={closeBag} />
 
         {/* Toast notifications (always available) */}
         <ToastContainer />

@@ -1,9 +1,18 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { LuStickyNote, LuListTodo, LuCalendarDays, LuShapes } from 'react-icons/lu'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  LuStickyNote, LuListTodo, LuCalendarDays, LuShapes, LuSettings, LuPalette,
+  LuRefreshCw, LuFilePlus, LuCirclePlus, LuPanelLeft, LuBookOpen, LuFolderOpen,
+} from 'react-icons/lu'
 import { EDITOR_COMMANDS, WIKILINK_COMMANDS } from '../Editor/editorCommands'
 import { getActiveEditor } from '../Editor/activeEditor'
 import { useModalPresence } from '../../utils/modalPresence'
+import { useSettings } from '../../contexts/SettingsContext'
+import { useSidebar } from '../../contexts/SidebarContext'
+import { readViewMode } from '../../hooks/noteViewModeCache'
+import { readSyncConfig, writeLastSync } from '../../hooks/syncConfig'
+import { syncNow } from '../../desktop/sync/client'
+import { toast } from '../../utils/toast'
 import { rankCommands } from './fuzzy'
 import styles from './CommandPalette.module.css'
 
@@ -22,8 +31,12 @@ const NAV_COMMANDS = [
 const EDITOR_LIST = [...EDITOR_COMMANDS, ...WIKILINK_COMMANDS].map((c) => ({ ...c, kind: 'editor' }))
 const NAV_LIST = NAV_COMMANDS.map((c) => ({ ...c, kind: 'nav' }))
 
-export default function CommandPalette({ notes = [], tasks = [] }) {
+export default function CommandPalette({ notes = [], tasks = [], addNote, closeBag }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { openSettings } = useSettings()
+  const { collapsed, setCollapsed } = useSidebar()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -50,6 +63,72 @@ export default function CommandPalette({ notes = [], tasks = [] }) {
 
   const hasEditor = !!capturedView.current
 
+  // ── app-level actions ────────────────────────────────────────────
+  const runSync = useCallback(async () => {
+    const { endpoint, token } = readSyncConfig()
+    if (!endpoint || !token) { openSettings('sync'); toast.error('Set the sync endpoint and token first.'); return }
+    const id = toast.loading ? toast.loading('Syncing…') : null
+    try {
+      const res = await syncNow({ endpoint, token })
+      writeLastSync(new Date().toISOString())
+      const n = res.conflicts?.length || 0
+      const msg = n ? `Synced — ${n} conflict${n === 1 ? '' : 's'} resolved.` : 'Synced.'
+      id ? toast.update(id, msg, 'success') : toast.success(msg)
+    } catch (e) {
+      const map = { 'no-bag': 'Open a Bag first.', unauthorized: 'The server rejected that token.' }
+      const msg = map[e?.code] || e?.message || 'Sync failed.'
+      id ? toast.update(id, msg, 'error') : toast.error(msg)
+    }
+  }, [openSettings])
+
+  const newNote = useCallback(() => {
+    if (!addNote) return
+    addNote('Untitled', (created) => { if (created?.id) navigate(`/notes/${created.id}`) })
+  }, [addNote, navigate])
+
+  // Read/write is driven by the `?view=` param on a note route (NotePane falls back
+  // to the per-note cache when it's absent), so the palette can flip it from here.
+  const toggleViewMode = useCallback(() => {
+    const noteId = /^\/notes\/([^/]+)/.exec(location.pathname)?.[1]
+    if (!noteId) return
+    const current = searchParams.get('view') || readViewMode(noteId)
+    const next = new URLSearchParams(searchParams)
+    next.set('view', current === 'read' ? 'write' : 'read')
+    setSearchParams(next, { replace: true })
+  }, [location.pathname, searchParams, setSearchParams])
+
+  const onNotePage = /^\/notes\/[^/]+/.test(location.pathname)
+  const appCommands = useMemo(() => {
+    const cmds = [
+      { id: 'app-settings', title: 'Open Settings', keywords: 'preferences options', icon: LuSettings, kind: 'nav', hint: 'app', run: () => openSettings() },
+      { id: 'app-settings-themes', title: 'Settings: Themes', keywords: 'colour color appearance brightness', icon: LuPalette, kind: 'nav', hint: 'app', run: () => openSettings('interface') },
+      { id: 'app-settings-sync', title: 'Settings: Sync', keywords: 'endpoint token worker', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: () => openSettings('sync') },
+      { id: 'app-sync-now', title: 'Sync now', keywords: 'push pull upload', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: runSync },
+      { id: 'app-new-note', title: 'New note', keywords: 'create add', icon: LuFilePlus, kind: 'nav', hint: 'app', run: newNote },
+      {
+        id: 'app-new-task', title: 'New task', keywords: 'create add todo', icon: LuCirclePlus, kind: 'nav', hint: 'app',
+        // Navigate first, then ask the (freshly mounted) add-task card to open.
+        run: () => { navigate('/tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('siddran:new-task')), 80) },
+      },
+      {
+        id: 'app-sidebar', title: collapsed ? 'Show sidebar' : 'Hide sidebar',
+        keywords: 'toggle panel', icon: LuPanelLeft, kind: 'nav', hint: 'app', run: () => setCollapsed(!collapsed),
+      },
+      {
+        id: 'app-bags', title: 'Close Bag — choose another',
+        keywords: 'switch vault open folder landing picker', icon: LuFolderOpen, kind: 'nav', hint: 'app',
+        run: async () => { if (closeBag) await closeBag(); navigate('/') },
+      },
+    ]
+    if (onNotePage) {
+      cmds.splice(4, 0, {
+        id: 'app-view-mode', title: 'Toggle read / write mode',
+        keywords: 'preview edit reading', icon: LuBookOpen, kind: 'nav', hint: 'note', run: toggleViewMode,
+      })
+    }
+    return cmds
+  }, [openSettings, collapsed, setCollapsed, closeBag, navigate, onNotePage, runSync, newNote, toggleViewMode])
+
   // "Open note/task: <title>" commands, built from the live note/task lists. Opening
   // a note routes to it; opening a task uses the ?task= deep-link TasksHub already
   // handles (fetches + opens its detail modal).
@@ -75,9 +154,9 @@ export default function CommandPalette({ notes = [], tasks = [] }) {
   // other page. The per-note/task commands are mixed in only once you've typed,
   // otherwise an empty palette would list every note and task.
   const pool = useMemo(() => {
-    const base = [...(hasEditor ? EDITOR_LIST : []), ...NAV_LIST]
+    const base = [...(hasEditor ? EDITOR_LIST : []), ...NAV_LIST, ...appCommands]
     return query.trim() ? [...base, ...dynamic] : base
-  }, [query, dynamic, hasEditor])
+  }, [query, dynamic, hasEditor, appCommands])
   const results = useMemo(() => rankCommands(query, pool).slice(0, 50), [query, pool])
 
   // Keep the highlighted row in range as the list shrinks.

@@ -45,6 +45,14 @@ function AddTaskCard({ addTask, addBundle, viewMode }) {
         return () => modalPresence.pop()
     }, [showForm])
 
+    // The command palette's "New task" navigates here and fires this event, so the
+    // create form opens without the user having to find the card.
+    useEffect(() => {
+        const open = () => setShowForm(true)
+        window.addEventListener('siddran:new-task', open)
+        return () => window.removeEventListener('siddran:new-task', open)
+    }, [])
+
     // ---------- for normal tasks ----------
     const handleSubmit = async (e) => {
         e.preventDefault()

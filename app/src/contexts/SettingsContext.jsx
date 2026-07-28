@@ -274,6 +274,7 @@ export function SettingsProvider({ children, authFetch, API, isAuthed }) {
   })
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState('interface')
   const dirtyRef = useRef(false)
   const settingsRef = useRef(settings)
 
@@ -330,7 +331,11 @@ export function SettingsProvider({ children, authFetch, API, isAuthed }) {
     setSettings(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  const openSettings = useCallback(() => setIsSettingsOpen(true), [])
+  // Optional tab lets callers (the command palette) open straight to a section.
+  const openSettings = useCallback((tab) => {
+    if (tab) setSettingsTab(tab)
+    setIsSettingsOpen(true)
+  }, [])
 
   // Save to backend only when closing the popup
   const closeSettings = useCallback(() => {
@@ -353,7 +358,9 @@ export function SettingsProvider({ children, authFetch, API, isAuthed }) {
     isSettingsOpen,
     openSettings,
     closeSettings,
-  }), [settings, updateSetting, isSettingsOpen, openSettings, closeSettings])
+    settingsTab,
+    setSettingsTab,
+  }), [settings, updateSetting, isSettingsOpen, openSettings, closeSettings, settingsTab])
 
   return (
     <SettingsContext.Provider value={value}>
