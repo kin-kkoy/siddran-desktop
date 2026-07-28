@@ -11,12 +11,10 @@
   animation: splashFade var(--fade-dur, 800ms) ease var(--fade-delay, 2100ms) forwards;
 }
 
-/* Centered scene; the dive zooms the whole thing INTO the bag's mouth. */
+/* Centered scene. The bag stays put — the reveal is the sparkle burst, not a zoom. */
 .stage {
   width: min(46vmin, 340px);
   height: min(46vmin, 340px);
-  transform-origin: 50% 40%;   /* the bag mouth */
-  animation: splashDive var(--dive-dur, 1300ms) cubic-bezier(0.7, 0, 0.7, 0.25) var(--dive-delay, 1400ms) forwards;
 }
 
 .bag {
@@ -27,7 +25,7 @@
   animation: splashBagIn var(--bagIn-dur, 700ms) cubic-bezier(0.18, 0.9, 0.3, 1.2) var(--bagIn-delay, 0ms) both;
 }
 
-/* interior glow — hidden while closed, blooms as the mouth opens + during the dive */
+/* interior glow — hidden while closed, swells as the mouth opens */
 .glow {
   transform-box: fill-box;
   transform-origin: center;
@@ -70,9 +68,9 @@
 
 @keyframes splashGlow {
   0%   { opacity: 0; transform: scaleY(0.15); }
-  35%  { opacity: 0.9; transform: scaleY(1); }
-  50%  { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 1; transform: scale(2.4); }
+  40%  { opacity: 0.95; transform: scaleY(1); }
+  70%  { opacity: 0.8; transform: scale(1.15); }
+  100% { opacity: 0.5; transform: scale(1.05); }
 }
 
 @keyframes splashLip {
@@ -81,9 +79,22 @@
   100% { opacity: 0; transform: translateY(-14px); }
 }
 
-@keyframes splashDive {
-  0%   { transform: scale(1); opacity: 1; }
-  100% { transform: scale(16); opacity: 0; }
+/* Each particle flies its own vector out of the mouth; --pd staggers the group so
+   they don't leave in lockstep. */
+.burst {
+  opacity: 0;
+  animation: splashBurst var(--burst-dur, 950ms) cubic-bezier(0.16, 0.72, 0.3, 1)
+             calc(var(--burst-delay, 620ms) + var(--pd, 0ms)) both;
+}
+
+@keyframes splashBurst {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.15) rotate(0deg); }
+  18%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(var(--sc, 1)) rotate(var(--rot, 0deg));
+  }
 }
 
 @keyframes splashFade {
@@ -99,3 +110,4 @@
 .reduced .handle { animation: none; opacity: 0.85; }
 .reduced .lip { animation: none; }
 .reduced .pull { animation: none; }
+.reduced .burst { animation: none; opacity: 0; }
