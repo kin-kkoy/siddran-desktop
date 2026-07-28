@@ -197,3 +197,15 @@ User's idea, to design & build AFTER the table work and the current desktop back
 - NOT yet implemented — user flagged it early so it isn't forgotten. Talk through the
   details (how pagination maps to a continuous markdown doc, where the editor caret
   goes across page breaks, print/PDF interplay) before building.
+
+## 🎨 Queued after Book view — icon / SVG work (raised 2026-07-28)
+
+- [ ] **Bag icon on the landing / Bag-picker page** — currently reads as loose,
+      disconnected lines rather than a bag. Make the shape properly *connected*.
+      **Remove the hover animation**: the zipper slides left but doesn't follow its
+      own line, which looks broken.
+- [ ] **Loading-screen icon** — janky and hard to read; wants a cleaner mark.
+- [ ] Direction: lean into the **bag** metaphor, away from the star / space theme.
+- [ ] **Tooling question (open):** find a free SVG/animation editor, OR build a small
+      standalone HTML tool in `references/` for editing these icons — user is open to
+      either. Decide before starting.
