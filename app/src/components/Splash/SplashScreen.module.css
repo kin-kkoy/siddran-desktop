@@ -47,14 +47,6 @@
   animation: splashZip var(--zip-dur, 950ms) ease-in-out var(--zip-delay, 250ms) both;
 }
 
-/* the Siddran sparkle rises out of the opened bag */
-.spark {
-  transform-box: fill-box;
-  transform-origin: center;
-  opacity: 0;
-  animation: splashSpark var(--spark-dur, 1150ms) ease var(--spark-delay, 770ms) both;
-}
-
 /* ── keyframes: each is a self-contained 0→100 motion; delay/duration position it ── */
 
 @keyframes splashBagIn {
@@ -70,10 +62,10 @@
 }
 
 @keyframes splashZip {
-  0%   { transform: translate(40px, 100px); opacity: 1; }
-  55%  { transform: translate(200px, 100px); opacity: 1; }
-  72%  { transform: translate(224px, 96px); opacity: 0; }
-  100% { transform: translate(224px, 96px); opacity: 0; }
+  0%   { transform: translate(60px, 106px); opacity: 1; }
+  55%  { transform: translate(180px, 106px); opacity: 1; }
+  72%  { transform: translate(196px, 104px); opacity: 0; }
+  100% { transform: translate(196px, 104px); opacity: 0; }
 }
 
 @keyframes splashGlow {
@@ -87,13 +79,6 @@
   0%   { opacity: 0.9; transform: translateY(0); }
   45%  { opacity: 0.9; transform: translateY(-6px); }
   100% { opacity: 0; transform: translateY(-14px); }
-}
-
-@keyframes splashSpark {
-  0%   { opacity: 0; transform: translateY(10px) scale(0.4); }
-  45%  { opacity: 1; transform: translateY(-6px) scale(1.15); }
-  62%  { opacity: 1; transform: translateY(-10px) scale(1); }
-  100% { opacity: 0; transform: translateY(-16px) scale(1.4); }
 }
 
 @keyframes splashDive {
@@ -114,4 +99,3 @@
 .reduced .handle { animation: none; opacity: 0.85; }
 .reduced .lip { animation: none; }
 .reduced .pull { animation: none; }
-.reduced .spark { animation: none; opacity: 1; }

@@ -99,53 +99,31 @@ function Backpack() {
         </filter>
       </defs>
 
-      {/* drop shadow */}
-      <ellipse cx="150" cy="322" rx="96" ry="14" fill="#000" opacity="0.45" filter="url(#soft)" />
+      {/* ground shadow */}
+      <ellipse cx="150" cy="320" rx="88" ry="12" fill="#000" opacity="0.42" filter="url(#soft)" />
 
-      {/* shoulder straps (behind the body) */}
-      <path className={styles.strap} d="M108 78 C 78 60 70 120 84 190" />
-      <path className={styles.strap} d="M192 78 C 222 60 230 120 216 190" />
-      {/* buckles */}
-      <rect className={styles.buckle} x="78" y="150" width="16" height="11" rx="3" />
-      <rect className={styles.buckle} x="206" y="150" width="16" height="11" rx="3" />
+      {/* Carry handle. Both feet land ON the body's top edge, so it reads as an
+          attached grab handle instead of a floating arc. */}
+      <path className={styles.handle} d="M118 132 C118 86 182 86 182 132" />
 
-      {/* top haul loop — base tucks behind the flap (drawn later) so it reads as
-          an attached grab handle rather than a floating arc */}
-      <path className={styles.loop} d="M136 90 q14 -24 28 0" />
+      {/* Body — one closed silhouette, gently flared toward the base. */}
+      <path className={styles.body}
+        d="M78 152 Q78 126 106 126 H194 Q222 126 222 152 L230 278 Q232 310 198 310 H102 Q68 310 70 278 Z" />
 
-      {/* main body */}
-      <rect x="54" y="86" width="192" height="228" rx="46" fill="url(#fabric)" stroke="#3a3a5c" strokeWidth="2" />
-      {/* stitch line */}
-      <rect className={styles.stitch} x="64" y="96" width="172" height="208" rx="38" />
-
-      {/* front pocket */}
-      <path fill="#1a1a2c" stroke="#3a3a5c" strokeWidth="2"
-        d="M92 214 h116 a14 14 0 0 1 14 14 v58 a20 20 0 0 1 -20 20 h-104 a20 20 0 0 1 -20 -20 v-58 a14 14 0 0 1 14 -14 z" />
-      {/* pocket zipper (small) */}
-      <g className={styles.zipSmall}>
-        <line x1="98" y1="230" x2="202" y2="230" />
-        <line className={styles.teeth} x1="98" y1="230" x2="202" y2="230" />
-        <circle cx="150" cy="230" r="4.5" fill="url(#amber)" />
+      {/* Lid seam + zipper. No hover animation: the pull used to slide straight
+          left while the seam curves, so it left its own line. It now sits fixed at
+          the seam's midpoint, which is exactly on the curve. */}
+      <path className={styles.zipTrack} d="M80 158 Q150 186 220 158" />
+      <path className={styles.zipTeeth} d="M80 158 Q150 186 220 158" />
+      <g transform="translate(150 172)">
+        <circle r="6.5" fill="none" stroke="url(#amber)" strokeWidth="3" />
+        <rect x="-3" y="7" width="6" height="15" rx="3" fill="url(#amber)" />
       </g>
 
-      {/* star patch badge */}
-      <circle cx="150" cy="176" r="30" fill="url(#patch)" stroke="#f0b840" strokeWidth="2" opacity="0.95" />
-      <path className={styles.star} d="M150 158 l6 12 13 2 -9.5 9 2.5 13 -12 -6.5 -12 6.5 2.5 -13 -9.5 -9 13 -2 z" />
-
-      {/* top flap */}
-      <path fill="url(#fabricFlap)" stroke="#3a3a5c" strokeWidth="2"
-        d="M54 132 v-2 a46 46 0 0 1 46 -44 h100 a46 46 0 0 1 46 44 v2 a10 10 0 0 1 -6 9 q-90 34 -180 0 a10 10 0 0 1 -6 -9 z" />
-
-      {/* THE zipper (signature) — track, interlocking teeth, amber pull */}
-      <g className={styles.zip}>
-        <path className={styles.zipTrack} d="M70 138 q80 26 160 0" />
-        <path className={styles.zipTeeth} d="M70 138 q80 26 160 0" />
-        <g className={styles.pull}>
-          <rect x="144" y="150" width="12" height="20" rx="4" fill="url(#amber)" />
-          <circle cx="150" cy="150" r="5.5" fill="none" stroke="url(#amber)" strokeWidth="3" />
-          <rect x="147" y="168" width="6" height="10" rx="3" fill="#f0b840" />
-        </g>
-      </g>
+      {/* Front pocket, inset from the body edges so the outline stays readable. */}
+      <path className={styles.pocket}
+        d="M106 232 H194 Q208 232 208 246 V276 Q208 292 192 292 H108 Q92 292 92 276 V246 Q92 232 106 232 Z" />
+      <rect className={styles.clasp} x="140" y="224" width="20" height="13" rx="4" />
     </svg>
   )
 }
