@@ -100,21 +100,6 @@
   .arrow:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-blue); }
   .arrow:disabled { opacity: .35; cursor: default; }
   .pageno { color: var(--text-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  /* ── page-flip animation ─────────────────────────────────────── */
-  /* A turn needs three layers: a static backdrop (what's underneath), and a leaf
-     with a front face (the page leaving) and a back face (the page arriving).
-     Each face is a clone of the column flow, clipped to one page. */
-  .pgface { overflow: hidden; background: var(--bg-surface); }
-  .flipOverlay { pointer-events: none; }
-  .leaf { will-change: transform; }
-  .leaf .face { position: absolute; inset: 0; backface-visibility: hidden; }
-  .leaf::after {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(to right, rgba(0,0,0,.28), rgba(0,0,0,0) 40%);
-    opacity: .0; transition: opacity .5s;
-  }
-  .leaf.turning::after { opacity: 1; }
-
   .frozen-badge {
     position: absolute; top: 8px; right: 12px; font-size: 11px;
     color: var(--accent-warning); opacity: 0; transition: opacity .15s;
@@ -176,7 +161,6 @@
     <div class="seg" id="turnSeg">
       <button data-turn="fade" aria-pressed="true">Fade</button>
       <button data-turn="instant" aria-pressed="false">Instant</button>
-      <button data-turn="flip" aria-pressed="false">Page flip</button>
     </div>
   </div>
 
@@ -355,8 +339,7 @@ function render(animate = true) {
   // Nothing moved: leave the DOM alone entirely (no transition, no restyle).
   if (offset === placedAt && animate) { updateNav(total); return; }
 
-  // 'flip' runs its own animation over the top, so the base layer moves instantly.
-  if (!animate || turnStyle === 'instant' || turnStyle === 'flip') {
+  if (!animate || turnStyle === 'instant') {
     pages.style.transition = 'none'; pages.style.opacity = '1'; place();
     requestAnimationFrame(() => { pages.style.transition = ''; });
   } else if (turnStyle === 'fade') {
@@ -381,79 +364,7 @@ function updateNav(total) {
   prevBtn.disabled = spread === 0;
   nextBtn.disabled = spread >= total - 1;
 }
-// ── page-flip turn ─────────────────────────────────────────────────
-// Build one page-sized face by cloning the column flow and shifting it so the wanted
-// column sits at x=0, then clipping to a single page width.
-function pageFace(colIndex, w, h, colStep) {
-  const holder = document.createElement('div');
-  holder.className = 'pgface';
-  holder.style.cssText = `position:absolute;top:0;width:${w}px;height:${h}px;`;
-  const clone = pages.cloneNode(true);
-  clone.removeAttribute('contenteditable');
-  clone.classList.remove('freeze');
-  clone.style.cssText =
-    `width:${pages.clientWidth}px;height:${h}px;transition:none;opacity:1;` +
-    `transform:translateX(${-colIndex * colStep}px);`;
-  holder.appendChild(clone);
-  return holder;
-}
-
-let flipping = false;
-
-function flipTo(dir) {
-  const { gap, total } = metrics();
-  const target = spread + dir;
-  if (flipping || target < 0 || target > total - 1) return;
-  flipping = true;
-
-  const cs = getComputedStyle(viewport);
-  const padL = parseFloat(cs.paddingLeft), padT = parseFloat(cs.paddingTop);
-  const w = pages.clientWidth, h = pages.clientHeight;
-  const c = (w - gap) / 2, colStep = c + gap;
-
-  const ov = document.createElement('div');
-  ov.className = 'flipOverlay';
-  ov.style.cssText =
-    `position:absolute;left:${padL}px;top:${padT}px;width:${w}px;height:${h}px;` +
-    `perspective:2200px;z-index:4;`;
-
-  // Backdrop: the half that stays put, plus the half being revealed underneath.
-  const backLeftCol = dir > 0 ? spread * 2 : target * 2;
-  const backRightCol = dir > 0 ? target * 2 + 1 : spread * 2 + 1;
-  const bl = pageFace(backLeftCol, c, h, colStep); bl.style.left = '0px';
-  const br = pageFace(backRightCol, c, h, colStep); br.style.left = `${c + gap}px`;
-  ov.append(bl, br);
-
-  // The leaf: front = page leaving, back = page arriving (mirrored).
-  const leaf = document.createElement('div');
-  leaf.className = 'leaf';
-  leaf.style.cssText =
-    `position:absolute;top:0;left:${dir > 0 ? c + gap : 0}px;width:${c}px;height:${h}px;` +
-    `transform-style:preserve-3d;transform-origin:${dir > 0 ? 'left' : 'right'} center;` +
-    `transition:transform .55s cubic-bezier(.42,.02,.34,1);`;
-  const front = pageFace(dir > 0 ? spread * 2 + 1 : spread * 2, c, h, colStep);
-  const back = pageFace(dir > 0 ? target * 2 : target * 2 + 1, c, h, colStep);
-  front.classList.add('face');
-  back.classList.add('face');
-  back.style.transform = 'rotateY(180deg)';
-  leaf.append(front, back);
-  ov.appendChild(leaf);
-  viewport.appendChild(ov);
-
-  spread = target;
-  render(false); // settle the base instantly beneath the overlay
-
-  requestAnimationFrame(() => {
-    leaf.classList.add('turning');
-    leaf.style.transform = `rotateY(${dir > 0 ? -180 : 180}deg)`;
-  });
-  setTimeout(() => { ov.remove(); flipping = false; }, 580);
-}
-
-const go = (d) => {
-  if (turnStyle === 'flip' && currentView() === 'book' && !frozen) { flipTo(d); return; }
-  spread += d; render();
-};
+const go = (d) => { spread += d; render(); };
 prevBtn.onclick = () => go(-1);
 nextBtn.onclick = () => go(1);
 
