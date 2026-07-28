@@ -288,6 +288,12 @@
 .pages h1, .pages h2, .pages h3 { break-after: avoid; }
 .pages table, .pages pre { break-inside: avoid; }
 
+/* "Keep whole": never split a block across a page edge. A paragraph that doesn't fit
+   moves entirely to the next page, so nothing is ever cut mid-sentence — at the cost
+   of pages that can end early with white space. */
+.keepWhole p, .keepWhole li, .keepWhole blockquote,
+.keepWhole ul, .keepWhole ol, .keepWhole h1, .keepWhole h2, .keepWhole h3 { break-inside: avoid; }
+
 .spine {
   position: absolute;
   top: 22px; bottom: 22px; left: 50%;

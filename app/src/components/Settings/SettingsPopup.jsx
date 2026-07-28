@@ -290,6 +290,20 @@ function InterfaceTab({ settings, updateSetting }) {
             </div>
           </SettingRow>
 
+          <SettingRow
+            label="Page Breaks"
+            description="Continue lets text carry on mid-sentence onto the next page. Keep whole never splits a paragraph or table, so pages can end early."
+          >
+            <SegmentedControl
+              options={[
+                { value: 'continue', label: 'Continue' },
+                { value: 'keep', label: 'Keep whole' },
+              ]}
+              value={settings.bookBreaks ?? 'continue'}
+              onChange={(v) => updateSetting('bookBreaks', v)}
+            />
+          </SettingRow>
+
           <SettingRow label="Page Turn" description="How turning to the next spread animates.">
             <SegmentedControl
               options={[

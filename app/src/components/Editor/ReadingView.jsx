@@ -257,7 +257,7 @@ function ReadingView({ markdown, noteId, rememberFolds, onSearchTag, onOpenLink,
   const content = (
     <div
       ref={ref}
-      className={`${styles.reading} ${book ? styles.pages : ''} ${fading ? styles.fading : ''}`}
+      className={`${styles.reading} ${book ? styles.pages : ''} ${book && settings.bookBreaks === 'keep' ? styles.keepWhole : ''} ${fading ? styles.fading : ''}`}
       style={book ? { height: pageH, transform: `translateX(${-spread * step}px)` } : undefined}
       onClick={handleClick}
       dangerouslySetInnerHTML={{ __html: html }}

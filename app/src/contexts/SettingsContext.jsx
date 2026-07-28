@@ -35,6 +35,9 @@ const DEFAULTS = {
   noteLayout: 'scroll', // reading-view layout: 'scroll' (continuous) | 'book' (two pages)
   bookPageHeight: 620,  // page height in book layout
   bookTurn: 'fade',     // page-turn style: 'fade' | 'instant'
+  // 'continue' = text cuts at the page edge and carries on; 'keep' = never split a
+  // paragraph/list item/table, so blocks move whole and pages can end short.
+  bookBreaks: 'continue',
 }
 
 // ── Color utilities ────────────────────────────────────────────────
