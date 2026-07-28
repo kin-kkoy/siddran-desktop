@@ -63,6 +63,47 @@ function NoteSettingsPopup({ isOpen, onClose }) {
               </div>
             </SettingRow>
 
+            {/* Page height — only relevant while the note is laid out as a book. */}
+            {settings.noteLayout === 'book' && (
+              <SettingRow
+                label="Page Height"
+                description="Height of a page in book layout."
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="range"
+                    className={styles.starSlider}
+                    min={360}
+                    max={900}
+                    step={20}
+                    value={settings.bookPageHeight ?? 620}
+                    onChange={e => updateSetting('bookPageHeight', parseInt(e.target.value, 10))}
+                  />
+                  <span style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: 13 }}>
+                    {settings.bookPageHeight ?? 620}px
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateSetting('bookPageHeight', 620)}
+                    title="Reset to default (620px)"
+                    aria-label="Reset page height"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 4,
+                      cursor: 'pointer',
+                      color: 'var(--text-secondary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <LuRotateCcw size={14} />
+                  </button>
+                </div>
+              </SettingRow>
+            )}
+
           </div>
         </div>
       </div>
