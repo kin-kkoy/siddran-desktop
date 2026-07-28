@@ -1,40 +1,32 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Siddran app icon. The rounded tile IS the bag: a zipper runs edge to edge with
+       its pull hanging near the left, and the front pouch carries the star.
+       Flat colour, no gradients — it has to survive 32px in a dock.
+       Regenerate every platform icon with:  npx tauri icon icon.svg  -->
   <defs>
-    <linearGradient id="bg" x1="0.15" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#21214180"/>
-      <stop offset="0" stop-color="#212141"/>
-      <stop offset="1" stop-color="#090912"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.44" r="0.56">
-      <stop offset="0" stop-color="#f0b840" stop-opacity="0.5"/>
-      <stop offset="0.42" stop-color="#f0b840" stop-opacity="0.12"/>
-      <stop offset="1" stop-color="#f0b840" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="amber" x1="0.2" y1="0.05" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#ffe6a0"/>
-      <stop offset="0.5" stop-color="#f0b840"/>
-      <stop offset="1" stop-color="#e0912a"/>
-    </linearGradient>
+    <clipPath id="tile">
+      <rect width="1024" height="1024" rx="228"/>
+    </clipPath>
   </defs>
 
-  <!-- deep-space rounded tile -->
-  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
-  <rect width="1024" height="1024" rx="228" fill="url(#glow)"/>
+  <!-- muted gold tile: bright enough to stand out among dark dock icons, without glare -->
+  <rect width="1024" height="1024" rx="228" fill="#d18f28"/>
 
-  <!-- drifting starfield (fades out at small sizes) -->
-  <g fill="#ffffff">
-    <circle cx="228" cy="256" r="4.5" opacity="0.55"/>
-    <circle cx="806" cy="300" r="5.5" opacity="0.5"/>
-    <circle cx="300" cy="806" r="4" opacity="0.42"/>
-    <circle cx="792" cy="772" r="3.5" opacity="0.5"/>
-    <circle cx="512" cy="158" r="3" opacity="0.38"/>
-    <circle cx="168" cy="560" r="3" opacity="0.35"/>
+  <g clip-path="url(#tile)">
+    <!-- zipper seam, full width; clipped so it meets the rounded sides cleanly -->
+    <path d="M0 356 Q512 516 1024 356" fill="none" stroke="#0d0b14" stroke-width="62"/>
+
+    <!-- pull: ring sitting on the seam, tab dangling below -->
+    <circle cx="150" cy="396" r="52" fill="none" stroke="#0d0b14" stroke-width="36"/>
+    <rect x="124" y="440" width="52" height="116" rx="26" fill="#0d0b14"/>
+
+    <!-- front pouch -->
+    <path d="M314 558 H710 Q778 558 778 626 V790 Q778 858 710 858 H314 Q246 858 246 790 V626 Q246 558 314 558 Z"
+          fill="#0d0b14"/>
+
+    <!-- the star, cut out of the pouch -->
+    <path d="M512 592 C523.6 669.72 550.28 696.4 628 708 C550.28 719.6 523.6 746.28 512 824
+             C500.4 746.28 473.72 719.6 396 708 C473.72 696.4 500.4 669.72 512 592 Z"
+          fill="#d18f28"/>
   </g>
-
-  <!-- the Siddran mark: a four-point drifting sparkle -->
-  <path d="M512 188 Q580 444 836 512 Q580 580 512 836 Q444 580 188 512 Q444 444 512 188 Z" fill="url(#amber)"/>
-  <path d="M512 300 Q548 476 724 512 Q548 548 512 724 Q476 548 300 512 Q476 476 512 300 Z" fill="#ffffff" opacity="0.16"/>
-
-  <!-- hairline edge -->
-  <rect x="3" y="3" width="1018" height="1018" rx="226" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="4"/>
 </svg>
