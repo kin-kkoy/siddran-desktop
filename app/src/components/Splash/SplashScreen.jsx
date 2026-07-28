@@ -17,16 +17,27 @@ const CREAM = '#ffe9b0'
 const VIOLET = '#c9a2ff'
 
 const PARTICLES = [
-  { dx: -86, dy: -76, sc: 1.0, rot: -35, d: 0, fill: AMBER },
-  { dx: -50, dy: -116, sc: 0.8, rot: 25, d: 90, arc: true, stroke: CREAM },
-  { dx: -14, dy: -132, sc: 1.25, rot: 15, d: 40, fill: CREAM },
-  { dx: 24, dy: -126, sc: 0.85, rot: -20, d: 120, arc: true, stroke: AMBER },
-  { dx: 58, dy: -110, sc: 1.0, rot: 40, d: 60, fill: VIOLET },
-  { dx: 92, dy: -72, sc: 0.85, rot: -30, d: 150, arc: true, stroke: AMBER },
-  { dx: -106, dy: -36, sc: 0.65, rot: 45, d: 180, fill: AMBER },
-  { dx: 108, dy: -40, sc: 0.7, rot: -45, d: 100, fill: CREAM },
-  { dx: -34, dy: -98, sc: 0.7, rot: 10, d: 200, arc: true, stroke: VIOLET },
-  { dx: 40, dy: -92, sc: 0.6, rot: -15, d: 230, fill: AMBER },
+  // outer ring — the big, far-flung ones
+  { dx: -126, dy: -58, sc: 1.7, rot: -35, d: 0, fill: AMBER },
+  { dx: -96, dy: -108, sc: 1.3, rot: 25, d: 90, arc: true, stroke: CREAM },
+  { dx: -68, dy: -138, sc: 2.1, rot: 15, d: 40, fill: CREAM },
+  { dx: -36, dy: -156, sc: 1.4, rot: -10, d: 130, arc: true, stroke: AMBER },
+  { dx: -6, dy: -164, sc: 2.3, rot: 20, d: 20, fill: AMBER },
+  { dx: 26, dy: -156, sc: 1.3, rot: -22, d: 120, arc: true, stroke: VIOLET },
+  { dx: 56, dy: -140, sc: 1.9, rot: 35, d: 60, fill: CREAM },
+  { dx: 88, dy: -114, sc: 1.4, rot: -30, d: 150, arc: true, stroke: AMBER },
+  { dx: 114, dy: -84, sc: 1.8, rot: 40, d: 70, fill: VIOLET },
+  { dx: 134, dy: -46, sc: 1.3, rot: -45, d: 170, fill: AMBER },
+  // low, wide pair
+  { dx: -142, dy: -16, sc: 1.2, rot: 45, d: 200, fill: CREAM },
+  { dx: 146, dy: -12, sc: 1.25, rot: -40, d: 190, fill: CREAM },
+  // inner ring — smaller, closer, filling the gaps
+  { dx: -58, dy: -92, sc: 1.1, rot: 12, d: 230, arc: true, stroke: VIOLET },
+  { dx: -24, dy: -112, sc: 1.35, rot: -18, d: 100, arc: true, stroke: CREAM },
+  { dx: 12, dy: -104, sc: 1.15, rot: 30, d: 260, fill: AMBER },
+  { dx: 44, dy: -96, sc: 1.5, rot: -25, d: 180, fill: AMBER },
+  { dx: -90, dy: -60, sc: 1.2, rot: 20, d: 250, fill: VIOLET },
+  { dx: 92, dy: -58, sc: 1.3, rot: -12, d: 215, arc: true, stroke: CREAM },
 ]
 //
 // Timing is fully parameterized (see splashTiming.js) and applied as CSS variables so
