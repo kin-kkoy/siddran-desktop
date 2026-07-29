@@ -5,6 +5,7 @@ import { LuRotateCcw, LuRefreshCw } from 'react-icons/lu'
 import { syncNow } from '../../desktop/sync/client'
 import { readSyncConfig, writeSyncConfig, readLastSync, writeLastSync } from '../../hooks/syncConfig'
 import styles from './SettingsPopup.module.css'
+import SegmentedControl from './SegmentedControl'
 
 function SettingsPopup() {
   // The active tab lives in context so the command palette can open Settings
@@ -46,22 +47,16 @@ function SettingsPopup() {
             >
               Sync
             </button>
-            <button
-              className={`${styles.tab} ${activeTab === 'account' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('account')}
-            >
-              Account
-            </button>
           </div>
 
-          {/* Tab content */}
+          {/* Tab content. Interface is the fallback, so an unrecognised tab
+              (a stale value from the command palette, say) lands somewhere real
+              rather than on a blank pane. */}
           <div className={styles.content}>
-            {activeTab === 'interface' ? (
-              <InterfaceTab settings={settings} updateSetting={updateSetting} />
-            ) : activeTab === 'sync' ? (
+            {activeTab === 'sync' ? (
               <SyncTab />
             ) : (
-              <div className={styles.placeholder}>To be implemented</div>
+              <InterfaceTab settings={settings} updateSetting={updateSetting} />
             )}
           </div>
         </div>
@@ -502,22 +497,6 @@ function SettingRow({ label, description, children }) {
       <div className={styles.settingControl}>
         {children}
       </div>
-    </div>
-  )
-}
-
-function SegmentedControl({ options, value, onChange }) {
-  return (
-    <div className={styles.segmented}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          className={`${styles.segmentBtn} ${value === opt.value ? styles.segmentActive : ''}`}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   )
 }

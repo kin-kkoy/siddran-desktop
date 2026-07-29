@@ -1,6 +1,7 @@
 import { useSettings } from '../../contexts/SettingsContext'
 import { LuRotateCcw } from 'react-icons/lu'
 import styles from './SettingsPopup.module.css'
+import SegmentedControl from './SegmentedControl'
 
 // A focused subset of the main SettingsPopup, opened from the NotePage kebab
 // menu. All controls write to the same underlying settings via useSettings(),
@@ -63,8 +64,12 @@ function NoteSettingsPopup({ isOpen, onClose }) {
               </div>
             </SettingRow>
 
-            {/* Page height — only relevant while the note is laid out as a book. */}
+            {/* Book-layout controls — only relevant while the note is laid out as
+                a book. Wording and options are kept identical to the main
+                Settings popup; both write the same keys, so a change here shows
+                up there and vice versa. */}
             {settings.noteLayout === 'book' && (
+              <>
               <SettingRow
                 label="Page Height"
                 description="Height of a page in book layout."
@@ -102,6 +107,35 @@ function NoteSettingsPopup({ isOpen, onClose }) {
                   </button>
                 </div>
               </SettingRow>
+
+              <SettingRow
+                label="Page Breaks"
+                description="Continue lets text carry on mid-sentence onto the next page. Keep whole never splits a paragraph or table, so pages can end early."
+              >
+                <SegmentedControl
+                  options={[
+                    { value: 'continue', label: 'Continue' },
+                    { value: 'keep', label: 'Keep whole' },
+                  ]}
+                  value={settings.bookBreaks ?? 'continue'}
+                  onChange={(v) => updateSetting('bookBreaks', v)}
+                />
+              </SettingRow>
+
+              <SettingRow
+                label="Page Turn"
+                description="How turning to the next spread animates."
+              >
+                <SegmentedControl
+                  options={[
+                    { value: 'fade', label: 'Fade' },
+                    { value: 'instant', label: 'Instant' },
+                  ]}
+                  value={settings.bookTurn ?? 'fade'}
+                  onChange={(v) => updateSetting('bookTurn', v)}
+                />
+              </SettingRow>
+              </>
             )}
 
           </div>
