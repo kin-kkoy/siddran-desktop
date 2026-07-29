@@ -14,11 +14,10 @@ const SandBoxes   = lazy(() => import("./pages/Sandbox/SandBoxes.jsx"))
 const SandBoxPage = lazy(() => import("./pages/Sandbox/SandBoxPage.jsx"))
 import Calendar from "./pages/Calendar/Calendar.jsx"
 import NotFoundPage from "./pages/NotFoundPage.jsx"
-// TEMPORARY — throwaway spike for Book layout in write mode. Lazy so it stays
-// out of the main bundle. Delete this import, the route below, and src/dev/
-// once the spike has answered its questions.
-const BookSpike = lazy(() => import("./dev/BookSpike.jsx"))
-const PagedEditor = lazy(() => import("./dev/PagedEditor.jsx"))
+// Dev-only routes (/dev/*). The `import.meta.env.DEV` guard is folded to `false`
+// in a production build, so Rollup drops this import and the whole of src/dev/
+// with it — none of it ships in the app.
+const DevRoutes = import.meta.env.DEV ? lazy(() => import("./dev/DevRoutes.jsx")) : null
 import { useNotes } from "./hooks/useNotes.js"
 import { useTasks } from "./hooks/useTasks.js"
 import { useCalendarEvents } from "./hooks/useCalendarEvents.js"
@@ -976,17 +975,7 @@ function App() {
                     </Suspense>
                   } />
                   <Route path="/calendar" element={<Calendar {...calendarProps} mode="full" />} />
-                  {/* TEMPORARY — book-layout spike; remove with src/dev/. */}
-                  <Route path="/dev/paged-editor" element={
-                    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
-                      <PagedEditor />
-                    </Suspense>
-                  } />
-                  <Route path="/dev/book-spike" element={
-                    <Suspense fallback={<div style={{ padding: 24 }}>Loading spike…</div>}>
-                      <BookSpike />
-                    </Suspense>
-                  } />
+                  {DevRoutes && <Route path="/dev/*" element={<DevRoutes />} />}
                   <Route path="*" element={<NotFoundPage />} />
             </Routes>
             </div>
