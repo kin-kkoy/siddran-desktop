@@ -1,0 +1,95 @@
+/* Open-notes list. Sizing and colours match SidebarList so the two read as the
+   same control in the same slot — the only visible difference is the close
+   button, which appears on hover. */
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.list::-webkit-scrollbar { width: 6px; }
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+.list::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 16px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: background-color 0.2s;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.item:hover { background-color: var(--bg-elevated); }
+
+.item.active {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hidden until the row is hovered or the note is the active one, so a long list
+   of tabs stays quiet. Kept in the layout (opacity, not display) so titles never
+   reflow as the pointer moves down the list. */
+.close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.item:hover .close,
+.item.active .close { opacity: 1; }
+
+.close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.close:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--border-strong);
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 16px;
+  margin: 0;
+}

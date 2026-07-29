@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from './Sidebar.module.css'
 import SidebarList from "./SidebarList";
+import SidebarOpenNotes from "./SidebarOpenNotes";
 import ProfileDropdown from "../ProfileDropdown/ProfileDropdown";
 import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen, LuChevronDown } from "react-icons/lu";
 import { readListOpen, writeListOpen } from "../../../hooks/sidebarState";
@@ -12,10 +13,18 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
     const navigate = useNavigate()
     const location = useLocation()
 
+    // On a note page the tab strip sits above the editor, so the sidebar shows the
+    // full note list — that is what you need there, to reach a note you haven't
+    // opened. Everywhere else the tab strip is off screen, so the sidebar shows
+    // the OPEN notes instead: off the note page a second copy of the whole note
+    // list is just noise (NotesHub already lists every note in its main area).
     const onNotePage = location.pathname.startsWith('/notes/') && location.pathname !== '/notes';
-    // NotesHub lives at both '/' and '/notes'. There the note list is offered as a
-    // collapsible accordion (persisted open/closed) rather than always-shown.
-    const onNotesHub = location.pathname === '/notes' || location.pathname === '/';
+    // The SandBoxes hub is the one exception: its own grid of boards is the
+    // subject there, and a notes list beside it is off-topic. An individual
+    // sandbox still shows it — notes are useful reference while you work on a
+    // board.
+    const onSandboxHub = location.pathname === '/sandboxes';
+    const showOpenNotes = !onNotePage && !onSandboxHub;
 
     const [listOpen, setListOpen] = useState(readListOpen)
     const toggleList = () => setListOpen(prev => { const next = !prev; writeListOpen(next); return next })
@@ -101,29 +110,23 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                         currentNoteID={currentNoteID}
                     />
                 )}
-                {onNotesHub && (
+                {showOpenNotes && (
                     <div className={styles.listAccordion}>
                         <button
                             type="button"
                             className={styles.listAccordionHeader}
                             onClick={toggleList}
                             aria-expanded={listOpen}
-                            title={listOpen ? 'Collapse note list' : 'Expand note list'}
+                            title={listOpen ? 'Collapse open notes' : 'Expand open notes'}
                         >
                             <LuChevronDown
                                 size={16}
                                 className={`${styles.listChevron} ${listOpen ? '' : styles.listChevronCollapsed}`}
                             />
-                            <span>List of Notes</span>
+                            <span>Opened Notes</span>
                         </button>
                         {listOpen && (
-                            <SidebarList
-                                isCollapsed={isCollapsed}
-                                notes={notes}
-                                notebooks={notebooks}
-                                currentNoteID={currentNoteID}
-                                hideTitle
-                            />
+                            <SidebarOpenNotes isCollapsed={isCollapsed} notes={notes} />
                         )}
                     </div>
                 )}
