@@ -1,0 +1,206 @@
+/* TEMPORARY — spike support, delete with app/src/dev/. */
+
+.page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  color: var(--text-primary);
+}
+
+.title { font-size: 1.3rem; font-weight: 700; margin: 0 0 4px; }
+.sub { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 18px; }
+
+/* ── the one button ───────────────────────────────────────────────── */
+.runBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  margin-bottom: 10px;
+}
+.runBtn {
+  background: var(--accent-primary, #6c8cff);
+  color: #0b0e17;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.runBtn:disabled { opacity: 0.55; cursor: default; }
+.runHint { color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; }
+
+.disclosure {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 10px;
+}
+.disclosure:hover:not(:disabled) { color: var(--text-primary); }
+
+/* ── controls ─────────────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  margin-bottom: 16px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.field select,
+.field input[type='number'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.btn {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--text-muted); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ── the book viewport under test ─────────────────────────────────── */
+/* Mirrors ReadingView.module.css so the spike measures the real geometry. */
+.bookOuter { width: 100%; margin-bottom: 14px; }
+.viewport {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 28px 34px;
+  background: var(--bg-surface);
+}
+.spine {
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--border-default) 12%, var(--border-default) 88%, transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* The CM host is transform-paged as a whole. `will-change` is deliberately NOT
+   set here — a promoted compositing layer breaks caretRangeFromPoint, which is
+   what verticalMotion.js relies on, and Q5 is specifically about that. */
+.host { position: relative; }
+
+/* Column layout goes on .cm-content itself. `column-fill: auto` plus a definite
+   height is what makes the multicol engine fragment into horizontally
+   overflowing columns rather than balancing. */
+/* The height MUST come from here with !important, not from an inline style.
+   CM's docView locks and then CLEARS contentDOM.style.height on every redraw
+   (@codemirror/view/dist/index.js:2986 and :2996), so an inline `height: 620px`
+   survives exactly until the first update — after which the multicol container
+   is auto-height again and `column-fill: auto` silently stops fragmenting.
+   A stylesheet !important rule beats CM's inline write and is not cleared.
+   min-height: 0 is equally required — the base theme's `min-height: 100%`
+   resolves against the scroller and would otherwise beat the height. */
+.host :global(.cm-content) {
+  height: var(--spike-page-h, 620px) !important;
+  min-height: 0 !important;
+  column-count: 2;
+  column-gap: 56px;
+  column-fill: auto;
+  orphans: 1;
+  widows: 1;
+}
+
+/* Cost-attribution control: same fixed height, same full render, but a SINGLE
+   column. Comparing against the two-column case isolates the browser's
+   multi-column re-layout cost from the decoration pass. */
+.noColumns :global(.cm-content) { column-count: 1 !important; }
+
+/* Mechanism 2 — the padding lie. Multicol fragments against the CONTENT box
+   (the page height), while getBoundingClientRect, and therefore CM's
+   fullPixelRange, sees the BORDER box (page height + the padding). */
+.padLie :global(.cm-content) {
+  box-sizing: content-box !important;
+  padding-bottom: 1000000px !important;
+}
+.host :global(.cm-line) { orphans: 1; widows: 1; }
+.host :global(.cm-table-block),
+.host :global(.cm-codeblock) { break-inside: avoid; }
+
+/* bookBreaks: 'keep' — never split a block, so pages can end short. */
+.keepWhole :global(.cm-line) { break-inside: avoid; }
+
+/* The fold gutter cannot track two columns: CM's base theme makes .cm-scroller
+   a flex row with .cm-gutters as a sibling of .cm-content, so the gutter stays a
+   single vertical strip while lines flow into column 2. Book mode hides it and
+   relies on livePreview's inline chevrons instead. */
+.host :global(.cm-gutters) { display: none !important; }
+
+/* ── measurement panel ────────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  padding: 14px 16px;
+  font-size: 0.85rem;
+}
+.panelTitle { font-weight: 700; margin: 0 0 10px; font-size: 0.95rem; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 20px;
+  margin-bottom: 12px;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.statLabel { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.statValue { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9rem; }
+.ok { color: var(--accent-success, #34d8c0); }
+.bad { color: var(--accent-danger, #ff6b6b); }
+.warn { color: var(--accent-warning, #f7b955); }
+
+.banner {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.bannerBad { background: rgba(255, 107, 107, 0.12); border: 1px solid rgba(255, 107, 107, 0.5); }
+.bannerOk { background: rgba(52, 216, 192, 0.1); border: 1px solid rgba(52, 216, 192, 0.4); }
+
+.results {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.nav { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.pageNo { color: var(--text-muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
