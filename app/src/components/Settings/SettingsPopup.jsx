@@ -6,6 +6,7 @@ import { syncNow } from '../../desktop/sync/client'
 import { readSyncConfig, writeSyncConfig, readLastSync, writeLastSync } from '../../hooks/syncConfig'
 import styles from './SettingsPopup.module.css'
 import SegmentedControl from './SegmentedControl'
+import { trustedPaths, forgetAllTrust, setTrusted } from '../../hooks/htmlTrust'
 
 function SettingsPopup() {
   // The active tab lives in context so the command palette can open Settings
@@ -36,10 +37,28 @@ function SettingsPopup() {
           {/* Tab sidebar */}
           <div className={styles.sidebar}>
             <button
-              className={`${styles.tab} ${activeTab === 'interface' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('interface')}
+              className={`${styles.tab} ${activeTab === 'appearance' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('appearance')}
             >
-              Interface
+              Appearance
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'editor' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('editor')}
+            >
+              Editor
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'behaviour' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('behaviour')}
+            >
+              Behaviour
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'pages' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('pages')}
+            >
+              HTML pages
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'sync' ? styles.tabActive : ''}`}
@@ -53,10 +72,14 @@ function SettingsPopup() {
               (a stale value from the command palette, say) lands somewhere real
               rather than on a blank pane. */}
           <div className={styles.content}>
-            {activeTab === 'sync' ? (
-              <SyncTab />
-            ) : (
-              <InterfaceTab settings={settings} updateSetting={updateSetting} />
+            {activeTab === 'sync' && <SyncTab />}
+            {activeTab === 'editor' && <EditorTab settings={settings} updateSetting={updateSetting} />}
+            {activeTab === 'behaviour' && <BehaviourTab settings={settings} updateSetting={updateSetting} />}
+            {activeTab === 'pages' && <PagesTab settings={settings} updateSetting={updateSetting} />}
+            {/* Appearance is the fallback, so a stale tab value (the command palette
+                still opens 'interface') lands somewhere real rather than on a blank pane. */}
+            {!['sync', 'editor', 'behaviour', 'pages'].includes(activeTab) && (
+              <AppearanceTab settings={settings} updateSetting={updateSetting} />
             )}
           </div>
         </div>
@@ -171,8 +194,60 @@ function SyncTab() {
   )
 }
 
-// ── Interface Tab ──────────────────────────────────────────────────
-function InterfaceTab({ settings, updateSetting }) {
+// Trusted pages, individually revocable. Without somewhere to see them, trust
+// decisions accumulate invisibly — you'd have granted permissions you can't name.
+// Listing them by file name means a single mistaken "Trust this page" is one click
+// to undo, rather than a choice between keeping it and resetting everything.
+function TrustedPagesBlock() {
+  const [paths, setPaths] = useState(() => trustedPaths())
+  if (!paths.length) return null
+
+  const nameOf = (p) => {
+    const raw = p.split('/').pop() || p
+    // Attachments carry a uuid prefix that means nothing to a reader.
+    return raw.replace(/^[0-9a-f]{6,8}-/, '')
+  }
+
+  return (
+    <div className={styles.settingBlock}>
+      <span className={styles.settingLabel}>Trusted pages</span>
+      <span className={styles.settingDesc}>
+        {paths.length} HTML {paths.length === 1 ? 'page is' : 'pages are'} allowed to read
+        files in your Bag. Remove any you no longer recognise.
+      </span>
+
+      <ul className={styles.trustList}>
+        {paths.map((p) => (
+          <li key={p} className={styles.trustRow}>
+            <span className={styles.trustName} title={p}>{nameOf(p)}</span>
+            <button
+              type="button"
+              className={styles.trustForget}
+              onClick={() => { setTrusted(p, false); setPaths(trustedPaths()) }}
+              title={`Stop trusting ${nameOf(p)}`}
+            >
+              Forget
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        type="button"
+        className={styles.trustForgetAll}
+        onClick={() => { forgetAllTrust(); setPaths([]) }}
+      >
+        Forget all
+      </button>
+    </div>
+  )
+}
+
+// ── Interface tabs ─────────────────────────────────────────────────
+// Split by what you'd be looking for, not by what happens to be adjacent in the
+// code. Fifteen settings in one column meant scrolling past twelve you didn't want.
+
+function AppearanceTab({ settings, updateSetting }) {
   return (
     <div className={styles.tabContent}>
 
@@ -254,6 +329,40 @@ function InterfaceTab({ settings, updateSetting }) {
       </SettingRow>
 
       {/* Reading layout: continuous scroll vs two-page book */}
+
+      {/* Star canvas toggle */}
+      <SettingRow
+        label="Twinkling Stars"
+        description="Show animated star particles in the background."
+      >
+        <ToggleSwitch
+          checked={settings.showStars !== false}
+          onChange={(v) => updateSetting('showStars', v)}
+        />
+      </SettingRow>
+
+      {settings.showStars !== false && (
+        <>
+          <SettingRow
+            label="Reduce Star Size"
+            description="Use smaller base radius when spawning new stars."
+          >
+            <ToggleSwitch
+              checked={settings.reduceStars === true}
+              onChange={(v) => updateSetting('reduceStars', v)}
+            />
+          </SettingRow>
+          <StarTuningBlock settings={settings} updateSetting={updateSetting} />
+        </>
+      )}
+    </div>
+  )
+}
+
+function EditorTab({ settings, updateSetting }) {
+  return (
+    <div className={styles.tabContent}>
+
       <SettingRow
         label="Note Layout"
         description="How a note is laid out in reading mode — one continuous column, or two pages side by side like a book."
@@ -350,15 +459,45 @@ function InterfaceTab({ settings, updateSetting }) {
           </button>
         </div>
       </SettingRow>
+    </div>
+  )
+}
 
-      {/* Remember per-note fold state */}
+function BehaviourTab({ settings, updateSetting }) {
+  return (
+    <div className={styles.tabContent}>
+
+      {/* Remember per-note fold state, and (nested) the launch restore that rides on it */}
       <SettingRow
         label="Remember File/Note State"
-        description="Keep collapsed headings, bullets and checklists folded per note across refreshes and read/edit modes."
+        description="Reopens notes the way you left them — collapsed headings, bullets and checklists stay folded, and each note remembers whether you were reading or writing."
       >
         <ToggleSwitch
           checked={settings.rememberNoteState === true}
           onChange={(v) => updateSetting('rememberNoteState', v)}
+        />
+      </SettingRow>
+
+      {settings.rememberNoteState === true && (
+        <SettingRow
+          label="Reopen where I left off"
+          description="On launch, return to the note or page you had open — including whatever was in the side panel."
+        >
+          <ToggleSwitch
+            checked={settings.restoreLastSession === true}
+            onChange={(v) => updateSetting('restoreLastSession', v)}
+          />
+        </SettingRow>
+      )}
+
+      {/* Launch animation */}
+      <SettingRow
+        label="Launch animation"
+        description="Play the opening animation when Siddran starts."
+      >
+        <ToggleSwitch
+          checked={settings.showSplash === true}
+          onChange={(v) => updateSetting('showSplash', v)}
         />
       </SettingRow>
 
@@ -372,36 +511,46 @@ function InterfaceTab({ settings, updateSetting }) {
           onChange={(v) => updateSetting('centerNowLine', v)}
         />
       </SettingRow>
-
-      {/* Star canvas toggle */}
-      <SettingRow
-        label="Twinkling Stars"
-        description="Show animated star particles in the background."
-      >
-        <ToggleSwitch
-          checked={settings.showStars !== false}
-          onChange={(v) => updateSetting('showStars', v)}
-        />
-      </SettingRow>
-
-      {settings.showStars !== false && (
-        <>
-          <SettingRow
-            label="Reduce Star Size"
-            description="Use smaller base radius when spawning new stars."
-          >
-            <ToggleSwitch
-              checked={settings.reduceStars === true}
-              onChange={(v) => updateSetting('reduceStars', v)}
-            />
-          </SettingRow>
-          <StarTuningBlock settings={settings} updateSetting={updateSetting} />
-        </>
-      )}
-
     </div>
   )
 }
+
+function PagesTab({ settings, updateSetting }) {
+  return (
+    <div className={styles.tabContent}>
+
+      {/* Trusting an HTML page lets it save its own state — and read the Bag. */}
+      <SettingRow
+        label="Ask before trusting an HTML page"
+        description="Some pages load their own data files as they run. That's blocked unless you trust the page — and trusting also lets it read anything else in your Bag, so it's worth asking. Saving state needs no trust; Siddran keeps that for every page."
+      >
+        <SegmentedControl
+          options={[
+            { value: 'always', label: 'Always' },
+            { value: 'once', label: 'Once per page' },
+            { value: 'never', label: 'Never' },
+          ]}
+          value={settings.htmlTrustPrompt || 'once'}
+          onChange={(v) => updateSetting('htmlTrustPrompt', v)}
+        />
+      </SettingRow>
+
+      <TrustedPagesBlock />
+
+      {/* Viewed HTML pages: the app is otherwise fully offline (fonts are self-hosted). */}
+      <SettingRow
+        label="Allow web fonts in HTML pages"
+        description="Let an attached HTML page load fonts from Google Fonts so it looks as its author intended. Off by default — pages fall back to system fonts and Siddran stays fully offline. Nothing else is ever fetched."
+      >
+        <ToggleSwitch
+          checked={settings.htmlWebFonts === true}
+          onChange={(v) => updateSetting('htmlWebFonts', v)}
+        />
+      </SettingRow>
+    </div>
+  )
+}
+
 
 // ── Star tuning block ──────────────────────────────────────────────
 const STAR_SLIDERS = [

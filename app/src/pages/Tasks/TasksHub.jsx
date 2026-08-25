@@ -11,6 +11,10 @@ import DailyTaskModal from "../../components/Common/DailyTaskModal"
 import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineTemplate, HiOutlineViewBoards } from 'react-icons/hi'
 import { LuCalendarDays } from 'react-icons/lu'
 import BundleCard from "../../components/Tasks/BundleCard"
+import {
+  readPlacements, writePlacements, placementFor, setPlacement, prunePlacements,
+  ROUTINES_COL, DAILY_KEY, bundleKey,
+} from "../../hooks/kanbanBoard"
 import BundleDetailModal from "../../components/Common/BundleDetailModal"
 import { useRowMasonry } from '../../hooks/useRowMasonry'
 import Skeleton from "../../components/Common/Skeleton"
@@ -29,7 +33,7 @@ function TasksHub({
   loading,
   addTask,
   updateTask,
-  deleteTask,
+  deleteTask, setTaskOrders,
   toggleTaskCompletion,
   addDailyTask,
   updateDailyTask,
@@ -51,15 +55,22 @@ function TasksHub({
 
   const calendarView = useCalendarView()
 
-  // Persist view mode in localStorage. Modes: 'card' | 'kanban' (old 'list' → kanban).
+  // Persist view mode in localStorage. Two views only: 'card' (masonry) | 'kanban'.
+  // ('list' is a legacy value; the old 'sectioned' card layout has been removed.)
   const [viewMode, setViewMode] = useState(() => {
     const m = localStorage.getItem('tasksViewMode')
     return m === 'kanban' || m === 'list' ? 'kanban' : 'card'
   })
-  const [layoutMode, setLayoutMode] = useState(() => {
-    return localStorage.getItem('tasksLayoutMode') || 'packed'
-  })
-  const [sortBy, setSortBy] = useState('priority')
+  // Sort is remembered per view, because the two want different defaults: a kanban
+  // board is an arrangement you make by hand, while the card grid is a list you want
+  // ordered by something. Sharing one value meant switching to kanban re-sorted your
+  // board out from under you, and dragging then left the card grid stuck on Manual.
+  const [sortByView, setSortByView] = useState({ card: 'priority', kanban: 'manual' })
+  const sortBy = sortByView[viewMode] ?? 'priority'
+  const setSortBy = useCallback(
+    (next) => setSortByView(prev => ({ ...prev, [viewMode]: next })),
+    [viewMode],
+  )
   const [sortDir, setSortDir] = useState('asc') // sorting direction (ascending/descending)
   const [showCompleted, setShowCompleted] = useState(true)
   const [deadlineFilter, setDeadlineFilter] = useState('all')
@@ -164,6 +175,16 @@ function TasksHub({
       // First sort by completion status (incomplete first)
       if (a.is_completed !== b.is_completed) {
         return a.is_completed ? 1 : -1
+      }
+
+      // Manual order, set by dragging on the kanban board. Tasks never dragged fall
+      // to the end, then break ties by priority so the board still reads sensibly the
+      // first time you switch to it.
+      if (sortBy === 'manual') {
+        const ao = Number.isFinite(a.order) ? a.order : Infinity
+        const bo = Number.isFinite(b.order) ? b.order : Infinity
+        if (ao !== bo) return ao - bo
+        return (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1)
       }
 
       // Sort by priority within each group
@@ -278,7 +299,7 @@ function TasksHub({
     return () => observer.disconnect()
   }, [hasMoreBundles, loadingMore, loadMoreBundles])
 
-  useRowMasonry(packedRef, [sortedTasks.length, sortBy, sortDir, showCompleted, deadlineFilter, deadlineRange, dailyTasks.length, bundles.length, isDailyCardOpen, layoutMode, viewMode])
+  useRowMasonry(packedRef, [sortedTasks.length, sortBy, sortDir, showCompleted, deadlineFilter, deadlineRange, dailyTasks.length, bundles.length, isDailyCardOpen, viewMode])
 
   const changeView = () => {
     const newMode = viewMode === "card" ? "kanban" : "card"
@@ -288,31 +309,210 @@ function TasksHub({
 
   // Kanban: group the (already sorted/filtered) tasks into priority columns, and
   // reprioritize on drop.
+  // Routines is where dailies and bundles live until you put them somewhere else.
+  // It is NOT a priority — a bundle parked in "High" isn't high priority, it just
+  // sits there, which is why its placement is an arrangement rather than a field.
   const KANBAN_COLS = [
     { key: 'high', label: 'High priority' },
     { key: 'normal', label: 'Normal' },
     { key: 'low', label: 'Low priority' },
+    { key: ROUTINES_COL, label: 'Routines' },
   ]
   const tasksByPriority = useMemo(() => {
     const g = { high: [], normal: [], low: [] }
     for (const t of sortedTasks) (g[t.priority] || g.normal).push(t)
     return g
   }, [sortedTasks])
-  const onKanbanDrop = (e, prio) => {
+  // Kanban drag & drop.
+  //
+  // Nothing here calls setState while a drag is in flight. A re-render replaces the
+  // card being dragged, and the browser cancels the drag the moment its source node
+  // leaves the DOM — so the placeholder is drawn by toggling classes on nodes React
+  // already owns, never by moving DOM around (which the reconciler can choke on at
+  // the next render). State only changes on drop, once the drag is over.
+  const [placements, setPlacements] = useState(() => readPlacements())
+
+  // Cards that aren't tasks: the single Today's Tasks card, plus one per bundle.
+  const routineCards = useMemo(() => {
+    const out = []
+    if (dailyTasks.length > 0) out.push({ kind: 'daily', key: DAILY_KEY })
+    for (const b of bundles) out.push({ kind: 'bundle', key: bundleKey(b.id), bundle: b })
+    return out
+  }, [dailyTasks.length, bundles])
+
+  // Forget placements for bundles that no longer exist, or they hold slots forever.
+  //
+  // Gated on the bundles having actually loaded. On the first render `bundles` is
+  // still [] , so pruning against it declared every placement dead and wrote the
+  // empty result to disk — the arrangement was wiped on every single launch.
+  // `bundlesPagination` is only set after a real response, so it's the honest signal.
+  useEffect(() => {
+    if (!bundlesPagination) return
+    const live = routineCards.map(r => r.key)
+    setPlacements(prev => {
+      const next = prunePlacements(prev, live)
+      if (Object.keys(next).length === Object.keys(prev).length) return prev
+      writePlacements(next)
+      return next
+    })
+  }, [routineCards, bundlesPagination])
+
+  // One ordered list per column, tasks and routine cards interleaved by `order`.
+  const boardCols = useMemo(() => {
+    const cols = {}
+    for (const c of KANBAN_COLS) cols[c.key] = []
+    for (const key of ['high', 'normal', 'low']) {
+      for (const t of tasksByPriority[key]) {
+        cols[key].push({
+          kind: 'task', key: `task:${t.id}`, task: t,
+          order: Number.isFinite(t.order) ? t.order : Number.MAX_SAFE_INTEGER,
+        })
+      }
+    }
+    for (const r of routineCards) {
+      const p = placementFor(placements, r.key)
+      const col = cols[p.col] ? p.col : ROUTINES_COL
+      cols[col].push({ ...r, order: p.order })
+    }
+    for (const k of Object.keys(cols)) cols[k].sort((a, b) => a.order - b.order)
+    return cols
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasksByPriority, routineCards, placements])
+
+  const dragIdRef = useRef(null)
+  const colBodyRefs = useRef({})
+  const colElRefs = useRef({})     // the visible board box — where the glow belongs
+  const colDropRefs = useRef({})   // the full-height column — the actual drop target
+  const hintRefs = useRef({})      // "Drop in X", positioned into the visible part
+  const dragFromColRef = useRef(null)  // which column the drag started in
+  const dropTargetRef = useRef(null)   // last (column:index) painted, to avoid redundant work
+  const paintRef = useRef(null)        // pending rAF, so we repaint at most once a frame
+
+  // Just the in-column placeholder, leaving the board outline alone.
+  const clearSlots = useCallback(() => {
+    for (const key of Object.keys(colBodyRefs.current)) {
+      const body = colBodyRefs.current[key]
+      if (!body) continue
+      body.querySelectorAll('.' + styles.gapBefore).forEach(el => el.classList.remove(styles.gapBefore))
+      const tail = body.querySelector('.' + styles.tailSlot)
+      if (tail) tail.classList.remove(styles.tailOn)
+    }
+  }, [])
+
+  const clearDropUI = useCallback(() => {
+    dropTargetRef.current = null
+    if (paintRef.current) { cancelAnimationFrame(paintRef.current); paintRef.current = null }
+    clearSlots()
+    for (const key of Object.keys(colElRefs.current)) {
+      colElRefs.current[key]?.classList.remove(styles.colOver)
+    }
+    for (const key of Object.keys(hintRefs.current)) {
+      hintRefs.current[key]?.classList.remove(styles.hintOn)
+    }
+    for (const key of Object.keys(colDropRefs.current)) {
+      colDropRefs.current[key]?.classList.remove(styles.hitOver)
+    }
+  }, [clearSlots])
+
+  // Which index the pointer sits at, ignoring the card being dragged.
+  const dropIndexAt = useCallback((body, clientY) => {
+    const cards = [...body.querySelectorAll('.' + styles.kanbanCardWrap)]
+      .filter(el => el.dataset.cardKey !== dragIdRef.current)
+    for (let i = 0; i < cards.length; i++) {
+      const r = cards[i].getBoundingClientRect()
+      if (clientY < r.top + r.height / 2) return { index: i, cards }
+    }
+    return { index: cards.length, cards }
+  }, [])
+
+  const onKanbanDragOver = useCallback((e, colKey) => {
     e.preventDefault()
-    // Ids come back as strings and may be numeric (legacy rows) or uuids — match on
-    // the string form, then act with the task's own id so its type is preserved.
-    const raw = e.dataTransfer.getData('text/plain')
-    if (!raw) return
-    const task = tasks.find(t => String(t.id) === raw)
-    if (task && task.priority !== prio) updateTask(task.id, { priority: prio })
+    e.dataTransfer.dropEffect = 'move'
+    const body = colBodyRefs.current[colKey]
+    if (!body) return
+
+    const { index, cards } = dropIndexAt(body, e.clientY)
+    const at = colKey + ':' + index
+    if (dropTargetRef.current === at) return
+    dropTargetRef.current = at
+
+    // Paint at most once per frame. `dragover` fires far faster than the screen
+    // refreshes, and while crossing cards the index changes on nearly every event —
+    // repainting each one is what made it strobe while moving but settle when still.
+    if (paintRef.current) cancelAnimationFrame(paintRef.current)
+    paintRef.current = requestAnimationFrame(() => {
+      paintRef.current = null
+      // Only the column that owns the drop keeps its outline; swap rather than
+      // clear-then-add, so approaching a neighbour never blanks both.
+      for (const key of Object.keys(colElRefs.current)) {
+        colElRefs.current[key]?.classList.toggle(styles.colOver, key === colKey)
+      }
+      // The column can be taller than the window, so anchoring the hint to the top
+      // or the drop slot puts it off screen exactly when it's needed. Centre it in
+      // the visible slice instead.
+      for (const key of Object.keys(colDropRefs.current)) {
+        colDropRefs.current[key]?.classList.toggle(styles.hitOver, key === colKey)
+      }
+      // Moving a card within its own column is a rearrange, not a move — you can
+      // already see exactly where it will land, so naming the column is noise.
+      const sameCol = dragFromColRef.current === colKey
+      for (const key of Object.keys(hintRefs.current)) {
+        const hint = hintRefs.current[key]
+        if (!hint) continue
+        hint.classList.toggle(styles.hintOn, key === colKey && !sameCol)
+        if (key !== colKey || sameCol) continue
+        const box = colDropRefs.current[key]?.getBoundingClientRect()
+        if (!box) continue
+        const top = Math.max(box.top, 0)
+        const bottom = Math.min(box.bottom, window.innerHeight)
+        hint.style.top = `${(top + bottom) / 2 - box.top}px`
+      }
+      clearSlots()
+      if (index < cards.length) cards[index].classList.add(styles.gapBefore)
+      else {
+        const tail = body.querySelector('.' + styles.tailSlot)
+        if (tail) tail.classList.add(styles.tailOn)
+      }
+    })
+  }, [clearSlots, dropIndexAt])
+
+  const onKanbanDrop = (e, colKey) => {
+    e.preventDefault()
+    const body = colBodyRefs.current[colKey]
+    const index = body ? dropIndexAt(body, e.clientY).index : 0
+    const dragged = e.dataTransfer.getData('text/plain')
+    dragIdRef.current = null
+    clearDropUI()
+    if (!dragged) return
+
+    const from = boardCols[colKey].filter(it => it.key !== dragged)
+    const moving =
+      Object.values(boardCols).flat().find(it => it.key === dragged)
+    if (!moving) return
+    from.splice(Math.min(index, from.length), 0, moving)
+
+    // Renumber the whole column so tasks and routine cards share one sequence —
+    // that shared numbering is what lets them interleave at all.
+    const taskOrders = []
+    let nextPlacements = placements
+    from.forEach((it, i) => {
+      if (it.kind === 'task') taskOrders.push({ id: it.task.id, order: i })
+      else nextPlacements = setPlacement(nextPlacements, it.key, colKey, i)
+    })
+
+    // A task dropped into a priority column adopts it. Routines columns carry no
+    // priority meaning, so a task landing there keeps whatever it had.
+    if (moving.kind === 'task' && colKey !== ROUTINES_COL && moving.task.priority !== colKey) {
+      updateTask(moving.task.id, { priority: colKey })
+    }
+    if (taskOrders.length) setTaskOrders(taskOrders)
+    if (nextPlacements !== placements) {
+      setPlacements(nextPlacements)
+      writePlacements(nextPlacements)
+    }
+    if (sortBy !== 'manual') setSortBy('manual')
   }
 
-  const changeLayout = () => {
-    const newMode = layoutMode === 'packed' ? 'sectioned' : 'packed'
-    setLayoutMode(newMode)
-    localStorage.setItem('tasksLayoutMode', newMode)
-  }
 
   // Selecting Task Logic
   const openDailyCardDetails = (task) => {
@@ -412,7 +612,8 @@ function TasksHub({
               </select>
             )}
 
-            {/* Sort options */}
+            {/* Sort options — hidden on the kanban board, which is ordered by hand. */}
+            {viewMode !== 'kanban' && (
             <select
               value={sortBy}
               onChange={ e => setSortBy(e.target.value)}
@@ -421,7 +622,8 @@ function TasksHub({
               <option value="priority">Priority</option>
               <option value="dueDate">Deadline</option>
             </select>
-            {sortBy === 'dueDate' && (
+            )}
+            {viewMode !== 'kanban' && sortBy === 'dueDate' && (
               <select value={sortDir} onChange={ e => setSortDir(e.target.value)} className={styles.sortSelect}>
                 <option value="asc">Earliest</option>
                 <option value="dsc">Furthest</option>
@@ -454,11 +656,6 @@ function TasksHub({
               </button>
             )}
 
-            {viewMode === 'card' && (
-              <button onClick={changeLayout} className={styles.toggleBtn} title={layoutMode === 'packed' ? 'Sectioned view' : 'Packed view'}>
-                {layoutMode === 'packed' ? <HiOutlineTemplate size={18} /> : <HiOutlineViewBoards size={18} />}
-              </button>
-            )}
             <button onClick={changeView} className={styles.toggleBtn} title={viewMode === "kanban" ? "Card View" : "Kanban View"}>
               {viewMode === "kanban" ? <HiOutlineViewGrid size={18} /> : <HiOutlineViewBoards size={18} />}
             </button>
@@ -471,17 +668,11 @@ function TasksHub({
         {/* Kanban mode — priority columns; drag a task between columns to reprioritize */}
         {viewMode === 'kanban' && (
           <div className={styles.kanbanWrapper}>
-            {/* pinned strip: a slim full-width add-task row, then dailies + projects */}
+            {/* Only the add bar is pinned now — dailies and bundles are cards on the
+                board, so they no longer cost a band of vertical space whether or not
+                there is anything in them. */}
             <div className={styles.kanbanTop}>
               <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode="list" />
-              {(dailyTasks.length > 0 || bundles.length > 0) && (
-                <div className={styles.kanbanExtras}>
-                  <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
-                  {bundles.map(bundle => (
-                    <BundleCard key={bundle.id} bundle={bundle} toggleBundleTaskCompletion={toggleBundleTaskCompletion} deleteBundle={deleteBundle} onOpenDetail={setOpenBundle} />
-                  ))}
-                </div>
-              )}
             </div>
 
             {loading ? (
@@ -491,29 +682,63 @@ function TasksHub({
                 {KANBAN_COLS.map(col => (
                   <div
                     key={col.key}
+                    ref={el => { colDropRefs.current[col.key] = el }}
                     className={styles.kanbanCol}
-                    onDragOver={e => e.preventDefault()}
+                    onDragOver={e => onKanbanDragOver(e, col.key)}
                     onDrop={e => onKanbanDrop(e, col.key)}
                   >
+                    <div className={styles.dropHint} ref={el => { hintRefs.current[col.key] = el }}>
+                      Drop in {col.label}
+                    </div>
+                    <div className={styles.kanbanColInner} ref={el => { colElRefs.current[col.key] = el }}>
                     <div className={styles.kanbanColHead}>
                       <span className={`${styles.kanbanDot} ${styles['dot_' + col.key]}`} />
                       <span className={styles.kanbanColTitle}>{col.label}</span>
-                      <span className={styles.kanbanCount}>{tasksByPriority[col.key].length}</span>
+                      <span className={styles.kanbanCount}>{boardCols[col.key].length}</span>
                     </div>
-                    <div className={styles.kanbanColBody}>
-                      {tasksByPriority[col.key].map(task => (
+                    <div className={styles.kanbanColBody} ref={el => { colBodyRefs.current[col.key] = el }}>
+                      {boardCols[col.key].map(item => (
                         <div
-                          key={task.id}
+                          key={item.key}
                           className={styles.kanbanCardWrap}
+                          data-card-key={item.key}
                           draggable
-                          onDragStart={e => e.dataTransfer.setData('text/plain', String(task.id))}
+                          onDragStart={e => {
+                            dragIdRef.current = item.key
+                            dragFromColRef.current = col.key
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', item.key)
+                            // Class only — a re-render here would kill the drag.
+                            const el = e.currentTarget
+                            requestAnimationFrame(() => el.classList.add(styles.lifted))
+                          }}
+                          onDragEnd={e => {
+                            e.currentTarget.classList.remove(styles.lifted)
+                            dragIdRef.current = null
+                            dragFromColRef.current = null
+                            clearDropUI()
+                          }}
                         >
-                          <TaskCard task={task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode="card" isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
+                          {item.kind === 'task' && (
+                            <TaskCard task={item.task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode="card" isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(item.task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
+                          )}
+                          {item.kind === 'daily' && (
+                            <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
+                          )}
+                          {item.kind === 'bundle' && (
+                            <BundleCard bundle={item.bundle} toggleBundleTaskCompletion={toggleBundleTaskCompletion} deleteBundle={deleteBundle} onOpenDetail={setOpenBundle} />
+                          )}
                         </div>
                       ))}
-                      {tasksByPriority[col.key].length === 0 && (
-                        <div className={styles.kanbanEmpty}>Drop a task here</div>
+                      {boardCols[col.key].length === 0 && (
+                        <div className={styles.kanbanEmpty}>
+                          {col.key === ROUTINES_COL ? 'Dailies and bundles land here' : 'Drop a task here'}
+                        </div>
                       )}
+                      {/* Always rendered, so opening it is a class toggle rather than a
+                          DOM insertion — see the note on onKanbanDrop. */}
+                      <div className={styles.tailSlot} />
+                    </div>
                     </div>
                   </div>
                 ))}
@@ -528,7 +753,7 @@ function TasksHub({
         )}
 
         {/* Packed card mode — single JS row-masonry grid */}
-        {viewMode === 'card' && layoutMode === 'packed' && (
+        {viewMode === 'card' && (
           <div className={styles.packedGrid} ref={packedRef}>
             <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode={viewMode} />
             <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
@@ -563,49 +788,6 @@ function TasksHub({
         )}
 
         {/* Sectioned card mode — pinned row, projects grid, tasks masonry */}
-        {viewMode === 'card' && layoutMode === 'sectioned' && (
-          <div className={styles.sectionedWrapper}>
-            <div className={styles.sectionedPinned}>
-              <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode={viewMode} />
-              <DailyTaskCard tasks={dailyTasks} toggleCompletion={toggleDailyTaskCompletion} deleteTask={deleteDailyTask} onOpenDetail={openDailyCardDetails} onOpenCard={() => setIsDailyCardOpen(true)} />
-              {hasMoreDailyTasks && (
-                <div ref={dailyTasksSentinelRef} className={styles.sentinel}>
-                  {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
-                </div>
-              )}
-            </div>
-
-            {(bundles.length > 0 || hasMoreBundles) && (
-              <div className={styles.sectionedBundles}>
-                {bundles.map(bundle => (
-                  <BundleCard key={bundle.id} bundle={bundle} toggleBundleTaskCompletion={toggleBundleTaskCompletion} deleteBundle={deleteBundle} onOpenDetail={setOpenBundle} />
-                ))}
-                {hasMoreBundles && (
-                  <div ref={bundlesSentinelRef} className={styles.sentinel}>
-                    {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className={styles.gridView}>
-              {loading ? (
-                <p>Loading tasks...</p>
-              ) : sortedTasks.length > 0 ? (
-                sortedTasks.map(task => (
-                  <TaskCard key={task.id} task={task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode={viewMode} isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
-                ))
-              ) : (
-                <div className={styles.emptyState}><p>No tasks yet. Create today's set of tasks or create a new task to do</p></div>
-              )}
-              {hasMoreTasks && (
-                <div ref={tasksSentinelRef} className={styles.sentinel}>
-                  {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Open task details Modal for DAILY TASK */}
         {isDailyCardOpen && <DailyTaskModal

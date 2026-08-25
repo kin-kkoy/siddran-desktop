@@ -21,8 +21,8 @@ import { readOutlineOpen, writeOutlineOpen } from '../../hooks/noteOutlineCache'
 import { useComments } from '../../hooks/useComments'
 import CommentsPanel from '../../components/Comments/CommentsPanel'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
-import { usePdfView } from '../../contexts/PdfViewContext'
-import { isPdfHref, pdfNameFromHref } from '../../utils/pdfLinks'
+import { useSidePane } from '../../contexts/SidePaneContext'
+import { isAttachmentHref, nameFromHref } from '../../utils/attachmentLinks'
 import { toast } from '../../utils/toast'
 import Skeleton from '../../components/Common/Skeleton'
 import { NOTE_COLORS } from '../../components/Notes/noteColors'
@@ -59,7 +59,7 @@ function NotePane({
 }) {
 
   const split = useNoteSplit()
-  const pdfView = usePdfView()
+  const sidePane = useSidePane()
   const { authFetch, API } = useApi()
   const { sandboxes, sandboxesLoaded } = useSandboxes()
 
@@ -346,8 +346,8 @@ function NotePane({
   const handleOpenPdf = useCallback((href) => {
     if (!href) return
     if (!isPrimary && noteId != null) navigate(`/notes/${noteId}`)
-    pdfView.requestOpen(href, pdfNameFromHref(href))
-  }, [pdfView, isPrimary, noteId, navigate])
+    sidePane.requestOpen(href, nameFromHref(href))
+  }, [sidePane, isPrimary, noteId, navigate])
 
   // Clicking a [[link]] in the reading view — same behaviours as the editor.
   const handleOpenLink = useCallback((el) => {
@@ -356,7 +356,7 @@ function NotePane({
     if (kind === 'sandbox') { handleOpenSandbox(el.getAttribute('data-link-id')); return }
     if (kind === 'bundle') { navigate(`/tasks?bundle=${el.getAttribute('data-link-id')}`); return }
     const href = el.getAttribute('data-href')
-    if (href && isPdfHref(href)) { handleOpenPdf(href); return }
+    if (href && isAttachmentHref(href)) { handleOpenPdf(href); return }
     const target = (el.getAttribute('data-target') || '').trim()
     const found = (notes || []).find(n => (n.title || '').trim().toLowerCase() === target.toLowerCase())
     if (found) navigateToNote(found.id)

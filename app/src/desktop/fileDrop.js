@@ -1,6 +1,7 @@
 import { EditorView } from '@codemirror/view'
 import { uploadImageFile, fileFromLocalPath } from '../utils/imageUpload'
 import { isOpen as isLocalOpen, saveAttachment } from './localStore'
+import { attachHtmlFromPath } from './media'
 
 // Native OS file-drop handling for the desktop shell. On WebKitGTK the webview's
 // DOM drop event exposes no usable file data (and `dragDropEnabled:false` just
@@ -12,6 +13,8 @@ import { isOpen as isLocalOpen, saveAttachment } from './localStore'
 
 const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|avif)$/i
 const PDF_EXT = /\.pdf$/i
+// Documents that open in the side pane rather than embedding inline.
+const DOC_EXT = /\.(pdf|html?)$/i
 const safeName = (n) => (n || 'image').replace(/[[\]()\n\r]/g, '').trim() || 'image'
 const encodePathForMarkdown = (p) => {
   if (/^(data:|https?:|blob:)/.test(p)) return p
@@ -32,7 +35,7 @@ function editorAt(cssX, cssY) {
 
 async function handleDrop(paths, position) {
   if (!isLocalOpen()) return
-  const files = (paths || []).filter((p) => IMG_EXT.test(p) || PDF_EXT.test(p))
+  const files = (paths || []).filter((p) => IMG_EXT.test(p) || DOC_EXT.test(p))
   if (!files.length) return
   // Tauri gives a PhysicalPosition; convert to CSS pixels for DOM hit-testing.
   const dpr = window.devicePixelRatio || 1
@@ -40,21 +43,30 @@ async function handleDrop(paths, position) {
   if (!target) return
   const { view } = target
   let pos = target.pos
-  let lastPdf = null
+  let lastDoc = null
   for (const p of files) {
     const file = await fileFromLocalPath(p)
     if (!file) continue
     try {
-      if (PDF_EXT.test(p)) {
-        // Copy into the Bag and drop a clickable link (persists so the PDF can be
+      if (DOC_EXT.test(p)) {
+        // Copy into the Bag and drop a clickable link (persists so the file can be
         // reopened later); the last one dropped also opens in the viewer pane.
-        const rel = await saveAttachment(file)
+        // HTML goes through the bundle path so a saved page brings its assets
+        // folder with it — dropping the .html alone would render it stripped.
+        let rel, name
+        if (PDF_EXT.test(p)) {
+          rel = await saveAttachment(file)
+          name = file.name || 'document.pdf'
+        } else {
+          const r = await attachHtmlFromPath(p, file.name || 'page.html')
+          rel = r?.path
+          name = r?.name || 'page.html'
+        }
         if (!rel) continue
-        const name = file.name || 'document.pdf'
         const md = `[${safeName(name)}](${encodePathForMarkdown(rel)})\n`
         view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length } })
         pos += md.length
-        lastPdf = { path: rel, name }
+        lastDoc = { path: rel, name }
       } else {
         const { path } = await uploadImageFile(null, null, file) // local Bag save — no auth needed
         const md = `![${safeName(file.name)}](${encodePathForMarkdown(path)})\n`
@@ -63,8 +75,8 @@ async function handleDrop(paths, position) {
       }
     } catch { /* skip this file */ }
   }
-  if (lastPdf && typeof window.__siddranOpenPdf === 'function') {
-    window.__siddranOpenPdf(lastPdf.path, lastPdf.name)
+  if (lastDoc && typeof window.__siddranOpenPdf === 'function') {
+    window.__siddranOpenPdf(lastDoc.path, lastDoc.name)
   }
 }
 

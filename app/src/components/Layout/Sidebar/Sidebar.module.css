@@ -218,9 +218,12 @@
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    /* left inset matches the nav icons: navSection 0.9rem + menuBtn 0.75rem = 1.65rem,
-       so the chevron lines up under the sidebar's Notes/Tasks/etc. icons. */
-    padding: 0.45rem 0.75rem 0.45rem 1.65rem;
+    /* Same box as a nav button — 0.9rem outer inset (navSection) plus 0.75rem inner
+       padding — so this header's edges AND its label line up with Notes/Tasks/etc.
+       Insetting only the content lined the chevron up but left the box flush to the
+       sidebar edge, which read as misaligned. */
+    margin: 0 0.9rem;
+    padding: 0.45rem 0.75rem;
     background: transparent;
     border: none;
     cursor: pointer;

@@ -87,11 +87,28 @@
 }
 .kanbanBoard {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
-    align-items: start;
+    /* Stretch, not start. A column's droppable area used to end where its cards
+       did, so moving a card from a tall column into a short one meant scrolling
+       back up to hit its box. Equal heights make the whole column a target. */
+    align-items: stretch;
 }
 .kanbanCol {
+    /* Invisible, full height: this is only the drop target. Keeping it stretched
+       means a short column is still reachable from anywhere on the board, while the
+       box you actually see hugs its contents — a column with two things in it looks
+       like a column with two things in it, not a wall of empty space. */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: none;
+    border: none;
+    padding: 0;
+    min-height: 220px;
+}
+
+.kanbanColInner {
     display: flex;
     flex-direction: column;
     min-height: 220px;
@@ -101,7 +118,7 @@
     padding: 12px;
     transition: border-color 0.18s ease, background 0.18s ease;
 }
-.kanbanCol:hover {
+.kanbanColInner:hover {
     border-color: var(--border-strong);
 }
 .kanbanColHead {
@@ -138,6 +155,7 @@
     padding: 1px 8px;
 }
 .kanbanColBody {
+
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -318,26 +336,8 @@
 }
 
 /* ── Sectioned layout containers ────────────────────────────── */
-.sectionedWrapper {
-    position: relative;
-    z-index: 1;
-    animation: fadeUp 0.4s ease both;
-    animation-delay: 0.1s;
-}
 
-.sectionedPinned {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
 
-.sectionedBundles {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
 
 .emptyStatePacked {
     grid-column: 1 / -1;
@@ -345,4 +345,103 @@
     color: var(--text-dim);
     margin-top: 40px;
     font-style: italic;
+}
+
+/* ── kanban drag & drop ─────────────────────────────────────────────
+   The gap is a margin on the card that will follow the dragged one, with the
+   placeholder drawn in that space by ::before. Sizing a card rather than
+   inserting a node keeps the DOM stable mid-drag, which the drag depends on. */
+.kanbanCardWrap {
+    position: relative;
+    transition: margin-top 0.18s cubic-bezier(0.2, 0.9, 0.3, 1),
+                opacity 0.15s ease,
+                transform 0.15s ease;
+}
+
+.lifted {
+    opacity: 0.32;
+    transform: scale(0.97);
+}
+
+.gapBefore {
+    margin-top: 54px;
+}
+.gapBefore::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -50px;
+    height: 42px;
+    border: 1.5px dashed var(--accent-warning);
+    border-radius: 6px;
+    background: var(--accent-warning-alpha);
+}
+
+/* Same placeholder, for dropping below the last card. */
+.tailSlot {
+    height: 0;
+    opacity: 0;
+    border: 1.5px dashed var(--accent-warning);
+    border-radius: 6px;
+    background: var(--accent-warning-alpha);
+    transition: height 0.18s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.14s ease;
+}
+.tailOn {
+    height: 42px;
+    opacity: 1;
+}
+
+/* The board's own edge glows — the outline traces the column, not a box drawn
+   inside it. */
+.colOver {
+    border-color: var(--accent-warning);
+    box-shadow: 0 0 0 1px var(--accent-warning),
+                0 0 18px -2px color-mix(in srgb, var(--accent-warning) 55%, transparent);
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+
+/* Routines column — deliberately a different hue from the three priorities, so it
+   doesn't read as "another priority level". */
+.dot_routines { background: var(--accent-success); }
+
+/* Where the card will land, named. The tail slot sits at the end of a long column
+   and can be off screen, so the column header says it too — that line is always
+   visible no matter how far down you are. */
+.dropHint {
+    /* Text only — the hit area's own dashed edge already says "here"; a second
+       bordered box on top of it just competes with the card being dragged. */
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    transform: translateY(-50%) scale(0.96);
+    z-index: 5;
+    text-align: center;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent-warning);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none;
+}
+.hintOn { opacity: 1; transform: translateY(-50%) scale(1); }
+
+
+
+/* The hit area while it's the drop target.
+   Broken outline, so it reads as "this extends past what you can see" rather than
+   as another panel — the panel keeps the solid glow. `outline` rather than
+   `border` because it doesn't take part in layout. */
+.hitOver {
+    outline: 1.5px dashed var(--accent-warning);
+    outline-offset: -1px;
+    border-radius: 14px;
+    /* Derived from the text colour, so it lightens the surface on dark themes and
+       darkens it on light ones without needing a second token per theme. */
+    background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+    transition: background 0.16s ease;
 }

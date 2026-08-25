@@ -1,6 +1,7 @@
 import { EditorView, keymap } from '@codemirror/view'
 import { Facet, Prec } from '@codemirror/state'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
+import { isAttachmentHref } from '../../../utils/attachmentLinks'
 
 // Obsidian-style `[[wikilinks]]` between notes: a Lezer inline node, live-preview
 // rendering (in cm/livePreview.js), `[[`-autocomplete over existing note titles,
@@ -121,11 +122,13 @@ const clickHandler = EditorView.domEventHandlers({
     const cfg = view.state.facet(wikilinkConfig)
     const tag = event.target?.closest?.('.cm-hashtag')
     if (tag) { event.preventDefault(); cfg.searchTag?.(tag.getAttribute('data-tag')); return true }
-    // A `.pdf` external link opens in the side viewer instead of doing nothing.
+    // An attachment link (.pdf / local .html) opens in the side viewer instead of
+    // doing nothing. Predicate is shared with the reading view — see
+    // utils/attachmentLinks.js; this used to carry its own copy of the regex.
     const ext = event.target?.closest?.('.cm-external-link')
     if (ext) {
       const href = ext.getAttribute('data-href') || ''
-      if (/\.pdf(\?|#|$)/i.test(href)) { event.preventDefault(); cfg.openPdf?.(href); return true }
+      if (isAttachmentHref(href)) { event.preventDefault(); cfg.openAttachment?.(href); return true }
       return false
     }
     const el = event.target?.closest?.('.cm-internal-link')

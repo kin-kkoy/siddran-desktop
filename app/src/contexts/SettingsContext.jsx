@@ -30,6 +30,11 @@ const DEFAULTS = {
   starDirection: '↙',
   noteEditorWidth: 1200,
   rememberNoteState: true,
+  restoreLastSession: true, // reopen the last route + right-column pane on launch
+  showSplash: false,        // launch animation — off by default, kept for a look-and-decide
+  htmlWebFonts: false,      // let viewed HTML pages fetch Google Fonts (the app's only network egress)
+  htmlTrustPrompt: 'once',  // ask before trusting an HTML page: 'always' | 'once' (per page) | 'never'
+
   centerNowLine: true,
   bgBrightness: 0, // background lightness offset, applied on every page; -20..+20
   noteLayout: 'scroll', // reading-view layout: 'scroll' (continuous) | 'book' (two pages)

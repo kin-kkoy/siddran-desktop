@@ -39,6 +39,7 @@ export const resolveImageUrl = (path) => {
 const MIME_BY_EXT = {
     png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
     webp: 'image/webp', bmp: 'image/bmp', avif: 'image/avif', pdf: 'application/pdf',
+    html: 'text/html', htm: 'text/html',
 }
 
 // Read a file at an absolute on-disk path (via the Rust `bag_read_bytes` command,

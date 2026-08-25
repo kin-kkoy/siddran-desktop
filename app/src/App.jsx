@@ -4,6 +4,7 @@ import Sidebar from "./components/Layout/Sidebar/Sidebar.jsx"
 import { SidebarContext } from "./contexts/SidebarContext.jsx"
 import { GlobalExpandButton } from "./components/Layout/Sidebar/ExpandSidebarButton.jsx"
 import StarCanvas from "./components/Layout/StarCanvas/StarCanvas.jsx"
+import RouteMemory from "./components/Session/RouteMemory.jsx"
 
 import NotePage from "./pages/Notes/NotePage.jsx"
 import NotesHub from "./pages/Notes/NotesHub.jsx"
@@ -28,21 +29,25 @@ import { stampWeeklyPattern, patternFromPlot, plotFromPattern } from "./componen
 import { useCalendarView } from "./contexts/CalendarViewContext.jsx"
 import CalendarPeek from "./components/Calendar/Peek/CalendarPeek.jsx"
 import { SettingsProvider } from "./contexts/SettingsContext.jsx"
+import { readCachedSetting } from "./hooks/settingsCache.js"
+import { armRestore, clearRestore } from "./hooks/sessionRouteCache.js"
+import { setViewerBag, allowBagAssets, installCloseFlush } from "./desktop/htmlViewer.js"
 import { ApiProvider } from "./contexts/ApiContext.jsx"
 import { SandboxViewProvider } from "./contexts/SandboxViewContext.jsx"
 import { NoteSplitProvider } from "./contexts/NoteSplitContext.jsx"
-import { PdfViewProvider } from "./contexts/PdfViewContext.jsx"
+import { SidePaneProvider } from "./contexts/SidePaneContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
 import CommandPalette from "./components/CommandPalette/CommandPalette.jsx"
 import logger from "./utils/logger.js"
+import { toast } from "./utils/toast.js"
 import BagPicker from "./pages/Bag/BagPicker.jsx"
 import SplashScreen from "./components/Splash/SplashScreen.jsx"
 import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, getLastBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
-import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote } from "./desktop/localStore.js"
+import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote, flushNow } from "./desktop/localStore.js"
 import { createTauriFs } from "./desktop/fs/tauriFs.js"
 import { createMemFs } from "./desktop/fs/memFs.js"
 import { resetForGuest as resetSandboxStore } from "./hooks/sandboxStore.js"
@@ -100,8 +105,11 @@ function App() {
   // it instead of the picker. Stays true until the attempt resolves so the picker
   // never flashes first.
   const [autoOpening, setAutoOpening] = useState(() => isTauri() && !!getLastBag())
-  // Launch animation — plays once per app session (not per route change / remount).
+  // Launch animation — off by default (Settings ▸ Launch animation), and when on it
+  // plays once per app session (not per route change / remount). Read from the
+  // settings cache rather than the hook: this gate renders above <SettingsProvider>.
   const [showSplash, setShowSplash] = useState(() => {
+    if (readCachedSetting('showSplash', false) !== true) return false
     try {
       if (!sessionStorage.getItem('siddran_splash_shown')) {
         sessionStorage.setItem('siddran_splash_shown', '1')
@@ -245,6 +253,9 @@ function App() {
     return () => { cancelled = true }
   }, [refreshAuthToken])
 
+  // Flush the vault before the window closes — see installCloseFlush.
+  useEffect(() => installCloseFlush(flushNow), [])
+
   // Mouse buttons 4/5 (side back/forward buttons) drive history navigation
   // everywhere — WebKitGTK doesn't do it by default. window.history triggers
   // popstate, which BrowserRouter (mounted below) picks up.
@@ -325,8 +336,23 @@ function App() {
   const openBag = useCallback(async (bag) => {
     resetSandboxStore()      // drop any cached board list from a prior Bag
     resetSandboxItems()      // drop any cached board items
+    // Grant asset-protocol access to this Bag first: images and PDFs resolve through
+    // convertFileSrc, and anything rendered before the grant lands would come up blank.
+    if (isTauri() && !(await allowBagAssets(bag.path))) {
+      toast.error('Could not grant access to this Bag — images and PDFs may not display.')
+    }
     const fs = isTauri() ? createTauriFs() : createMemFs()
     await openBagStore(fs, bag.path)   // read the Bag folder into memory
+    // Confine the HTML viewer protocol to this Bag before anything can request a file.
+    await setViewerBag(bag.path)
+    // Arm "reopen where I left off" for THIS Bag, before the router mounts. Every
+    // way into a Bag funnels through here, so a restore armed for the last Bag can
+    // never be applied to a different one the user picks from the picker instead.
+    if (readCachedSetting('rememberNoteState', true) === true && readCachedSetting('restoreLastSession', true) === true) {
+      armRestore(bag.path)
+    } else {
+      clearRestore()
+    }
     setCurrentBag(bag)
     setUsername(bag.name)
     addRecentBag(bag)
@@ -413,7 +439,7 @@ function App() {
 
   // ------------- TASKS DATA LOGIC ===================================
   const {
-    tasks, dailyTasks, bundles, tasksPagination, dailyTasksPagination, bundlesPagination, loadMoreTasks, loadMoreDailyTasks, loadMoreBundles, loadingMore: tasksLoadingMore, loading: tasksLoading, addTask, updateTask, patchTaskInCache, setDailyTime, deleteTask, toggleTaskCompletion, addDailyTask, updateDailyTask, deleteDailyTask, toggleDailyTaskCompletion, batchToggleDailyTasks, batchDeleteDailyTasks, addBundle, updateBundle, deleteBundle, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion, batchDeleteBundleTasks
+    tasks, dailyTasks, bundles, tasksPagination, dailyTasksPagination, bundlesPagination, loadMoreTasks, loadMoreDailyTasks, loadMoreBundles, loadingMore: tasksLoadingMore, loading: tasksLoading, addTask, updateTask, patchTaskInCache, setDailyTime, deleteTask, setTaskOrders, toggleTaskCompletion, addDailyTask, updateDailyTask, deleteDailyTask, toggleDailyTaskCompletion, batchToggleDailyTasks, batchDeleteDailyTasks, addBundle, updateBundle, deleteBundle, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion, batchDeleteBundleTasks
   } = useTasks(authFetch, API, unlocked)
 
   // ------------- CALENDAR DATA LOGIC ===================================
@@ -779,7 +805,7 @@ function App() {
       loading={tasksLoading}
       addTask={addTaskSynced}
       updateTask={updateTask}
-      deleteTask={deleteTask}
+      deleteTask={deleteTask} setTaskOrders={setTaskOrders}
       toggleTaskCompletion={toggleTaskCompletion}
       addDailyTask={createDailyTask}
       updateDailyTask={updateDailyTaskSynced}
@@ -853,7 +879,7 @@ function App() {
     <ApiProvider authFetch={authFetch} API={API} isAuthed={unlocked}>
     <SandboxViewProvider>
     <NoteSplitProvider>
-    <PdfViewProvider>
+    <SidePaneProvider>
     <div style={style}>
 
       {unlocked && (
@@ -872,6 +898,8 @@ function App() {
       <BrowserRouter>
         <NoteTabsProvider>
         <SidebarContext.Provider value={{ collapsed: isCollapsed, setCollapsed: setIsCollapsed }}>
+        {/* Remembers the route per section + restores it once on launch (needs the Router). */}
+        <RouteMemory bagPath={currentBag?.path} notes={notes} notesReady={notesPagination != null} />
         {/* Background effects — inside Router so StarCanvas can use useLocation() */}
         <StarCanvas />
         {/* "Show sidebar" button for pages without their own toolbar (Hubs/Calendar) */}
@@ -1029,7 +1057,7 @@ function App() {
         </NoteTabsProvider>
       </BrowserRouter>
     </div>
-    </PdfViewProvider>
+    </SidePaneProvider>
     </NoteSplitProvider>
     </SandboxViewProvider>
     </ApiProvider>

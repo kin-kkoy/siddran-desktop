@@ -6,6 +6,7 @@ import SidebarOpenNotes from "./SidebarOpenNotes";
 import ProfileDropdown from "../ProfileDropdown/ProfileDropdown";
 import { LuStickyNote, LuListTodo, LuShapes, LuCalendarDays, LuPanelLeftClose, LuPanelLeftOpen, LuChevronDown } from "react-icons/lu";
 import { readListOpen, writeListOpen } from "../../../hooks/sidebarState";
+import { readSession, sectionTarget } from "../../../hooks/sessionRouteCache";
 
 
 function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag }) {
@@ -25,6 +26,14 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
     // board.
     const onSandboxHub = location.pathname === '/sandboxes';
     const showOpenNotes = !onNotePage && !onSandboxHub;
+
+    // Section buttons return you to where you were in that section. Read on every
+    // render so it can't go stale: `location.pathname` is already a render input,
+    // and the session store is a synchronous localStorage read.
+    // Already inside a section → the button goes to that section's hub instead, so
+    // it stays a way back to the overview rather than a no-op.
+    const session = readSession(currentBagPath)
+    const target = (section) => sectionTarget(session, section, location.pathname)
 
     const [listOpen, setListOpen] = useState(readListOpen)
     const toggleList = () => setListOpen(prev => { const next = !prev; writeListOpen(next); return next })
@@ -69,26 +78,28 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
 
                 {/* Navigation area */}
                 <div className={styles.navSection}>
-                    <Link to="/notes"
+                    <Link to={target('notes')}
                         className={`${styles.menuBtn} ${location.pathname.startsWith('/notes') ? styles.active : ''}`}
                         title="Notes">
                             <LuStickyNote className={styles.navIcon} size={18} />
                             <span className={styles.navLabel}>Notes</span>
                     </Link>
-                    <Link to="/tasks"
+                    <Link to={target('tasks')}
                         className={`${styles.menuBtn} ${location.pathname === '/tasks' ? styles.active : ''}`} title="Tasks">
                             <LuListTodo className={styles.navIcon} size={18} />
                             <span className={styles.navLabel}>Tasks</span>
                     </Link>
 
-                    <Link to="/sandboxes"
-                        className={`${styles.menuBtn} ${location.pathname === '/sandboxes' ? styles.active : ''}`}
+                    {/* startsWith, not ===: restoring to /sandboxes/:id would otherwise
+                        leave no nav item lit at all. */}
+                    <Link to={target('sandboxes')}
+                        className={`${styles.menuBtn} ${location.pathname.startsWith('/sandboxes') ? styles.active : ''}`}
                         title="SandBoxes">
                             <LuShapes className={styles.navIcon} size={18} />
                             <span className={styles.navLabel}>SandBoxes</span>
                     </Link>
 
-                    <Link to="/calendar"
+                    <Link to={target('calendar')}
                         className={`${styles.menuBtn} ${location.pathname === '/calendar' ? styles.active : ''}`}
                         title="Calendar">
                             <LuCalendarDays className={styles.navIcon} size={18} />
@@ -120,7 +131,7 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                             title={listOpen ? 'Collapse open notes' : 'Expand open notes'}
                         >
                             <LuChevronDown
-                                size={16}
+                                size={18}
                                 className={`${styles.listChevron} ${listOpen ? '' : styles.listChevronCollapsed}`}
                             />
                             <span>Opened Notes</span>

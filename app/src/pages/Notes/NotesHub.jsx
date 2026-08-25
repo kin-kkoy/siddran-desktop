@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Card from '../../components/Notes/Card'
 import HorizontalCard from '../../components/Notes/HorizontalCard'
@@ -20,6 +20,14 @@ import Skeleton from '../../components/Common/Skeleton'
 
 // obtains the notes and
 function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, reorderNotebooks, authFetch, API }) {
+
+  // List view is PAGED, not scrolled: the area is fixed to the viewport and the
+  // wheel swaps which notes are shown rather than moving the window. Rows are a
+  // uniform height here, so how many fit is arithmetic — measured once per resize.
+  const pagerRef = useRef(null)
+  const pagerBarRef = useRef(null)
+  const [page, setPage] = useState(0)
+  const [perPage, setPerPage] = useState(16)
 
   // Persist view mode in localStorage
   const [viewMode, setViewMode] = useState(() => {
@@ -249,6 +257,70 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
   const nbDrag = useDragReorder(notebookIds, reorderNotebooks, canReorder, 'notebooks')
   const noteDrag = useDragReorder(loneNoteIds, reorderNotes, canReorder, 'notes')
 
+  // One flat sequence so a page can straddle the notebooks/notes boundary.
+  const pagedItems = useMemo(() => ([
+    ...nbDrag.order.map(id => ({ kind: 'nb', id })),
+    ...noteDrag.order.map(id => ({ kind: 'note', id })),
+  ]), [nbDrag.order, noteDrag.order])
+
+  const pageCount = Math.max(1, Math.ceil(pagedItems.length / perPage))
+  const safePage = Math.min(page, pageCount - 1)
+  const visibleItems = viewMode === 'list'
+    ? pagedItems.slice(safePage * perPage, safePage * perPage + perPage)
+    : pagedItems
+
+  // How many rows fit between the top of the list and the bottom of the window.
+  //
+  // Deliberately NOT a ResizeObserver on the list: the list's height depends on
+  // perPage, so observing it means each measurement triggers another — that fed back
+  // on itself and locked the window up. The viewport is the only input that doesn't
+  // depend on the result.
+  const [pageHeight, setPageHeight] = useState(null)
+  useLayoutEffect(() => {
+    if (viewMode !== 'list') return
+    let raf = null
+    const measure = () => {
+      const el = pagerRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top
+      const barH = pagerBarRef.current?.getBoundingClientRect().height || 44
+      const avail = window.innerHeight - top - barH - 8
+      if (avail < 120) return
+      const row = el.querySelector('[data-row]')
+      const rowH = Math.max(40, row ? row.getBoundingClientRect().height : 56)
+      const gap = 12
+      const rows = Math.max(1, Math.floor((avail + gap) / (rowH + gap)))
+      // Size the box to a WHOLE number of rows. Using `avail` directly left a partial
+      // row visible at the bottom, which overflow:hidden then sliced in half.
+      const exact = rows * rowH + (rows - 1) * gap
+      setPerPage(prev => (prev === rows * 2 ? prev : rows * 2))
+      setPageHeight(prev => (prev === exact ? prev : exact))
+    }
+    // After layout, so `top` reflects the real header height rather than a
+    // pre-paint estimate — measuring too early made `avail` too generous, which is
+    // what left the page itself scrollable.
+    raf = requestAnimationFrame(measure)
+    window.addEventListener('resize', measure)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
+  }, [viewMode])
+
+  useEffect(() => { setPage(0) }, [viewMode, searchQuery])
+
+  // The wheel turns pages instead of scrolling — nothing here actually moves.
+  const onPagerWheel = useCallback((e) => {
+    if (viewMode !== 'list') return
+    e.preventDefault()
+    if (Math.abs(e.deltaY) < 4) return
+    setPage(p => Math.min(Math.max(p + (e.deltaY > 0 ? 1 : -1), 0), pageCount - 1))
+  }, [viewMode, pageCount])
+
+  // Nothing scrolls any more, so the observers never fire — pull the next batch as
+  // you approach the last page instead.
+  useEffect(() => {
+    if (viewMode !== 'list') return
+    if (safePage >= pageCount - 2 && hasMoreNotes && !loadingMore) loadMoreNotes?.()
+  }, [safePage, pageCount, hasMoreNotes, loadingMore, loadMoreNotes, viewMode])
+
 
   if (notesLoading && notes.length === 0 && notebooks.length === 0) {
     return (
@@ -360,19 +432,24 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
       {viewMode === "list" && !isSelectionMode && <AddCardList addNote={addNote}/>}
 
       {/* notes display area && ADD NOTE FOR CARD VIEW */}
-      <div className={viewMode === "grid" ? styles.gridView : styles.listView}>
+      <div
+        ref={pagerRef}
+        className={viewMode === "grid" ? styles.gridView : styles.listView}
+        onWheel={onPagerWheel}
+        style={viewMode === 'list' && pageHeight ? { height: pageHeight } : undefined}
+      >
 
         {/* list view by default, change if it's in grid view */}
         {viewMode === "grid" && !isSelectionMode && <AddCard addNote={addNote}/>}
         
         {/* display NOTEBOOKS FIRST */}
         {!isSelectionMode && (
-          nbDrag.order.map(nbId => {
+          visibleItems.filter(i => i.kind === 'nb').map(({ id: nbId }) => {
             const notebook = notebookById.get(String(nbId))
             if (!notebook) return null
             const noteCount = countByNotebook.get(notebook.id) || 0
             return (
-              <div key={notebook.id} className={styles.dragCell} {...nbDrag.dragProps(notebook.id)}>
+              <div key={notebook.id} data-row className={styles.dragCell} {...nbDrag.dragProps(notebook.id)}>
                 {viewMode === "list" ? (
                   <HorizontalNotebookCard
                     notebook={notebook}
@@ -398,11 +475,11 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
         )}
 
         {/* afterwards display the LONE NOTES (notes that aren't part of a notebook) */}
-        {noteDrag.order.map(nId => {
+        {visibleItems.filter(i => i.kind === 'note').map(({ id: nId }) => {
           const note = loneNoteById.get(String(nId))
           if (!note) return null
           return (
-            <div key={note.id} className={styles.dragCell} {...noteDrag.dragProps(note.id)}>
+            <div key={note.id} data-row className={styles.dragCell} {...noteDrag.dragProps(note.id)}>
               {viewMode === "list" ? (
                 <HorizontalCard
                   note={note}
@@ -429,13 +506,37 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
         })}
       </div>
 
+      {/* Page controls. The wheel already turns pages; these make that discoverable
+          and give the keyboard a way in. */}
+      {viewMode === "list" && pageCount > 1 && (
+        <div className={styles.pagerBar} ref={pagerBarRef}>
+          <button
+            type="button"
+            className={styles.pagerBtn}
+            onClick={() => setPage(p => Math.max(p - 1, 0))}
+            disabled={safePage === 0}
+            aria-label="Previous page"
+          >‹</button>
+          <span className={styles.pagerCount}>
+            {safePage + 1} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className={styles.pagerBtn}
+            onClick={() => setPage(p => Math.min(p + 1, pageCount - 1))}
+            disabled={safePage >= pageCount - 1}
+            aria-label="Next page"
+          >›</button>
+        </div>
+      )}
+
       {/* Infinite scroll sentinels */}
-      {hasMoreNotebooks && (
+      {viewMode !== "list" && hasMoreNotebooks && (
         <div ref={notebooksSentinelRef} className={styles.sentinel}>
           {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
         </div>
       )}
-      {hasMoreNotes && (
+      {viewMode !== "list" && hasMoreNotes && (
         <div ref={notesSentinelRef} className={styles.sentinel}>
           {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
         </div>

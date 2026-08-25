@@ -130,6 +130,9 @@
     margin: 0;
     max-height: 300px;
     overflow-y: auto;
+    /* Absorb any height the card has beyond its contents, so slack never lands
+       below the footer. */
+    flex: 1 1 auto;
 }
 
 .taskList::-webkit-scrollbar {
@@ -221,6 +224,11 @@
 .footer {
     padding: 14px 20px;
     border-top: 2px solid var(--border-strong);
+    /* Pinned to the bottom of the card. Without this the footer sat wherever the
+       content ended and left a gap beneath it when the card was taller than its
+       contents (the masonry grid sizes rows in 8px steps, so it usually is). */
+    margin-top: auto;
+    flex-shrink: 0;
 }
 
 .progressBar {

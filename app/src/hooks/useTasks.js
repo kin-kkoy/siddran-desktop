@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "../utils/toast";
 import logger from "../utils/logger";
 
@@ -326,6 +326,43 @@ export const useTasks = (authFetch, API, isAuthed) => {
         }
     }, [authFetch, API])
 
+    // Manual order for the kanban board. Mirrors reorderNotes: apply locally first so
+    // the card stays exactly where it was dropped, then persist one PUT per task.
+    // Without a stored order a dropped card snaps back to whatever the sort decides.
+    // One row per id, whatever the state contains. A double-fired submit (the
+    // `submitting` guard reads a render-time value, so two calls in the same tick
+    // both see false) could otherwise leave a duplicate that only a remount cleared.
+    const dedupedBundles = useMemo(() => {
+        const seen = new Set()
+        return bundles.filter(b => {
+            const key = String(b?.id)
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+    }, [bundles])
+
+    // Explicit positions, not "index in this array". The kanban board interleaves
+    // tasks with routine cards, so a task's order has to be the position it actually
+    // occupies in its column — which isn't its index among the tasks alone.
+    const setTaskOrders = useCallback((pairs) => {
+        const pos = new Map(pairs.map(({ id, order }) => [String(id), order]))
+        setTasks(prev => prev.map(t => pos.has(String(t.id)) ? { ...t, order: pos.get(String(t.id)) } : t))
+        pairs.forEach(({ id, order }) => {
+            authFetch(`${API}/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ order }) })
+                .catch(err => logger.error('set task order failed', err))
+        })
+    }, [authFetch, API])
+
+    const reorderTasks = useCallback((orderedIds) => {
+        const pos = new Map(orderedIds.map((id, i) => [String(id), i]))
+        setTasks(prev => prev.map(t => pos.has(String(t.id)) ? { ...t, order: pos.get(String(t.id)) } : t))
+        orderedIds.forEach((id, i) => {
+            authFetch(`${API}/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ order: i }) })
+                .catch(err => logger.error('reorder task failed', err))
+        })
+    }, [authFetch, API])
+
     const deleteTask = useCallback(async (id) => {
         let removed = null
         setTasks(prev => {
@@ -563,7 +600,7 @@ export const useTasks = (authFetch, API, isAuthed) => {
             })
 
             if(res.ok){
-                setBundles(prev => prev.map(p => p.id === id ? { ...p, ...cleanParams } : p))
+                setBundles(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...cleanParams } : p))
             }
 
         } catch (error) {
@@ -581,7 +618,7 @@ export const useTasks = (authFetch, API, isAuthed) => {
             const res = await authFetch(`${API}/projects/${id}`, { method: 'DELETE' })
             if(res.ok){
                 toast.success(whatMessage("deleted"))
-                setBundles(prev => prev.filter(p => p.id !== id))
+                setBundles(prev => prev.filter(p => String(p.id) !== String(id)))
             }
         } catch (error) {
             logger.error("Error deleting bundle:", error)
@@ -610,7 +647,7 @@ export const useTasks = (authFetch, API, isAuthed) => {
             if(res.ok){
                 const updatedBundle = await res.json()
                 toast.success(whatMessage("created"));
-                setBundles(bundle => bundle.map( p => p.id === bundleId ? { ...p, tasks: updatedBundle.tasks, priority: updatedBundle.priority } : p ));
+                setBundles(bundle => bundle.map( p => String(p.id) === String(bundleId) ? { ...p, tasks: updatedBundle.tasks, priority: updatedBundle.priority } : p ));
             }
 
         } catch (error) {
@@ -700,7 +737,7 @@ export const useTasks = (authFetch, API, isAuthed) => {
     return {
         tasks,
         dailyTasks,
-        bundles,
+        bundles: dedupedBundles,
         tasksPagination,
         dailyTasksPagination,
         bundlesPagination,
@@ -714,6 +751,8 @@ export const useTasks = (authFetch, API, isAuthed) => {
         patchTaskInCache,
         setDailyTime,
         deleteTask,
+        reorderTasks,
+        setTaskOrders,
         toggleTaskCompletion,
         addDailyTask,
         updateDailyTask,

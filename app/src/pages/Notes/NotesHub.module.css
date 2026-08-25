@@ -185,9 +185,13 @@
 
 /* List view */
 .listView {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    /* Two columns, filled left-to-right row by row. Rows are uniform height here
+       (unlike the masonry card view), so a column split just works — no measuring,
+       which is what sank the paged book editor. */
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px 16px;
     padding: 20px 0;
     position: relative;
     z-index: 1;
@@ -250,4 +254,50 @@
 @keyframes pulse {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
+}
+
+/* One column when there isn't room for two — below this a row becomes unreadable. */
+@media (max-width: 900px) {
+    .listView { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The infinite-scroll sentinel must not be treated as a cell. */
+.listView > .sentinel { grid-column: 1 / -1; }
+
+/* Paged list: the area is pinned to the viewport and the wheel swaps its contents,
+   so nothing here scrolls. Rows are uniform, so a page is just rows x 2.
+   `align-content: start` stops the grid stretching rows to fill the fixed height —
+   without it the rows grow and the last one gets clipped. */
+.listView {
+    overflow: hidden;
+    align-content: start;
+}
+
+.pagerBar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 6px 0 14px;
+}
+.pagerBtn {
+    width: 30px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated, var(--bg-surface));
+    color: var(--text-secondary);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.pagerBtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.pagerBtn:disabled { opacity: 0.35; cursor: default; }
+.pagerCount {
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 56px;
+    text-align: center;
 }

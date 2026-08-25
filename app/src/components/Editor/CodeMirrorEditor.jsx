@@ -159,7 +159,7 @@ function CodeMirrorEditor({
         onDirtyRef.current?.(false)
         return
       }
-      Promise.resolve(onSaveRef.current?.(md)).then(ok => {
+      return Promise.resolve(onSaveRef.current?.(md)).then(ok => {
         if (ok !== false) {
           lastSavedRef.current = md
           dirtyRef.current = false
@@ -268,7 +268,7 @@ function CodeMirrorEditor({
             openSandbox: (id) => onOpenSandboxRef.current?.(id),
             openBundle: (id) => onOpenBundleRef.current?.(id),
             searchTag: (tag) => onSearchTagRef.current?.(tag),
-            openPdf: (href) => onOpenPdfRef.current?.(href),
+            openAttachment: (href) => onOpenPdfRef.current?.(href),
             tasks: () => tasksRef.current,
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,
@@ -329,7 +329,18 @@ function CodeMirrorEditor({
 
     const autosaveTimer = setInterval(saveBackend, AUTOSAVE_INTERVAL_MS)
 
+    // Commit on demand. Autosave is on an interval and otherwise only flushes on
+    // blur or unmount, so closing the window straight after typing would drop the
+    // edit — the store can't flush what it was never given. The closer collects
+    // these promises and waits before letting the window go.
+    const onFlushRequest = (e) => {
+      const p = saveBackend()
+      if (p && Array.isArray(e.detail?.waits)) e.detail.waits.push(p)
+    }
+    window.addEventListener('siddran:flush-editors', onFlushRequest)
+
     return () => {
+      window.removeEventListener('siddran:flush-editors', onFlushRequest)
       clearInterval(autosaveTimer)
       if (foldSaveTimer) clearTimeout(foldSaveTimer)
       // Flush to the Bag on unmount so edits persist to disk across navigation.

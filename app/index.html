@@ -7,6 +7,9 @@
     <!-- Self-hosted fonts (offline desktop app — no CDN). See public/fonts/. -->
     <link href="/fonts/fonts.css" rel="stylesheet">
     <title>Siddran</title>
+    <!-- Painted before any stylesheet loads, so the first frame is the app's own
+         dark rather than the webview's default white. Matches --bg-primary. -->
+    <style>html,body{background:#09090f;margin:0}</style>
   </head>
   <body>
     <div id="root"></div>

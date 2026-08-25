@@ -476,7 +476,7 @@ function handleTasks(method, seg, q, body) {
   }
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
-    const tk = { id: uuid(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, is_completed: false, created_at: t, updated_at: t }
+    const tk = { id: uuid(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, is_completed: false, order: null, created_at: t, updated_at: t }
     db.tasks.push(tk); dirty.tasks = true; return created(tk)
   }
   const id = parseId(seg[1])
@@ -484,7 +484,7 @@ function handleTasks(method, seg, q, body) {
     const tk = db.tasks.find((x) => x.id === id)
     if (method === 'GET') return tk ? ok(tk) : notFound()
     if (!tk) return notFound()
-    if (method === 'PUT') { Object.assign(tk, pick(body || {}, ['title', 'description', 'is_completed', 'priority', 'due_date'])); touch(tk); dirty.tasks = true; return ok(tk) }
+    if (method === 'PUT') { Object.assign(tk, pick(body || {}, ['title', 'description', 'is_completed', 'priority', 'due_date', 'order'])); touch(tk); dirty.tasks = true; return ok(tk) }
     if (method === 'DELETE') { db.tasks = db.tasks.filter((x) => x.id !== id); dirty.tasks = true; return ok({ message: 'deleted' }) }
   }
   return notFound()

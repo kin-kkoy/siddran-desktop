@@ -14,7 +14,7 @@ import { remarkHashtag } from './remarkHashtag'
 import { remarkWikilinks } from './remarkWikilinks'
 import { normalizeCalloutWithMap } from './calloutBlocks'
 import { resolveImageUrl } from '../../../utils/imageUpload'
-import { isPdfHref } from '../../../utils/pdfLinks'
+import { isAttachmentHref, hrefKind } from '../../../utils/attachmentLinks'
 import logger from '../../../utils/logger'
 
 // Markdown → HTML for the reading view. Reuses the same remark plugins the
@@ -80,9 +80,9 @@ function rehypeCinderPdfLinks() {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a' || !node.properties) return
       const href = String(node.properties.href || '')
-      if (!isPdfHref(href)) return
+      if (!isAttachmentHref(href)) return
       const cls = Array.isArray(node.properties.className) ? node.properties.className : []
-      node.properties.className = [...cls, 'rv-link', 'rv-link-pdf']
+      node.properties.className = [...cls, 'rv-link', `rv-link-${hrefKind(href)}`]
       node.properties['data-href'] = href
       delete node.properties.href
     })

@@ -1,0 +1,228 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+.header {
+  display: flex;
+  align-items: center;
+  /* Controls sit together on the left like a browser toolbar; a spacer pushes the
+     close button to the far edge, so nothing floats in the middle. */
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-primary);
+}
+.spacer { flex: 1; min-width: 8px }
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  /* Breathing room either side, so the name reads as the "address" rather than
+     crowding the lock or the blocked chip. */
+  margin: 0 6px 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.closeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #525659; /* neutral PDF-viewer backdrop */
+}
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* "N blocked" control — warning-tinted so it reads as a real notice rather than
+   decoration, but it sits next to a filename so it must not shout. Opens the
+   detail popover below. */
+.blockedBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  color: var(--accent-warning);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.blockedBtn:hover,
+.blockedBtn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--accent-warning) 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-warning) 12%, transparent);
+}
+
+/* Anchor for the popover. */
+.blockedWrap { position: relative; display: inline-flex; flex-shrink: 0; }
+
+.blockedPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 300px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated, var(--bg-surface));
+  box-shadow: 0 8px 24px var(--shadow-color);
+  text-align: left;
+}
+.blockedTitle {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.blockedDesc {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.blockedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.blockedList li {
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+  word-break: break-all;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+}
+
+/* Trust toggle. Neutral while blocked (the safe default shouldn't look like a
+   warning); warning-toned once trusted, because that IS the notable state. */
+.lockBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.lockBtn:hover { background: var(--bg-hover); color: var(--text-secondary) }
+.lockOpen {
+  border-color: var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  color: var(--accent-warning);
+}
+
+/* In-page back/forward. The frame is cross-origin, so these post a message to the
+   injected shim rather than touching its history directly. */
+.navGroup { display: inline-flex; gap: 2px; flex-shrink: 0 }
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.navBtn:hover { background: var(--bg-hover); color: var(--text-secondary) }
+
+.allowBtn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-warning);
+  background: var(--accent-warning-alpha);
+  color: var(--accent-warning);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.allowBtn:hover { background: color-mix(in srgb, var(--accent-warning) 18%, transparent) }
+
+/* "What does allowing actually expose?" — for anyone who wants the real limits
+   rather than a reassuring one-liner. */
+.whyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-blue);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.whyBtn:hover { text-decoration: underline }
+.privacy {
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+}
+.privacy p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.privacy p:last-child { margin-bottom: 0 }
+.privacy code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+}

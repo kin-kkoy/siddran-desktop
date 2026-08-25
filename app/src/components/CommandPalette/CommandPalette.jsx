@@ -2,8 +2,7 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   LuStickyNote, LuListTodo, LuCalendarDays, LuShapes, LuSettings, LuPalette,
-  LuRefreshCw, LuFilePlus, LuCirclePlus, LuPanelLeft, LuBookOpen, LuFolderOpen,
-} from 'react-icons/lu'
+  LuRefreshCw, LuFilePlus, LuCirclePlus, LuPanelLeft, LuBookOpen, LuFolderOpen, LuImage, LuFileText, LuCode, LuFileInput } from 'react-icons/lu'
 import { EDITOR_COMMANDS, WIKILINK_COMMANDS } from '../Editor/editorCommands'
 import { getActiveEditor } from '../Editor/activeEditor'
 import { useModalPresence } from '../../utils/modalPresence'
@@ -101,7 +100,7 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
   const appCommands = useMemo(() => {
     const cmds = [
       { id: 'app-settings', title: 'Open Settings', keywords: 'preferences options', icon: LuSettings, kind: 'nav', hint: 'app', run: () => openSettings() },
-      { id: 'app-settings-themes', title: 'Settings: Themes', keywords: 'colour color appearance brightness', icon: LuPalette, kind: 'nav', hint: 'app', run: () => openSettings('interface') },
+      { id: 'app-settings-themes', title: 'Settings: Themes', keywords: 'colour color appearance brightness', icon: LuPalette, kind: 'nav', hint: 'app', run: () => openSettings('appearance') },
       { id: 'app-settings-sync', title: 'Settings: Sync', keywords: 'endpoint token worker', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: () => openSettings('sync') },
       { id: 'app-sync-now', title: 'Sync now', keywords: 'push pull upload', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: runSync },
       { id: 'app-new-note', title: 'New note', keywords: 'create add', icon: LuFilePlus, kind: 'nav', hint: 'app', run: newNote },
@@ -131,6 +130,32 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
         id: 'app-view-mode', title: 'Toggle read / write mode',
         keywords: 'preview edit reading', icon: LuBookOpen, kind: 'nav', hint: 'note', run: toggleViewMode,
       })
+      // The editor owns the caret, so the dock does the actual insert — see the
+      // `siddran:attach` listener in EditorDock.
+      const attach = (kind) => () =>
+        window.dispatchEvent(new CustomEvent('siddran:attach', { detail: { kind } }))
+      cmds.push(
+        {
+          id: 'app-attach-image', title: 'Attach image at cursor',
+          keywords: 'insert picture photo png jpg media upload', icon: LuImage,
+          kind: 'nav', hint: 'note', run: attach('image'),
+        },
+        {
+          id: 'app-attach-pdf', title: 'Attach PDF at cursor',
+          keywords: 'insert document file media attachment', icon: LuFileText,
+          kind: 'nav', hint: 'note', run: attach('pdf'),
+        },
+        {
+          id: 'app-attach-html', title: 'Attach HTML page at cursor',
+          keywords: 'insert web page file media attachment viewer', icon: LuCode,
+          kind: 'nav', hint: 'note', run: attach('html'),
+        },
+        {
+          id: 'app-import-html', title: 'Import HTML as markdown at cursor',
+          keywords: 'convert web page text paste readable', icon: LuFileInput,
+          kind: 'nav', hint: 'note', run: attach('import-html'),
+        },
+      )
     }
     return cmds
   }, [openSettings, settings.noteLayout, updateSetting, collapsed, setCollapsed, closeBag, navigate, onNotePage, runSync, newNote, toggleViewMode])

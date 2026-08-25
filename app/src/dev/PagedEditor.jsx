@@ -121,7 +121,7 @@ export default function PagedEditor() {
             resolve: (t) => resolveNote([], t),
             navigate: () => {}, create: () => {}, openTask: () => {},
             openSandbox: () => {}, openBundle: () => {}, searchTag: () => {},
-            openPdf: () => {},
+            openAttachment: () => {},
             tasks: () => [], bundles: () => [], sandboxes: () => [],
           }),
           commentsExtension({ onClickComment: () => {} }),

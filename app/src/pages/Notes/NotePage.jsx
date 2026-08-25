@@ -6,11 +6,12 @@ import NotePane from './NotePane'
 import NoteTabBar from '../../components/Notes/NoteTabBar'
 import SandboxDock from '../../components/Sandbox/Dock/SandboxDock'
 import EditorDock from '../../components/Editor/EditorDock'
-import PdfPane from '../../components/Notes/PdfPane'
+import AttachmentPane from '../../components/Notes/AttachmentPane'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
-import { usePdfView } from '../../contexts/PdfViewContext'
+import { useSidePane } from '../../contexts/SidePaneContext'
 import ResizablePanes from '../../components/Layout/ResizablePanes'
+import RightPaneMemory from '../../components/Session/RightPaneMemory'
 import { useSandboxes } from '../../hooks/useSandboxes'
 import { compareByOrder } from '../../utils/noteSorting'
 import { getNoteBackground } from '../../components/Notes/noteColors'
@@ -25,7 +26,7 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
   const sandboxView = useSandboxView()
   const { sandboxes } = useSandboxes()
   const split = useNoteSplit()
-  const pdfView = usePdfView()
+  const sidePane = useSidePane()
   const { id } = useParams() //what note
   // The tab bar's right-side slot node; the primary NotePane portals its header
   // controls in here so tabs + controls share one row.
@@ -42,19 +43,26 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
     if (split.enabled && setSidebarCollapsed) setSidebarCollapsed(true)
   }, [split.enabled, setSidebarCollapsed])
 
-  // The PDF pane is a right-column occupant too — collapse the sidebar for room.
-  useEffect(() => {
-    if (pdfView.isOpen && setSidebarCollapsed) setSidebarCollapsed(true)
-  }, [pdfView.isOpen, setSidebarCollapsed])
+  // NOT auto-collapsed for the attachment pane, unlike split view and the sandbox.
+  //
+  // Collapsing the sidebar changes the pane's width ~220ms after it opens, and
+  // WebKitGTK's PDF viewer lays out once, rasterises progressively, and never
+  // reflows — so pages drawn during that transition came out sized for the old
+  // width. Every attempt to schedule around it (remount, wait-for-stable-width,
+  // nudge-after-load) fixed some documents and broke others, because how much of a
+  // PDF is mid-render at any moment depends on the file. Leaving the layout alone
+  // removes the cause: the geometry is final before the frame exists.
+  //
+  // The cost is a little less editor width; collapse it yourself if you want the room.
 
-  // Keep the right column to ONE occupant: close the PDF if a split or sandbox
-  // takes over. (Opening the PDF disables both, so this won't fight that.)
+  // Keep the right column to ONE occupant: close the attachment if a split or
+  // sandbox takes over. (Opening one disables both, so this won't fight that.)
   useEffect(() => {
-    if (split.enabled || !sandboxView.isHidden) pdfView.close()
+    if (split.enabled || !sandboxView.isHidden) sidePane.close()
   }, [split.enabled, sandboxView.isHidden]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clean up the dock + cancel split + PDF when navigating away from NotePage.
-  useEffect(() => () => { sandboxView.close(); split.disable(); pdfView.close() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Clean up the dock + cancel split + attachment when navigating away from NotePage.
+  useEffect(() => () => { sandboxView.close(); split.disable(); sidePane.close() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live per-note editor content, keyed by note id. Switching layout modes
   // (single ↔ PDF ↔ split) remounts the NotePane, so the editor would otherwise
@@ -74,7 +82,7 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
   // Layout mode flags. A "filled" layout (split / PDF / half-sandbox) hands its
   // body to ResizablePanes, whose panes need a definite page height to size
   // against — so the page becomes a flex column that fills the content pane.
-  const isFilledLayout = split.enabled || pdfView.isOpen || sandboxView.isHalf
+  const isFilledLayout = split.enabled || sidePane.isOpen || sandboxView.isHalf
   // In split view there is only ever ONE editor dock — it lives in whichever note
   // pane is focused (its buttons target that pane's own editor). When the other
   // side isn't an editable note (sandbox / empty picker), the lone note keeps its
@@ -200,7 +208,7 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
       />
       {bothNotes && <EditorDock viewRef={activeSplitViewRef} sandboxes={sandboxes} variant="fixed" onComment={sharedOnComment} />}
     </>
-  ) : pdfView.isOpen ? (
+  ) : sidePane.isOpen ? (
     // PDF side-view: note column on the left, PDF viewer on the right.
     <ResizablePanes
       left={
@@ -208,7 +216,7 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
           <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
         </div>
       }
-      right={<PdfPane pdf={pdfView.pdf} onClose={pdfView.close} />}
+      right={<AttachmentPane file={sidePane.file} onClose={sidePane.close} />}
     />
   ) : (
     // Single-note mode. Half-mode wraps the note column + a sandbox column in a resizable split;
@@ -238,6 +246,9 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
 
   return (
     <div className={`${styles.tabbedPage} ${isFilledLayout ? styles.tabbedPageFilled : ''}`}>
+      {/* Records/reopens the right-column pane. Lives here, not at App level, so the
+          unmount cleanup above can't be observed as "nothing was open". */}
+      <RightPaneMemory noteId={id} />
       <NoteTabBar notes={notes} controlsRef={setControlsSlot} />
       <div className={`${styles.tabbedBody} ${isFilledLayout ? styles.tabbedBodyFilled : ''}`}>{body}</div>
     </div>

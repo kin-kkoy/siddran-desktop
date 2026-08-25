@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase Map</title>
+<style>
+  :root{
+    --paper:#cdc7a2;
+    --paper-2:#c6bf97;
+    --ink:#15150f;
+    --ink-soft:#4a4835;
+    --ink-faint:#8b8768;
+    --line:#15150f;
+    --hot:#15150f;
+    --face-top:#d6d0ad;
+    --face-l:#bdb68c;
+    --face-r:#aca578;
+    --ext:#c0b98f;
+    --mono:"DM Mono","SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--mono);font-size:12px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  /* ── top bar ─────────────────────────────────────────── */
+  #top{
+    display:flex;align-items:stretch;border-bottom:1px solid var(--line);
+    height:44px;flex:0 0 auto;
+  }
+  .stat{
+    padding:3px 14px;border-right:1px solid var(--line);
+    display:flex;flex-direction:column;justify-content:center;min-width:0;
+  }
+  .stat:last-child{border-right:none}
+  .stat .k{font-size:8.5px;letter-spacing:.13em;color:var(--ink-faint);text-transform:uppercase;white-space:nowrap}
+  .stat .v{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat.repo .v{font-size:14px}
+  #topspacer{flex:1;border-right:1px solid var(--line)}
+  #topbtns{display:flex;align-items:center;gap:6px;padding:0 10px}
+  button.btn{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+    background:transparent;color:var(--ink);border:1px solid var(--line);
+    padding:5px 9px;cursor:pointer;
+  }
+  button.btn:hover{background:var(--ink);color:var(--paper)}
+  button.btn[disabled]{opacity:.35;cursor:default}
+  button.btn[disabled]:hover{background:transparent;color:var(--ink)}
+  /* ── layout ──────────────────────────────────────────── */
+  #main{display:flex;height:calc(100% - 44px)}
+  #rail{
+    flex:0 0 236px;border-right:1px solid var(--line);overflow-y:auto;
+    padding:8px 0 40px;
+  }
+  #panel{
+    flex:0 0 400px;border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0;
+  }
+  #stage{flex:1;position:relative;min-width:0;overflow:hidden}
+  /* ── left rail ───────────────────────────────────────── */
+  .grp{
+    font-size:8.5px;letter-spacing:.16em;color:var(--ink-faint);
+    text-transform:uppercase;padding:14px 12px 5px;
+  }
+  .row{
+    display:flex;align-items:flex-start;gap:8px;margin:0 8px 4px;padding:6px 8px;
+    border:1px solid var(--line);cursor:pointer;background:transparent;width:calc(100% - 16px);
+    text-align:left;font-family:var(--mono);font-size:10.5px;color:var(--ink);line-height:1.35;
+  }
+  .row.child{margin-left:24px;width:calc(100% - 32px);border-color:var(--ink-soft);opacity:.92}
+  .row:hover{background:var(--paper-2)}
+  .row.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .row.on .rc,.row.on .rn{color:inherit}
+  .row .rc{flex:0 0 16px;color:var(--ink-faint);font-size:9.5px;padding-top:1px}
+  .row .rn{flex:1;letter-spacing:.05em;text-transform:uppercase;min-width:0}
+  .row .rx{flex:0 0 auto;font-size:9px;color:var(--ink-faint);padding-top:1px}
+  .row.on .rx{color:var(--paper)}
+  .dot{display:inline-block;width:5px;height:5px;border:1px solid currentColor;margin-left:5px;vertical-align:middle}
+  .dot.fill{background:currentColor}
+  /* ── stage ───────────────────────────────────────────── */
+  #svg{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  #svg.drag{cursor:grabbing}
+  #zoom{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:5px}
+  #zoom button{width:24px;height:24px;font-size:13px;line-height:1;padding:0}
+  #crumb{
+    position:absolute;top:10px;left:12px;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  #hint{
+    position:absolute;left:0;right:0;bottom:0;padding:7px 12px;
+    font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+    border-top:1px solid var(--line);background:var(--paper);
+  }
+  .blk{cursor:pointer}
+  .blk .top{fill:var(--face-top)}
+  .blk .fl{fill:var(--face-l)}
+  .blk .fr{fill:var(--face-r)}
+  .blk polygon,.blk path.edge{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+  .blk text{fill:var(--ink);font-family:var(--mono);font-size:11px;letter-spacing:.06em;pointer-events:none}
+  .blk .lay{stroke:var(--line);stroke-width:.5;opacity:.45;vector-effect:non-scaling-stroke}
+  .blk.ext polygon{stroke-dasharray:4 3}
+  .blk.ext .top{fill:var(--ext)}
+  .blk.hot .top{fill:var(--ink)}
+  .blk.hot text{fill:var(--paper)}
+  .blk.hot polygon{stroke-width:1.8}
+  .blk.sel .top{fill:var(--ink)}
+  .blk.sel text{fill:var(--paper)}
+  .blk.sel polygon{stroke-width:1.8}
+  .blk.dim{opacity:.34}
+  .grid{stroke:var(--ink);stroke-width:.5;opacity:.13;vector-effect:non-scaling-stroke}
+  .wire{stroke:var(--ink);fill:none;stroke-width:1;vector-effect:non-scaling-stroke;opacity:.75}
+  .wire.soft{stroke-dasharray:3 4;opacity:.45}
+  .wire.lit{stroke-width:2;opacity:1}
+  .joint{fill:var(--ink);opacity:.75}
+  /* ── right panel ─────────────────────────────────────── */
+  #tabs{display:flex;flex:0 0 auto;border-bottom:1px solid var(--line)}
+  #tabs button{
+    flex:1;padding:11px 6px;background:transparent;border:none;border-right:1px solid var(--line);
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-soft);cursor:pointer;
+  }
+  #tabs button:last-child{border-right:none}
+  #tabs button.on{background:var(--ink);color:var(--paper)}
+  #body{flex:1;overflow-y:auto;padding:16px 18px 60px}
+  #body h1{font-size:19px;font-weight:400;letter-spacing:.01em;margin:0 0 4px;line-height:1.25}
+  #body .kicker{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  #body .sub{font-size:11px;color:var(--ink-soft);margin:0 0 18px;line-height:1.45}
+  #body h2{
+    font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
+    font-weight:400;margin:22px 0 7px;border-bottom:1px solid var(--ink-faint);padding-bottom:5px;
+  }
+  #body p{margin:0 0 11px;font-size:12px;line-height:1.62}
+  #body ul{margin:0 0 11px;padding-left:0;list-style:none}
+  #body li{font-size:11.5px;line-height:1.55;margin-bottom:5px;padding-left:14px;position:relative}
+  #body li:before{content:"·";position:absolute;left:4px;color:var(--ink-faint)}
+  #body code,#body .f{
+    background:var(--paper-2);padding:1px 4px;font-family:var(--mono);font-size:10.5px;
+    border:1px solid rgba(21,21,15,.14);white-space:nowrap;
+  }
+  #body mark{background:var(--ink);color:var(--paper);padding:1px 4px}
+  #body .files li{padding-left:0}
+  #body .files li:before{content:none}
+  #body .files .f{display:inline-block;margin:0 4px 4px 0;white-space:normal;word-break:break-all}
+  #body .tag{
+    display:inline-block;border:1px solid var(--line);padding:2px 6px;margin:0 4px 5px 0;
+    font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  }
+  #body .tag.solid{background:var(--ink);color:var(--paper)}
+  #body .meta{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 16px}
+  #body .meta div{font-size:10px}
+  #body .meta .k{font-size:8.5px;letter-spacing:.13em;color:var(--ink-faint);text-transform:uppercase}
+  #body .link{
+    display:block;width:100%;text-align:left;margin:4px 0 0;padding:7px 9px;
+    border:1px solid var(--line);background:transparent;cursor:pointer;
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);
+  }
+  #body .link:hover{background:var(--ink);color:var(--paper)}
+  .flow{border:1px solid var(--ink-faint);padding:9px 11px;margin:0 0 12px;font-size:10.5px;line-height:1.7}
+  .flow b{font-weight:400;background:var(--ink);color:var(--paper);padding:1px 4px}
+  @media (max-width:1180px){
+    #rail{flex-basis:190px}
+    #panel{flex-basis:320px}
+  }
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="stat repo"><span class="k">Repository</span><span class="v" id="s-repo"></span></div>
+  <div id="stats" style="display:flex"></div>
+  <div id="topspacer"></div>
+  <div id="topbtns">
+    <button class="btn" id="b-back" disabled>&#8592; come back out</button>
+    <button class="btn" id="b-fit">reset view</button>
+  </div>
+</div>
+<div id="main">
+  <aside id="rail"></aside>
+  <section id="stage">
+    <svg id="svg"></svg>
+    <div id="crumb"></div>
+    <div id="zoom">
+      <button class="btn" id="b-in">+</button>
+      <button class="btn" id="b-out">&#8722;</button>
+    </div>
+    <div id="hint">&#8594; click a block to pin it &#183; hover to read &#183; double-click to go inside &#183; drag to pan &#183; scroll to zoom</div>
+  </section>
+  <aside id="panel">
+    <div id="tabs">
+      <button class="on" data-tab="what">What it does</button>
+      <button data-tab="how">How it's built</button>
+    </div>
+    <div id="body"></div>
+  </aside>
+</div>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   SIDDRAN DESKTOP — the local-first distribution (Tauri shell + the
+   Cinder frontend, forked). Content only; renderer lives below.
+   ══════════════════════════════════════════════════════════════════ */
+const MAP = {
+  title: "Siddran Desktop Codebase Map",
+  repo: "siddran-desktop · tauri + local vault",
+  stats: [
+    { k: "Source files", v: "204 js/jsx · 63 css · 1 rs" },
+    { k: "Lines", v: "≈33,100 + 112 rust" },
+    { k: "Shell", v: "Tauri 2 · WebKitGTK" },
+    { k: "Storage", v: "files on disk — a Bag" },
+    { k: "Server", v: "none (sync worker idle)" },
+    { k: "Status", v: "active development" },
+  ],
+
+  overview: {
+    kicker: "Siddran · desktop",
+    title: "The Local-First Distribution",
+    sub: "the same app, running on a folder of markdown files instead of a server",
+    what: [
+      ["p", "Siddran Desktop is Cinder forked and re-grounded. The React app is nearly the same code — the same editor, the same calendar, the same sandbox — but everything below <code>authFetch</code> was replaced. There is <mark>no server, no account, and no login</mark>. You open a <b>Bag</b>, which is just a folder you choose, and the app runs on the files inside it."],
+      ["p", "A Bag on disk looks like this, and it is meant to be readable without the app:"],
+      ["flow", "MyBag/<br>&nbsp;&nbsp;notes/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>.md files</b>, folders = notebooks, <b>.comments.json</b> sidecars<br>&nbsp;&nbsp;tasks.siddran&nbsp;&nbsp;&nbsp;&nbsp;tasks · dailies · completions · bundles<br>&nbsp;&nbsp;calendar.siddran&nbsp;events · schedules<br>&nbsp;&nbsp;settings.siddran<br>&nbsp;&nbsp;sandboxes/&nbsp;&nbsp;&nbsp;one JSON per board<br>&nbsp;&nbsp;attachments/&nbsp;&nbsp;pasted images, per note"],
+      ["h", "The trick that made it possible"],
+      ["p", "The web build already had a guest demo mode that served the whole app from an in-memory mock. That proved the app only ever talks to <i>one function</i>. The desktop build reuses the identical seam: <code>authFetch</code> checks whether a Bag is open and routes to <mark>localStore</mark> instead of the network. Every hook, page and component above it is unchanged and does not know the difference."],
+      ["flow", "<b>App.jsx</b> → <b>authFetch</b> → <b>localStore</b> (REST-shaped, in memory) → debounced flush → <b>files on disk</b> → <b>Rust</b>"],
+      ["h", "How to read this map"],
+      ["p", "Height means weight. Blocks marked <mark>DESKTOP ONLY</mark> do not exist in the Cinder web build — that is the whole of the fork. Blocks marked <mark>NOT DEPLOYED</mark> are written and tested but not switched on."],
+      ["p", "Hover any block for a description; the <mark>How it is built</mark> tab gives the implementation and files. Double-click a block with an inside (E, V, Q, C, B) to open it."],
+      ["h", "Adding a feature — the usual path"],
+      ["ul", [
+        "New <b>data</b> → a handler in <code>desktop/localStore.js</code> (the REST shim), a dirty flag, a write in the flush, and hydration on open. Then the method in the matching hook.",
+        "New <b>file on disk</b> → decide the format first: markdown if a human should read it, <code>.siddran</code> JSON otherwise. Add it to <code>hydrate()</code> and <code>flushNow()</code> together, or it silently will not persist.",
+        "New <b>OS capability</b> (dialogs, paths, processes) → a <code>#[tauri::command]</code> in <code>src-tauri/src/main.rs</code>, then an adapter method in <code>desktop/fs/tauriFs.js</code>.",
+        "New <b>editor syntax</b> → still the four-part change: Lezer node, live-preview case, theme class, remark plugin.",
+      ]],
+    ],
+    how: [
+      ["h", "Stack"],
+      ["tags", ["Tauri 2 (Rust)", "WebKitGTK", "React 19", "Vite", "CodeMirror 6", "Konva", "remark / rehype", "Vitest", "AppImage + .deb"]],
+      ["p", "Two npm projects: the root drives the Tauri CLI, <code>app/</code> is the frontend. <code>npm run tauri:dev</code> starts Vite and points the window at it; <code>npm run tauri:build</code> produces an AppImage and a .deb."],
+      ["h", "Why Tauri, not Electron"],
+      ["p", "Small binary and low memory — the window is the OS WebView rather than a bundled Chromium. The cost is WebKitGTK quirks on Linux, and several of them are pinned in code: mouse buttons 4 and 5 are wired to history navigation by hand, and empty <code>&lt;input type=time&gt;</code> fields need an overlay because WebKit paints a phantom time in them."],
+      ["h", "Persistence model"],
+      ["p", "The whole Bag is hydrated into memory on open. All reads are synchronous against that model; all writes mark a dirty flag and schedule a debounced flush 1.5&nbsp;s later. Notes reconcile against disk — files are written, moved when retitled, and orphans pruned — while tasks, calendar and settings are rewritten wholesale in a stable id order so the JSON diffs cleanly."],
+      ["h", "Identity"],
+      ["p", "Ids moved from server sequences to <code>crypto.randomUUID()</code> in July 2026 so two devices can create rows independently. Legacy numeric ids still parse; <code>parseId</code> coerces digit-only strings back to numbers so both kinds keep matching."],
+      ["h", "Auth code still present"],
+      ["p", "The JWT bootstrap and refresh loop survive in App.jsx, unused. They are dead weight in this build — <code>unlocked</code> is driven by whether a Bag is open, not by <code>isAuthed</code>."],
+    ],
+  },
+
+  groups: [
+    { title: "The shell", ids: ["A", "L", "Y", "I"] },
+    { title: "The vault", ids: ["W", "D", "V", "J"] },
+    { title: "Sync — built, not deployed", ids: ["Q", "O"] },
+    { title: "The data spine", ids: ["F", "N", "T", "K", "S", "Z"] },
+    { title: "The surfaces", ids: ["H", "P", "E", "R", "X", "C", "B"] },
+    { title: "Extras", ids: ["M", "G"] },
+  ],
+
+  nodes: {
+    /* ── shell ─────────────────────────────────────────────── */
+    A: {
+      name: "App shell & router", kind: "root component", count: "1041",
+      path: "app/src/App.jsx", size: "1,041 lines — the largest file",
+      gx: 0, gy: 0, w: 3, d: 3, h: 6, layers: 5,
+      what: [
+        ["p", "The one file that wires the whole application. It owns Bag state, builds <code>authFetch</code>, calls every data hook, and threads the results into the pages as props."],
+        ["p", "What replaced login: <code>unlocked</code> is simply <i>is a Bag open</i>. No Bag → the BagPicker renders instead of the app. Opening one hydrates <code>localStore</code> <b>before</b> unlocking, so the data hooks fetch against a loaded store. Switching Bags flushes the old one, unmounts the shell for a frame and resets the URL, so nothing from the previous vault leaks in."],
+        ["p", "It also hosts the two transactional calendar modes — <b>Plan mode</b> and the <b>Schedule Designer</b> — which have to sit above the shared stores."],
+      ],
+      add: [
+        ["ul", [
+          "A new page: import it, add a <code>&lt;Route&gt;</code>, thread props from the hooks already called here.",
+          "A new global shortcut: the <code>keydown</code> effect near the calendar peek.",
+          "A new provider: add to the sandwich at the bottom — Settings → Api → SandboxView → NoteSplit → PdfView → NoteTabs.",
+          "Anything that must happen when a Bag opens or closes: <code>openBag</code> / <code>closeBag</code> / <code>switchBag</code>.",
+          "Keep data logic out of here. It belongs in a hook or in localStore.",
+        ]],
+      ],
+      how: [
+        ["p", "A single component with roughly forty <code>useState</code>s. Plan mode and the Designer are shadow copies of the real lists plus an <code>eff*</code> layer choosing what the calendar sees:"],
+        ["flow", "designer plot → plan session (staged) → <b>real store</b>"],
+        ["p", "Boot order matters: splash screen (once per session, returned early so effects run underneath) → auto-reopen the last Bag → BagPicker if that fails → the shell. The auth bootstrap still runs but decides nothing."],
+      ],
+      files: ["app/src/App.jsx", "app/src/main.jsx", "app/src/index.css"],
+    },
+    L: {
+      name: "Sidebar, tabs & panes", kind: "layout", count: "10",
+      path: "app/src/components/Layout/ + Notes/NoteTabBar", size: "9 components",
+      gx: 4, gy: 0, w: 2, d: 2, h: 3,
+      what: [
+        ["p", "The app chrome, noticeably richer than the web build. The sidebar header shows the open Bag's name, the profile at the top is a <b>Bag switcher</b> (a scrollable list of your vaults, social-profile style), and the footer carries the menu."],
+        ["ul", [
+          "<b>NoteTabBar</b> — Obsidian-style curved tabs across the content area <span class='tag'>desktop only</span>",
+          "<b>SidebarOpenNotes</b> — the open-notes list <span class='tag'>desktop only</span>",
+          "<b>ResizablePanes</b> / <b>ExpandSidebarButton</b> — the collapse fully hides the sidebar, and a contextual show button appears in whatever surface you are on",
+          "<b>StarCanvas</b> — the star field (switched off on the note page here)",
+        ]],
+      ],
+      add: [["p", "Nav destinations in <code>Sidebar.jsx</code>; tab behaviour in <code>NoteTabsContext</code> + <code>NoteTabBar</code>. The shared <code>--header-height</code> token keeps the sidebar brand and the tab bar aligned — change it in <code>index.css</code>, not per component."]],
+      how: [["p", "The sidebar stays mounted and slides off-canvas by transform; remounting re-rendered the notes list and caused the collapse lag. The reserved gap next to it snaps instantly rather than animating width, because animating width reflowed CodeMirror every frame."]],
+      files: ["app/src/components/Layout/Sidebar/Sidebar.jsx", "app/src/components/Layout/Sidebar/SidebarOpenNotes.jsx", "app/src/components/Notes/NoteTabBar.jsx", "app/src/components/Layout/ResizablePanes.jsx", "app/src/contexts/NoteTabsContext.jsx"],
+    },
+    Y: {
+      name: "Contexts", kind: "state", count: "8",
+      path: "app/src/contexts/", size: "8 files · 771 lines",
+      gx: 7, gy: 0, w: 2, d: 2, h: 3, layers: 8,
+      what: [
+        ["p", "Eight contexts against the web build's five. Still deliberately thin — cross-cutting concerns only, never the data itself."],
+        ["ul", [
+          "<b>SettingsContext</b> — every preference (376 lines), persisted into <code>settings.siddran</code>",
+          "<b>ApiContext</b> — <code>authFetch</code> for components too deep to prop-drill into",
+          "<b>CalendarViewContext</b> — view, focused day, peek state, and the 2-column day toggles",
+          "<b>NoteTabsContext</b> <span class='tag'>desktop</span> — which notes are open, and in what order",
+          "<b>PdfViewContext</b> <span class='tag'>desktop</span> — the PDF side pane",
+          "<b>SidebarContext</b> <span class='tag'>desktop</span> — collapse state, so any surface can offer a show button",
+          "<b>SandboxViewContext</b> / <b>NoteSplitContext</b> — pane and split state",
+        ]],
+      ],
+      add: [["p", "A user-facing preference: field + default in <code>SettingsContext.jsx</code>, control in <code>SettingsPopup.jsx</code>. It persists to the Bag automatically. Note the one-time localStorage migration pattern used when a default flips — copy it rather than silently changing behaviour for existing vaults."]],
+      how: [["p", "<code>createContext</code> + provider + a <code>useX()</code> that throws outside its provider; values wrapped in <code>useMemo</code>. Some view state also mirrors into localStorage (device-local, deliberately not synced)."]],
+      files: ["app/src/contexts/SettingsContext.jsx", "app/src/contexts/NoteTabsContext.jsx", "app/src/contexts/PdfViewContext.jsx", "app/src/contexts/CalendarViewContext.jsx", "app/src/contexts/SidebarContext.jsx"],
+    },
+    I: {
+      name: "Splash screen", kind: "launch animation", count: "177", flag: "DESKTOP ONLY",
+      path: "app/src/components/Splash/", size: "2 files · 177 lines",
+      gx: 10, gy: 0, w: 2, d: 2, h: 1,
+      what: [["p", "The launch sequence: a zippered amber bag drops in, the zipper slides open, the interior glows, the Siddran sparkle rises, and the camera dives into the bag to reveal the app. Roughly 3.6 seconds, once per app session, Esc-skippable, and it honours <code>prefers-reduced-motion</code>."]],
+      add: [["p", "Timing constants are isolated in <code>splashTiming.js</code>. Keep it early-return in App.jsx so boot work runs underneath while it plays."]],
+      how: [["p", "Pure CSS keyframes over an inline SVG — no animation library. A <code>sessionStorage</code> flag (<code>siddran_splash_shown</code>) makes it once-per-launch rather than once-per-mount."]],
+      files: ["app/src/components/Splash/SplashScreen.jsx", "app/src/components/Splash/splashTiming.js"],
+    },
+
+    /* ── vault ─────────────────────────────────────────────── */
+    W: {
+      name: "Tauri shell (Rust)", kind: "native shell", count: "112", flag: "DESKTOP ONLY",
+      path: "src-tauri/", size: "112 lines of Rust",
+      gx: 13, gy: 0, w: 3, d: 2, h: 3,
+      what: [
+        ["p", "The desktop window and the only code with real OS access. Deliberately tiny — nine filesystem commands and a native folder dialog. All application logic stays in JavaScript."],
+        ["ul", [
+          "<code>bag_exists</code>, <code>bag_read_dir</code>, <code>bag_read_text</code>, <code>bag_write_text</code>",
+          "<code>bag_mkdirp</code>, <code>bag_remove</code>, <code>bag_rename</code>",
+          "<code>bag_write_bytes</code> / <code>bag_read_bytes</code> — base64 across the bridge, for image attachments",
+        ]],
+        ["p", "It uses <code>std::fs</code> directly rather than tauri-plugin-fs, because a Bag is a folder the user picks <i>anywhere</i> and the plugin's path scoping would refuse it."],
+      ],
+      add: [["p", "Any new OS capability starts here as a <code>#[tauri::command]</code>, gets registered in the <code>invoke_handler</code> list, then gets a method on the fs adapter. Window size, title and bundle targets live in <code>tauri.conf.json</code>."]],
+      how: [
+        ["p", "Tauri 2 with <code>withGlobalTauri</code> on, so the frontend can call <code>window.__TAURI__.core.invoke</code> without importing the JS API. The dialog plugin supplies the native folder picker. Asset protocol is scoped to <code>$HOME/**</code> so attachment images can be displayed from disk."],
+        ["p", "Bundles as AppImage and .deb. The window is 1280×820 with drag-drop enabled."],
+      ],
+      files: ["src-tauri/src/main.rs", "src-tauri/tauri.conf.json", "src-tauri/capabilities/default.json", "src-tauri/Cargo.toml"],
+    },
+    D: {
+      name: "Bag picker & bag.js", kind: "entry", count: "259", flag: "DESKTOP ONLY",
+      path: "app/src/pages/Bag/ + desktop/bag.js", size: "259 lines",
+      gx: 0, gy: 5, w: 2, d: 2, h: 2,
+      what: [
+        ["p", "What you see instead of a login page. It lists recent Bags as cards — each with a mini amber zipper-bag chip — and offers Open and Create, both via the native folder dialog."],
+        ["p", "On launch the app tries to reopen the most recent Bag automatically, verifying the folder still exists first so a moved or deleted vault falls through to the picker rather than resurrecting an empty one."],
+      ],
+      add: [["p", "Recents are capped at 50 in <code>bag.js</code>. Forgetting a Bag removes it from the list only — the folder on disk is never touched, and that should stay true."]],
+      how: [
+        ["p", "<code>bag.js</code> owns folder-picking and the recents list (in the webview's localStorage, which persists per app). Picking degrades gracefully outside Tauri — the File System Access API, then a prompt — so the flow is testable in a plain browser during development."],
+      ],
+      files: ["app/src/pages/Bag/BagPicker.jsx", "app/src/desktop/bag.js"],
+    },
+    V: {
+      name: "LocalStore — the vault engine", kind: "data layer", count: "610", flag: "DESKTOP ONLY",
+      path: "app/src/desktop/localStore.js", size: "610 lines — the heart of the fork",
+      gx: 6, gy: 5, w: 3, d: 3, h: 6, layers: 4,
+      what: [
+        ["p", "The single most important file in this repo. It is a <mark>REST server that runs in the browser tab</mark> and stores its data as files. It hydrates a Bag folder into an in-memory model, answers exactly the requests the app's hooks already make, and writes changes back to disk."],
+        ["p", "Because it speaks the same contract as the Express server and the guest mock, nothing above it changed when the app went local."],
+        ["flow", "hydrate on open → serve <b>localFetch</b> synchronously → mark dirty → <b>debounced flush</b> (1.5&nbsp;s) → disk"],
+        ["ul", [
+          "notes → <code>.md</code> files with YAML-ish frontmatter; notebooks are <i>folders</i>",
+          "comments → a <code>.comments.json</code> sidecar next to each note",
+          "tasks, dailies, completions, bundles → <code>tasks.siddran</code>",
+          "events, schedules → <code>calendar.siddran</code>",
+          "each sandbox → its own JSON; settings → <code>settings.siddran</code>",
+          "pasted images → <code>attachments/&lt;note title&gt;/</code>",
+        ]],
+      ],
+      add: [
+        ["p", "Adding an endpoint here is a <b>four-part</b> change, and missing one is the classic bug — it works until you restart:"],
+        ["ul", [
+          "1. a <code>handleX</code> case in the <code>localFetch</code> switch",
+          "2. a dirty flag so the change is noticed",
+          "3. a write in <code>flushNow()</code>",
+          "4. a read in <code>hydrate()</code> so it comes back on open",
+        ]],
+        ["p", "If the data should also sync, add it to <code>exportVault</code> / <code>importVault</code> too."],
+      ],
+      how: [
+        ["p", "Handlers return objects shaped like <code>Response</code> — an <code>ok</code> flag and an async <code>json()</code>. The URL is split into segments and switched on the first one, exactly as the guest mock does."],
+        ["p", "The flush is not naive. Notes <i>reconcile</i>: every note is written to the path its title and notebook imply, files are moved when retitled, and orphans are pruned — with comment sidecars following their note. JSON files are written in a stable id order so a vault in git produces clean diffs and two devices appending different rows do not collide at the end of the same array."],
+        ["p", "One subtle guard worth knowing: id continuation uses <code>Number.isFinite</code> rather than a typeof check, because a hand-edited <code>id:</code> in frontmatter parses to NaN, and NaN passing into <code>Math.max</code> permanently wedged the id counter."],
+      ],
+      files: ["app/src/desktop/localStore.js", "app/src/desktop/localStore.ids.test.js", "app/src/desktop/media.js", "app/src/desktop/fileDrop.js"],
+      inside: {
+        nodes: {
+          V1: { name: "hydrate", h: 5, kind: "read path", path: "localStore.js — hydrate()", what: [["p", "Reads the whole Bag into memory on open: the three .siddran files, then a walk of <code>notes/</code> where folders become notebooks and .md files become notes, then each sandbox JSON."]], how: [["p", "Corrupt files are skipped rather than fatal. Ids seen on disk raise the local counter so nothing collides."]] },
+          V2: { name: "localFetch router", h: 5, kind: "dispatcher", path: "localStore.js — localFetch()", what: [["p", "The REST shim. Splits the URL and switches: notes, notebooks, tasks, daily-tasks, projects, events, schedules, sandboxes, settings."]], how: [["p", "Any non-GET schedules a flush. Handler exceptions become a 500 rather than crashing the app."]] },
+          V3: { name: "flushNow + reconcile", h: 5, kind: "write path", path: "localStore.js — flushNow()", what: [["p", "Writes only what changed. Notes reconcile against the folder — write, move on retitle, prune orphans, carry sidecars along."]], how: [["p", "Debounced 1.5&nbsp;s; also forced on Bag close and switch so nothing is lost."]] },
+          V4: { name: "markdown ↔ note", h: 3, kind: "serialization", path: "noteToMd / mdToNote", what: [["p", "The note file format: a frontmatter block with id, title, tags, favorite, colour, order and timestamps, then the body verbatim."]], how: [["p", "Hand-rolled, not a YAML library — the frontmatter is a fixed small set of scalar keys."]] },
+          V5: { name: "attachments", h: 2, kind: "media", path: "saveAttachment", what: [["p", "Pasted or dropped images are saved under <code>attachments/&lt;note title&gt;/</code> and the markdown gets a Bag-relative path."]], how: [["p", "The active note id is pushed in from App.jsx on route change. Bytes cross to Rust as base64."]] },
+          V6: { name: "vault export/import", h: 2, kind: "sync surface", path: "exportVault / importVault", what: [["p", "The syncable slice — tasks and calendar only. Notes are markdown and out of scope; settings are device-local on purpose."]], how: [["p", "Wholesale replacement of the collections from a merged snapshot; the caller flushes."]] },
+        },
+        edges: [["V1", "V4"], ["V2", "V3"], ["V3", "V4"], ["V2", "V5"], ["V3", "V6"]],
+      },
+    },
+    J: {
+      name: "Filesystem adapters", kind: "abstraction", count: "100", flag: "DESKTOP ONLY",
+      path: "app/src/desktop/fs/", size: "2 adapters · 100 lines",
+      gx: 10, gy: 5, w: 2, d: 2, h: 2,
+      what: [
+        ["p", "A seven-method interface — exists, mkdirp, readDir, readText, writeText, remove, rename, plus byte variants — with two implementations:"],
+        ["ul", [
+          "<b>tauriFs</b> — the real disk, through the Rust commands",
+          "<b>memFs</b> — an in-memory fake, used in a plain browser during development and by the tests",
+        ]],
+        ["p", "This is why the whole vault engine is testable without launching a desktop window."],
+      ],
+      add: [["p", "Add a method to <b>both</b> adapters or the tests will pass while the app breaks. New capabilities need the Rust command first."]],
+      how: [["p", "Plain object factories returning async functions. <code>tauriFs</code> normalises Rust's <code>is_dir</code> into <code>isDir</code> so both adapters return the same shape."]],
+      files: ["app/src/desktop/fs/tauriFs.js", "app/src/desktop/fs/memFs.js"],
+    },
+
+    /* ── sync ──────────────────────────────────────────────── */
+    Q: {
+      name: "Sync client & merge", kind: "sync", count: "245", flag: "BUILT · NOT DEPLOYED",
+      path: "app/src/desktop/sync/", size: "245 lines + 428 lines of tests",
+      gx: 13, gy: 5, w: 2, d: 2, h: 3,
+      what: [
+        ["p", "Optional multi-device sync for the parts of a vault that are rows rather than files: tasks, dailies, completions, bundles, events and schedules. Notes are excluded — they are markdown on disk and belong to whatever file sync you already use."],
+        ["p", "It is <b>explicit</b>. It never runs on a timer and never sits in front of a tap. You press sync."],
+        ["flow", "pull → <b>three-way merge</b> → write locally → push (If-Match)"],
+        ["p", "Written and covered by tests; the Worker has not been deployed. Ember and git-based sync were both evaluated and ruled out."],
+      ],
+      add: [["p", "New syncable collection: add it to <code>exportVault</code>/<code>importVault</code> in localStore, then a <code>run()</code> line in <code>mergeVault</code>. If its identity is not <code>id</code>, pass a custom key the way completions do."]],
+      how: [
+        ["p", "<code>merge.js</code> is pure and the interesting half. It takes three snapshots — <b>base</b> (last successful sync, stored in the Bag), <b>local</b>, <b>remote</b> — and merges row by row. Base is load-bearing rather than an optimisation: without it a deleted row is indistinguishable from one this device has never seen, and deletions resurrect on every sync."],
+        ["ul", [
+          "an edit beats a delete",
+          "edited on both sides → last-write-wins on <code>updated_at</code>, tie-broken by a stable stringify so both devices reach the same answer",
+          "completions are keyed by (daily_task_id, date) — presence is the value",
+          "bundles merge as a row <i>and</i> their subtasks merge as their own collection",
+        ]],
+        ["p", "The client holds base and local fixed across retries; a 412 means the remote moved, so it re-pulls and re-merges — the merge is idempotent. Local state is only committed after the server accepts, so a failed push cannot leave base ahead of what is stored."],
+      ],
+      files: ["app/src/desktop/sync/merge.js", "app/src/desktop/sync/client.js", "app/src/desktop/sync/merge.test.js", "app/src/desktop/sync/client.test.js", "app/src/hooks/syncConfig.js"],
+      inside: {
+        nodes: {
+          Q1: { name: "mergeRows", h: 5, kind: "pure logic", path: "sync/merge.js", what: [["p", "The three-way merge over one collection. Every tie-break is deterministic and symmetric, so both devices independently reach the same result instead of ping-ponging."]], how: [["p", "Indexes base, local and remote by key, then walks the union. Equality is a stable stringify, so key order cannot affect the outcome."]] },
+          Q2: { name: "mergeVault", h: 3, kind: "orchestration", path: "sync/merge.js", what: [["p", "Runs mergeRows across every collection in the snapshot and collects conflicts with their collection name attached."]], how: [["p", "Bundles get special handling: merged as a row, and their nested tasks merged as a sub-collection."]] },
+          Q3: { name: "syncNow", h: 4, kind: "client", path: "sync/client.js", what: [["p", "Pull, merge, push, retry on 412 up to four times. Commits locally only after the server accepts."]], how: [["p", "<code>fetchImpl</code> is injectable, so the entire flow is exercised against a fake server in tests."]] },
+          Q4: { name: "base snapshot", h: 2, kind: "state", path: ".siddran-sync-base.json", what: [["p", "The last successfully-synced snapshot, stored inside the Bag so it travels with the vault."]], how: [["p", "Written only after a successful push, for exactly the reason above."]] },
+        },
+        edges: [["Q2", "Q1"], ["Q3", "Q2"], ["Q3", "Q4"]],
+      },
+    },
+    O: {
+      name: "Sync worker (CF + R2)", kind: "external service", count: "80", flag: "NOT DEPLOYED",
+      path: "sync-worker/src/index.js", size: "80 lines",
+      gx: 16, gy: 5, w: 2, d: 2, h: 1, ext: true,
+      what: [
+        ["p", "A Cloudflare Worker in front of an R2 bucket. Deliberately dumb: it stores one opaque snapshot at one key and refuses stale writes. It does not understand notes, tasks or anything else — all merging happens on the client."],
+        ["ul", [
+          "<code>GET /v1/vault</code> — the snapshot plus its etag (404 when nothing has been pushed)",
+          "<code>PUT /v1/vault</code> — requires <code>If-Match</code>; 412 when the etag has moved",
+          "<code>GET /v1/vault/meta</code> — a cheap is-there-anything-new probe",
+        ]],
+      ],
+      add: [["p", "Resist adding intelligence here. Its shortness is the design — R2's conditional writes do the concurrency check, which is why the file can stay this small."]],
+      how: [["p", "One shared bearer token, compared in near-constant time so it cannot be recovered by timing. Concurrency is R2's <code>onlyIf: { etagMatches }</code>; a null result means someone else pushed first, and the client re-pulls."]],
+      files: ["sync-worker/src/index.js", "sync-worker/wrangler.toml"],
+    },
+
+    /* ── spine ─────────────────────────────────────────────── */
+    F: {
+      name: "authFetch bridge", kind: "seam", count: "1",
+      path: "app/src/App.jsx — authFetch()", size: "one callback, load-bearing",
+      gx: 3, gy: 5, w: 2, d: 2, h: 2,
+      what: [
+        ["p", "The choke point every request passes through — and, in this build, the point where the app stops being a web app."],
+        ["flow", "Bag open? → <b>localStore</b> (files) &nbsp;·&nbsp; otherwise → network (vestigial)"],
+        ["p", "The network branch survives from Cinder and is effectively dead: with no Bag open the app shows the picker instead."],
+      ],
+      add: [["p", "Anything global about requests belongs here. Never call bare <code>fetch</code> from a component — it would bypass the vault entirely."]],
+      how: [["p", "A <code>useCallback</code> that reads <code>isLocalOpen()</code> from a module singleton rather than from state, so the callback identity stays stable and the data hooks do not re-run when a Bag opens."]],
+      files: ["app/src/App.jsx", "app/src/desktop/localStore.js"],
+    },
+    N: {
+      name: "useNotes", kind: "data hook", count: "666",
+      path: "app/src/hooks/useNotes.js", size: "666 lines",
+      gx: 0, gy: 10, w: 2, d: 2, h: 4, layers: 3,
+      what: [["p", "Owns every note and notebook: the lists, the per-notebook batches, and roughly twenty mutations — create, delete, retitle, edit body, tag, colour, pin, import, export, reorder. Unchanged from the web build; it simply talks to localStore now."]],
+      add: [["p", "New note or notebook operations go here, then the matching handler in <code>localStore.js</code>. Remember a retitle moves the file on disk — the reconcile step handles it, but it does mean paths are not stable."]],
+      how: [["p", "Optimistic mutations, cursor pagination (a no-op against localStore, which returns whole lists), and the batched notebook-contents request kept from the web build."]],
+      files: ["app/src/hooks/useNotes.js", "app/src/utils/markdownIO.js", "app/src/utils/noteSorting.js"],
+    },
+    T: {
+      name: "useTasks", kind: "data hook", count: "732",
+      path: "app/src/hooks/useTasks.js", size: "732 lines",
+      gx: 3, gy: 10, w: 2, d: 2, h: 4, layers: 3,
+      what: [
+        ["p", "Three collections in one hook: <b>tasks</b> with deadlines, <b>daily tasks</b> that expire at midnight unless they carry a recurrence, and <b>bundles</b> whose priority is derived from their subtasks."],
+        ["p", "The calendar reads its tasks derived from this store rather than fetching a second copy, so an edit in TasksHub moves on the calendar immediately."],
+      ],
+      add: [["p", "New task behaviour here, plus the localStore handler. If it touches recurrence, the calendar keeps a separate recurring set that App.jsx syncs on create, convert and delete."]],
+      how: [["p", "Batch endpoints for bulk operations. <code>patchTaskInCache</code> exists so calendar drag-scheduling can move a task optimistically. All of it lands in <code>tasks.siddran</code>."]],
+      files: ["app/src/hooks/useTasks.js"],
+    },
+    K: {
+      name: "Calendar hooks", kind: "data hooks", count: "5",
+      path: "app/src/hooks/useCalendar*.js", size: "5 hooks · 600 lines",
+      gx: 6, gy: 10, w: 2, d: 2, h: 3, layers: 5,
+      what: [
+        ["p", "The calendar is assembled from several sources, each with its own hook — the part of the codebase most worth understanding before changing it."],
+        ["ul", [
+          "<b>useCalendarEvents</b> — real blocks",
+          "<b>useCalendarTasks</b> — derived from useTasks; dated and undated",
+          "<b>useCalendarDailies</b> — recurring dailies and per-day completions",
+          "<b>useSchedules</b> — named groups of stamped blocks",
+          "<b>useCalendar</b> — expands recurrence rules into virtual per-day instances",
+        ]],
+      ],
+      add: [["p", "A new thing on the calendar needs a source list, a colour token, drag handling, and a case in <code>ItemDetailsModal</code>. Recurrence expansion lives in <code>useCalendar.js</code>."]],
+      how: [["p", "Gated on <code>unlocked &amp;&amp; calendarActive</code>, so nothing loads until the peek opens or the route mounts. Recurrence is a rule expanded on the fly into virtual instances with synthetic ids, not a stored series."]],
+      files: ["app/src/hooks/useCalendar.js", "app/src/hooks/useCalendarEvents.js", "app/src/hooks/useCalendarTasks.js", "app/src/hooks/useCalendarDailies.js", "app/src/hooks/useSchedules.js"],
+    },
+    S: {
+      name: "Sandbox stores", kind: "singleton stores", count: "7",
+      path: "app/src/hooks/sandbox*.js", size: "7 modules · ≈950 lines",
+      gx: 9, gy: 10, w: 2, d: 2, h: 3, layers: 3,
+      what: [
+        ["p", "Boards do not use the hook-per-collection pattern — a whiteboard changes far too often. Module-level singleton stores with subscriptions let a drag mutate a hundred items a second without re-rendering the tree."],
+        ["p", "In this build the cache layer matters less: writes land in the Bag through localStore, which is already local."],
+      ],
+      add: [["p", "New item kinds register in <code>components/Sandbox/shapes/registry.js</code>; persistence rides the batch upsert automatically."]],
+      how: [["p", "Writes are coalesced and flushed to the batch endpoint after a pause, so a drag produces one write instead of hundreds. Each board becomes one JSON file in <code>sandboxes/</code>."]],
+      files: ["app/src/hooks/sandboxStore.js", "app/src/hooks/sandboxItemsStore.js", "app/src/hooks/sandboxCache.js", "app/src/hooks/useSandboxHistory.js", "app/src/hooks/useSandboxCanvas.js"],
+    },
+    Z: {
+      name: "Comments", kind: "feature", count: "466", flag: "DESKTOP ONLY",
+      path: "hooks/useComments.js + components/Comments/ + cm/comments.js", size: "3 modules · 466 lines",
+      gx: 12, gy: 10, w: 2, d: 2, h: 2,
+      what: [
+        ["p", "Google-Docs-style threaded comments on a note. Select text, leave a comment, reply, resolve. Shipped July 2026."],
+        ["p", "Threads live in a <code>.comments.json</code> sidecar next to the note file, so the markdown itself stays clean and portable."],
+      ],
+      add: [["p", "The anchoring is the fragile part. If you change how text is selected or how the reading view renders, re-check both anchor paths — the CM6 one and the DOM one."]],
+      how: [
+        ["p", "Anchors are a CodeMirror <code>StateField</code> that maps positions through document changes, with the quoted text stored alongside so a thread can re-anchor by search when the mapping is lost (edited elsewhere, reopened, or arrived via sync)."],
+        ["p", "The panel is React; the positions are the editor's. Keeping those two concerns split is what made it tractable."],
+      ],
+      files: ["app/src/hooks/useComments.js", "app/src/components/Comments/CommentsPanel.jsx", "app/src/components/Editor/cm/comments.js"],
+    },
+
+    /* ── surfaces ──────────────────────────────────────────── */
+    H: {
+      name: "Notes hub", kind: "page", count: "480",
+      path: "app/src/pages/Notes/NotesHub.jsx", size: "480 lines + cards",
+      gx: 0, gy: 15, w: 2, d: 2, h: 2,
+      what: [["p", "All notes and notebooks as cards: search, sort, pins, grid and row layouts, notebook creation, markdown import — plus <b>drag-to-reorder</b> for standalone notes and notebooks, with the sidebar mirroring the saved order."]],
+      add: [["p", "Card visuals live in <code>components/Notes/</code> and <code>components/Notebooks/</code>; the hub only arranges and filters. Reorder logic is the shared <code>useDragReorder</code> hook."]],
+      how: [["p", "Sorting and filtering memoised. Manual order persists as an <code>order</code> field, which localStore writes into the note frontmatter and the notebook meta file."]],
+      files: ["app/src/pages/Notes/NotesHub.jsx", "app/src/components/Notes/Card.jsx", "app/src/hooks/useDragReorder.js"],
+    },
+    P: {
+      name: "Note page & pane", kind: "page", count: "1510",
+      path: "app/src/pages/Notes/", size: "NotePage 98 + NotePane ≈1,400",
+      gx: 3, gy: 15, w: 2, d: 2, h: 4, layers: 3,
+      what: [
+        ["p", "One open note, and by far the most-grown surface in the fork — more than double the web build. The look changed too: no paper card, text sits directly on the background, with a full-width sticky toolbar and curved Obsidian-style tabs."],
+        ["ul", [
+          "<b>Split view</b> — two notes side by side, each with its own mode and controls",
+          "<b>Outline</b> <span class='tag'>desktop</span> — a per-pane heading list that scrolls to a heading in either mode",
+          "<b>In-note search</b> <span class='tag'>desktop</span> — Ctrl+F, works in read and write mode, all matches highlighted",
+          "<b>PDF pane</b> <span class='tag'>desktop</span> — a PDF open beside a note",
+          "<b>Comments</b> <span class='tag'>desktop</span> — the threads panel",
+          "<b>Sticky dock</b> — the formatting bar, now docked rather than floating, hidden in read mode",
+        ]],
+      ],
+      add: [["p", "New per-note controls go in <code>NotePane.jsx</code> — but note the pattern: in split view the controls belong to the pane that owns them, and imperative handles are threaded per pane (<code>searchApiRef</code> is the model to copy). How markdown <i>renders</i> belongs in the Editor or the Reading view instead."]],
+      how: [["p", "Split state in <code>NoteSplitContext</code>, tabs in <code>NoteTabsContext</code>, PDF in <code>PdfViewContext</code>. Search is dual-implementation by necessity: a CM6 <code>StateField</code> of decorations in write mode, a DOM text-walker wrapping spans in read mode — the same shape the comment highlighter uses."]],
+      files: ["app/src/pages/Notes/NotePane.jsx", "app/src/components/Notes/NoteSearch.jsx", "app/src/components/Notes/NoteOutline.jsx", "app/src/components/Notes/PdfPane.jsx", "app/src/utils/headings.js", "app/src/utils/pdfLinks.js"],
+    },
+    E: {
+      name: "CodeMirror editor", kind: "subsystem", count: "4993",
+      path: "app/src/components/Editor/", size: "27 modules · ≈5,000 lines",
+      gx: 6, gy: 15, w: 3, d: 3, h: 7, layers: 6,
+      deps: "@codemirror/* · @lezer/markdown",
+      what: [
+        ["p", "The heart of the app and the densest code in it — and where most of the fork's new work has gone. A <mark>live-preview markdown editor</mark>: you type raw markdown and it styles itself in place, while the underlying text stays plain markdown."],
+        ["p", "Beyond the web build it adds:"],
+        ["ul", [
+          "<b>Editable live-preview tables</b> — the big one; type in a rendered table and the markdown updates",
+          "<b>Comment anchoring</b> — threads that survive edits",
+          "<b>In-note search</b> decorations",
+          "<b>Formatting shortcuts</b> — Ctrl+B/I/U/H/=, sharing one implementation with the dock buttons",
+          "<b>Inline render</b> and a much larger test suite",
+        ]],
+      ],
+      add: [
+        ["p", "New markdown syntax is a <b>four-part</b> change; skipping one breaks the pair:"],
+        ["ul", [
+          "1. a Lezer node in <code>cm/syntaxNodes.js</code>",
+          "2. a case in <code>cm/livePreview.js</code>",
+          "3. a class in <code>cm/theme.js</code>",
+          "4. a remark plugin in <code>Editor/utils/</code> for read mode",
+        ]],
+        ["p", "New formatting buttons go in <code>cm/formatting.js</code> — the dock and the keymap both use it, which is what keeps a button and its shortcut identical. Run <code>npm test</code>: the drift test fails if write and read modes disagree."],
+      ],
+      how: [
+        ["p", "A controlled React wrapper around a CM6 <code>EditorView</code>. Decoration is a <code>ViewPlugin</code> walking the syntax tree across the visible ranges only; widgets replace ranges, marks style them in place, and any range containing the cursor is left raw."],
+        ["p", "Scroll performance in long notes came from making fold-state lookups O(1) rather than scanning forward once per visible line — the full scan now runs only on an actual fold click."],
+        ["p", "Two known open issues carried over: <code>[[</code> autocomplete is invisible on otherwise-empty lines, and a large restored fold can render raw markdown until the first click. A few table edge cases are deferred too."],
+      ],
+      files: ["app/src/components/Editor/CodeMirrorEditor.jsx", "app/src/components/Editor/cm/livePreview.js", "app/src/components/Editor/cm/tables.js", "app/src/components/Editor/cm/formatting.js", "app/src/components/Editor/cm/search.js", "app/src/components/Editor/cm/comments.js", "app/src/components/Editor/cm/fold.js"],
+      inside: {
+        nodes: {
+          E1: { name: "livePreview", h: 6, kind: "view plugin", path: "cm/livePreview.js", what: [["p", "The core. Walks the syntax tree across the visible viewport and emits decorations — marks, widgets, line decorations."]], how: [["p", "Rebuilds on document change, viewport change and selection move. Ranges under the cursor stay raw."]] },
+          E2: { name: "tables", h: 6, kind: "feature", flag: "DESKTOP ONLY", path: "cm/tables.js + tableModel.js + tableRender.js + tableGap.js — 640 lines", what: [["p", "Editable live-preview tables: a markdown table renders as a real table you can type into, add rows and columns to, and realign — with the markdown source rewritten underneath."]], how: [["p", "<code>tableModel.js</code> parses and re-emits the markdown (pure, and tested); <code>tableRender.js</code> draws it; <code>tables.js</code> owns the editing behaviour. A few edge cases are knowingly deferred."]] },
+          E3: { name: "comments", h: 4, kind: "anchoring", flag: "DESKTOP ONLY", path: "cm/comments.js", what: [["p", "Position anchors for comment threads, mapped through every document change, with quote-based re-anchoring as the fallback."]], how: [["p", "A <code>StateField</code> holding ranges; the React panel reads them and never owns them."]] },
+          E4: { name: "search", h: 3, kind: "feature", flag: "DESKTOP ONLY", path: "cm/search.js", what: [["p", "In-note find: every match highlighted amber, Enter and the arrows step through, and the active hit scrolls into view."]], how: [["p", "A <code>StateField</code> of mark decorations plus a doc selection and scroll. Read mode uses a DOM walker instead."]] },
+          E5: { name: "formatting", h: 3, kind: "shared", flag: "DESKTOP ONLY", path: "cm/formatting.js", what: [["p", "<code>wrapSelection</code> and the keymap for bold, italic, underline, spoiler and highlight."]], how: [["p", "One implementation used by both the dock buttons and the shortcuts, at a precedence above the default keymap, and inert in read mode."]] },
+          E6: { name: "fold", h: 4, kind: "state field", path: "cm/fold.js", what: [["p", "Collapsible headings, lists and checklists with gutter chevrons, remembered per note — on by default in this build."]], how: [["p", "Foldability is decided from the first following line, O(1). The old forward scan per visible line was the source of the scroll stutter."]] },
+          E7: { name: "theme", h: 5, kind: "styles", path: "cm/theme.js", what: [["p", "Every visual rule for the editor: heading scale, code blocks, quotes, marks, chevrons, tables."]], how: [["p", "A CM6 <code>EditorView.theme</code> reading the same CSS custom properties as the rest of the app."]] },
+          E8: { name: "listEditing", h: 4, kind: "keymap", path: "cm/listEditing.js", what: [["p", "Enter continues a bullet, Tab indents, an empty item breaks out, checkboxes renumber."]], how: [["p", "A keymap at high precedence inspecting the current line before the default command runs."]] },
+          E9: { name: "wikilinks", h: 3, kind: "extension", path: "cm/wikilinks.js", what: [["p", "<code>[[Note title]]</code> links with autocomplete over existing notes."]], how: [["p", "A completion source over the notes list. Known bug: the dropdown mispositions when <code>[[</code> starts a line."]] },
+          E10: { name: "reading-view plugins", h: 4, kind: "remark", path: "Editor/utils/remark*.js", what: [["p", "The read-mode half of every custom syntax — wikilinks, hashtags, highlight, spoiler, underline, line breaks."]], how: [["p", "unified/remark plugins mutating the mdast; each mirrors a live-preview case, and the drift test compares them."]] },
+          E11: { name: "EditorDock", h: 3, kind: "ui", path: "Editor/EditorDock.jsx", what: [["p", "The formatting bar — now sticky at the bottom with an explicit show/hide toggle, hidden entirely in read mode. Includes the markdown-tips popover."]], how: [["p", "Buttons call into <code>cm/formatting.js</code>, the same path the shortcuts take."]] },
+          E12: { name: "exportPdf", h: 2, kind: "export", path: "Editor/utils/exportPdf.js", what: [["p", "Renders a note to a printable document."]], how: [["p", "Builds standalone HTML from the reading-view renderer with print CSS."]] },
+        },
+        edges: [["E1", "E7"], ["E1", "E6"], ["E1", "E2"], ["E1", "E9"], ["E8", "E1"], ["E5", "E11"], ["E3", "E1"], ["E4", "E1"], ["E1", "E10", "soft"], ["E10", "E12"]],
+      },
+    },
+    R: {
+      name: "Reading view", kind: "renderer", count: "1231",
+      path: "app/src/components/Editor/ReadingView.jsx", size: "renderer + 7 remark plugins",
+      gx: 10, gy: 15, w: 2, d: 2, h: 3,
+      what: [
+        ["p", "The other half of a note: markdown compiled to HTML for reading, with highlighted code, working checkboxes, collapsible headings, callouts, comment highlights and search hits."],
+        ["p", "It must agree with the editor character for character. Every custom syntax exists twice — a CodeMirror decoration and a remark plugin — and a Vitest drift test keeps the pair honest."],
+      ],
+      add: [["p", "Never add a remark plugin without the matching live-preview case, or vice versa. Run <code>npm test</code>."]],
+      how: [
+        ["p", "A unified pipeline: <code>remark-parse → gfm → breaks → custom plugins → remark-rehype → rehype-highlight → stringify</code>, injected as <code>innerHTML</code>."],
+        ["p", "Two traps learned the hard way: React re-applies the HTML on every commit and wipes DOM decorations, so chevrons must be re-attached after each render; and checkbox toggling is index-based, so the render must match GFM's node order exactly."],
+      ],
+      files: ["app/src/components/Editor/ReadingView.jsx", "app/src/components/Editor/utils/markdownToHtml.js", "app/src/components/Editor/utils/calloutBlocks.js"],
+    },
+    X: {
+      name: "Tasks hub", kind: "page", count: "662",
+      path: "app/src/pages/Tasks/TasksHub.jsx", size: "662 lines + 4 cards",
+      gx: 13, gy: 15, w: 2, d: 2, h: 3,
+      what: [["p", "Everything task-shaped on one page: today's dailies with the recurrence picker, deadline tasks, and bundles with expandable subtasks. Task details open in a modal where the deadline is editable — that is the bridge to the calendar."]],
+      add: [["p", "New task surfaces here; new behaviour in <code>useTasks</code>. Reuse the shared <code>RecurrencePicker</code> and <code>DateTimePicker</code> rather than writing new ones — the custom date picker exists because WebKitGTK renders the native one badly."]],
+      how: [["p", "Grouping and priority sorting memoised; batch select drives the batch endpoints. Converting a daily to recurring notifies App.jsx so the calendar's separate recurring set stays in sync."]],
+      files: ["app/src/pages/Tasks/TasksHub.jsx", "app/src/components/Tasks/TaskCard.jsx", "app/src/components/Tasks/DailyTaskCard.jsx", "app/src/components/Common/DateTimePicker.jsx"],
+    },
+    C: {
+      name: "Calendar", kind: "subsystem", count: "2677",
+      path: "app/src/pages/Calendar/ + components/Calendar/", size: "19 modules · ≈2,700 lines",
+      gx: 0, gy: 20, w: 3, d: 3, h: 4, layers: 3,
+      what: [
+        ["p", "A planning surface, not a viewer. Month, Week and Day over one shared time grid, with drag-to-schedule, a peek drawer that can pin to a resizable half-split, and two transactional modes driven from App.jsx."],
+        ["ul", [
+          "<b>Plan mode</b> — stage a whole reshuffle, then apply or discard it as one action",
+          "<b>Schedule Designer</b> — design a weekly timetable on a blank canvas and stamp it across a date range",
+          "<b>2-column Day view</b> <span class='tag'>desktop</span> — the day as two side-by-side timelines fitted to the viewport, with a rebalance button when hidden hours make the halves unequal",
+          "<b>Hidden-hours popover</b>, now-line centring, and a current-time hover read-out",
+        ]],
+      ],
+      add: [["p", "New view: a component under <code>views/</code> reusing <code>TimeGrid</code> — the grid owns geometry, drag, the now-line and hidden hours, and rewriting it is where bugs come from. Block appearance flows through the <code>--src</code> colour token."]],
+      how: [
+        ["p", "<code>timeGridGeom.js</code> is the single source of pixel↔minute maths; a dynamic <code>setHourPx</code> plus a row offset is what lets the 2-column day render two slices of one grid while click-create, drag and resize keep working across both halves."],
+        ["p", "Blocks use the bold-capsule style — the source colour tints the fill through a <code>--src</code> property, short blocks collapse to one row — and the now-line is a mint gradient thread with a gutter read-out."],
+      ],
+      files: ["app/src/pages/Calendar/Calendar.jsx", "app/src/components/Calendar/views/TimeGrid.jsx", "app/src/components/Calendar/views/timeGridGeom.js", "app/src/components/Calendar/views/DayView.jsx", "app/src/components/Calendar/EventModal.jsx", "app/src/components/Calendar/Peek/CalendarPeek.jsx"],
+      inside: {
+        nodes: {
+          C1: { name: "TimeGrid", h: 6, kind: "core", path: "views/TimeGrid.jsx", what: [["p", "The shared engine under Day and Week: hour rows, drag to create and move, resize handles, the all-day row, the now-line, hidden hours, and the 2-column slicing."]], how: [["p", "Pointer events over a positioned grid, with all maths delegated to timeGridGeom. <code>user-select:none</code> on the grid, because dragging used to start a stuttery text selection."]] },
+          C2: { name: "timeGridGeom", h: 3, kind: "geometry", path: "views/timeGridGeom.js", what: [["p", "Pure conversion between screen offsets and minutes, including the dynamic hour height used by the fitted day."]], how: [["p", "No DOM, no React — the safest place in the calendar to change first."]] },
+          C3: { name: "Day / Week / Month", h: 4, kind: "views", path: "views/", what: [["p", "Three arrangements. Day and Week wrap TimeGrid; Month is its own cell grid with overflow badges. Day blocks show start–end; Week shows start only."]], how: [["p", "View, focused day and the 2-column toggles live in <code>CalendarViewContext</code> and persist to localStorage."]] },
+          C4: { name: "Peek drawer", h: 3, kind: "ui", path: "Peek/CalendarPeek.jsx", what: [["p", "A calendar glance from anywhere — mini month, focused-day list, quick add. Ctrl/Cmd+; toggles it; it pins to a resizable half-split."]], how: [["p", "Root-mounted in App.jsx so it survives route changes."]] },
+          C5: { name: "EventModal", h: 3, kind: "modal", path: "EventModal.jsx", what: [["p", "Create a block and view one — read-only details flipping to edit, with a link picker that attaches a note, task, daily, bundle or sandbox."]], how: [["p", "A polymorphic <code>ref_type</code>/<code>ref_id</code> pair on the event row. Time fields use an overlay so WebKitGTK does not paint a phantom time in an empty input."]] },
+          C6: { name: "Designer", h: 4, kind: "mode", path: "calendarDates.js", what: [["p", "Blank-canvas weekly timetable design, stamped across a date range as a named schedule, with overlapping blocks flagged as dismissable conflicts."]], how: [["p", "<code>stampWeeklyPattern</code>, <code>patternFromPlot</code> and <code>plotFromPattern</code> convert between a saved pattern and a concrete plot; the saved template also stores the range and skips so Edit can prefill."]] },
+          C7: { name: "RecurrencePicker", h: 2, kind: "shared control", path: "Peek/RecurrencePicker.jsx", what: [["p", "One control for every-day / weekdays / weekends / custom mask, used from four surfaces."]], how: [["p", "Emits the same <code>recurrence</code> string the daily-task row stores."]] },
+        },
+        edges: [["C1", "C2"], ["C3", "C1"], ["C4", "C3"], ["C5", "C1"], ["C6", "C1"], ["C7", "C4"]],
+      },
+    },
+    B: {
+      name: "Sandbox", kind: "subsystem", count: "4528",
+      path: "app/src/pages/Sandbox/ + components/Sandbox/", size: "36 modules · ≈4,500 lines",
+      gx: 4, gy: 20, w: 3, d: 3, h: 4, layers: 4,
+      deps: "konva · react-konva · perfect-freehand",
+      what: [
+        ["p", "An infinite whiteboard: freehand ink, shapes with text, connectors that follow their endpoints, text boxes, and cards that attach a real note or task so a board becomes a workspace over your actual content. In this build PDFs can be dropped on a board too."],
+        ["p", "The largest subsystem by file count, and the only code-split one — Konva stays out of the main bundle until a board opens."],
+      ],
+      add: [["p", "A new item type: register it in <code>shapes/registry.js</code>, add hit-testing in <code>selection/hitTest.js</code>, bounds in <code>itemBounds.js</code>, and a render case in the right layer. Persistence comes free through the batch upsert."]],
+      how: [
+        ["p", "Konva split into layers so an in-progress stroke repaints only one: GraphicsLayer, ActiveLayer, ConnectorLayer, OverlayLayer. Freehand strokes are outlined by perfect-freehand and stored as a path."],
+        ["p", "Snapping, alignment, z-order and grouping are pure geometry in <code>selection/</code> and testable on their own."],
+      ],
+      files: ["app/src/pages/Sandbox/SandBoxPage.jsx", "app/src/components/Sandbox/Canvas/SandboxCanvas.jsx", "app/src/components/Sandbox/shapes/registry.js", "app/src/components/Sandbox/selection/snapping.js", "app/src/components/Sandbox/Cards/SandboxPdfCard.jsx"],
+      inside: {
+        nodes: {
+          B1: { name: "SandboxCanvas", h: 5, kind: "core", path: "Canvas/SandboxCanvas.jsx", what: [["p", "The Konva stage and the pointer state machine — active tool, what is being drawn, what is being dragged."]], how: [["p", "Delegates to four layers so a live stroke repaints only the active canvas."]] },
+          B2: { name: "layers", h: 3, kind: "renderers", path: "Canvas/*Layer.jsx", what: [["p", "Graphics for committed items, Active for the live stroke, Connector for links, Overlay for selection chrome."]], how: [["p", "Each is a react-konva <code>&lt;Layer&gt;</code> — a separate canvas underneath."]] },
+          B3: { name: "selection & geometry", h: 4, kind: "pure logic", path: "selection/", what: [["p", "Hit testing, bounds, marquee, snapping, alignment, z-order. No React, no canvas."]], how: [["p", "Plain functions over item records — the safest part of the sandbox to change."]] },
+          B4: { name: "shape registry", h: 2, kind: "registry", path: "shapes/registry.js", what: [["p", "The table of item kinds. Adding a shape starts here."]], how: [["p", "Each entry declares default size and its render and edit affordances."]] },
+          B5: { name: "toolbar & dock", h: 3, kind: "ui", path: "Toolbar/ + Dock/", what: [["p", "Tool picker, colour palette, brush settings, insert menu, shortcuts help, bottom dock."]], how: [["p", "Tool state lives in the page component and flows down as props."]] },
+          B6: { name: "attached cards", h: 3, kind: "integration", path: "Cards/", what: [["p", "Note, task and PDF cards pinned on a board and live-linked to the real record — tick a task on the board and it ticks everywhere."]], how: [["p", "The card stores only the id; content comes from the props threaded down from App.jsx."]] },
+          B7: { name: "export", h: 2, kind: "output", path: "Canvas/exportImage.js", what: [["p", "Export a board, or a selection, as an image."]], how: [["p", "Konva stage <code>toDataURL</code> over a computed bounding box."]] },
+        },
+        edges: [["B1", "B2"], ["B1", "B3"], ["B2", "B4"], ["B5", "B1"], ["B6", "B2"], ["B1", "B7"]],
+      },
+    },
+
+    /* ── extras ────────────────────────────────────────────── */
+    M: {
+      name: "Command palette", kind: "feature", count: "381", flag: "DESKTOP ONLY",
+      path: "app/src/components/CommandPalette/", size: "3 files · 381 lines",
+      gx: 8, gy: 20, w: 2, d: 2, h: 2,
+      what: [["p", "Ctrl/Cmd+Shift+P — jump to a note, run a command, navigate, create, close the Bag. The keyboard-first way around the app, shipped alongside the live tables in July 2026."]],
+      add: [["p", "New commands are entries in the palette's command list. Keep the fuzzy matcher (<code>fuzzy.js</code>, which has its own tests) separate from the command definitions."]],
+      how: [["p", "A modal over a fuzzy-scored list of notes, tasks and static commands. It lives inside the Router so navigation commands can use it."]],
+      files: ["app/src/components/CommandPalette/CommandPalette.jsx", "app/src/components/CommandPalette/fuzzy.js", "app/src/components/CommandPalette/fuzzy.test.js"],
+    },
+    G: {
+      name: "Dev-only routes", kind: "scratch", count: "2806", flag: "DEV BUILD ONLY",
+      path: "app/src/dev/", size: "7 files · 2,806 lines",
+      gx: 11, gy: 20, w: 2, d: 2, h: 1,
+      what: [
+        ["p", "Experiments that never shipped, kept for reference: <code>/dev/paged-editor</code> and <code>/dev/book-spike</code>, four attempts at a paged, book-like write mode. Notes stayed a plain scroll."],
+        ["p", "None of it ships. The route is behind <code>import.meta.env.DEV</code>, which folds to <code>false</code> in a production build so Rollup drops the whole folder."],
+      ],
+      add: [["p", "A good home for a spike you want to keep but not ship. If an experiment graduates, move it out of <code>dev/</code> — the folder is deliberately excluded from production."]],
+      how: [["p", "A lazy-loaded route group. The measurements behind the paged-mode attempts are written up in <code>references/plan-book-write-mode.md</code>."]],
+      files: ["app/src/dev/DevRoutes.jsx", "app/src/dev/PagedEditor.jsx", "app/src/dev/pagedLayout.js", "app/src/dev/BookSpike.jsx"],
+    },
+  },
+
+  edges: [
+    ["A", "L"], ["A", "Y"], ["A", "I"], ["A", "F"], ["A", "D"],
+    ["D", "W"], ["F", "V"], ["V", "J"], ["J", "W"],
+    ["V", "Q"], ["Q", "O"],
+    ["N", "F"], ["T", "F"], ["K", "F"], ["S", "F"], ["Z", "F"],
+    ["H", "N"], ["P", "N"], ["P", "E"], ["E", "R"], ["Z", "E"],
+    ["X", "T"], ["C", "K"], ["C", "T", "soft"], ["B", "S"],
+    ["A", "M", "soft"], ["A", "G", "soft"], ["A", "C", "soft"], ["A", "B", "soft"], ["A", "H", "soft"], ["A", "X", "soft"],
+  ],
+}
+/* ══════════════════════════════════════════════════════════════════
+   RENDERER — isometric block map. Shared by both codebase maps.
+   Nothing below is app-specific; all content lives in MAP above.
+   ══════════════════════════════════════════════════════════════════ */
+;(function () {
+  const TW = 52, TH = 26, HZ = 21   // half tile width / half tile depth / height unit
+  const svg = document.getElementById('svg')
+  const body = document.getElementById('body')
+  const rail = document.getElementById('rail')
+
+  let stack = []          // drill-down path: [] = root, ['E'] = inside E
+  let sel = null          // pinned node id
+  let hover = null        // hovered node id
+  let tab = 'what'
+  let vb = { x: 0, y: 0, w: 1000, h: 700 }
+
+  /* ── the currently visible scene ───────────────────────────── */
+  function scene() {
+    if (!stack.length) return { nodes: MAP.nodes, edges: MAP.edges || [], parent: null }
+    const p = MAP.nodes[stack[0]]
+    return { nodes: p.inside.nodes, edges: p.inside.edges || [], parent: p }
+  }
+  function node(id) {
+    const s = scene()
+    return s.nodes[id] || MAP.nodes[id] || null
+  }
+  // Children may omit coordinates — lay them out on a 3-wide grid.
+  function placed() {
+    const s = scene(), out = []
+    let i = 0
+    for (const id in s.nodes) {
+      const n = s.nodes[id]
+      const auto = n.gx === undefined
+      out.push({
+        id, n,
+        gx: auto ? (i % 3) * 3 : n.gx,
+        gy: auto ? Math.floor(i / 3) * 3 : n.gy,
+        w: n.w || 2, d: n.d || 2, h: n.h || 2,
+      })
+      i++
+    }
+    return out
+  }
+
+  // Long flag strings would overflow a block face — draw a short marker instead.
+  const FLAGS = {
+    'DESKTOP ONLY': '+DESKTOP', 'WEB ONLY': 'WEB ONLY', 'DESKTOP': '+DESKTOP',
+    'BUILT · NOT DEPLOYED': 'IDLE', 'NOT DEPLOYED': 'IDLE',
+    'SEPARATE REPO': 'EXTERNAL', 'PLACEHOLDER': 'STUB', 'DEV BUILD ONLY': 'DEV ONLY',
+  }
+  const shortFlag = f => (f ? (FLAGS[f] || f.slice(0, 9)) : '')
+
+  // Hatched side faces, drafting-drawing style. X variants cross-hatch and mark
+  // a block that exists in only one of the two distributions.
+  const pat = (id, fill, d) =>
+    `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="${fill}"/>
+      <path d="${d}" stroke="#15150f" stroke-width=".55" opacity=".38" fill="none"/>
+    </pattern>`
+  const UP = 'M-1,1 L1,-1 M0,7 L7,0 M6,8 L8,6'
+  const DN = 'M-1,6 L6,-1 M0,8 L8,0 M1,8 L8,1'
+  const DEFS = `<defs>
+    ${pat('hatchL', '#bdb68c', UP)}
+    ${pat('hatchR', '#aca578', DN)}
+    ${pat('hatchLX', '#bdb68c', UP + ' ' + DN)}
+    ${pat('hatchRX', '#aca578', UP + ' ' + DN)}
+  </defs>`
+
+  /* ── isometric projection ──────────────────────────────────── */
+  const P = (x, y, z) => [(x - y) * TW, (x + y) * TH - z * HZ]
+  const pts = a => a.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')
+
+  function drawBlock(b) {
+    const { gx, gy, w, d, h, n, id } = b
+    const t = [P(gx, gy, h), P(gx + w, gy, h), P(gx + w, gy + d, h), P(gx, gy + d, h)]
+    const fr = [P(gx + w, gy, h), P(gx + w, gy + d, h), P(gx + w, gy + d, 0), P(gx + w, gy, 0)]
+    const fl = [P(gx, gy + d, h), P(gx + w, gy + d, h), P(gx + w, gy + d, 0), P(gx, gy + d, 0)]
+    const c = P(gx + w / 2, gy + d / 2, h)
+    let cls = 'blk'
+    if (n.ext) cls += ' ext'
+    if (id === sel) cls += ' sel'
+    else if (id === hover) cls += ' hot'
+    else if (hover && !related(hover, id)) cls += ' dim'
+
+    let layers = ''
+    const L = n.layers || 0
+    for (let i = 1; i < L; i++) {
+      const z = (h * i) / L
+      layers += `<polyline class="lay" fill="none" points="${pts([P(gx, gy + d, z), P(gx + w, gy + d, z), P(gx + w, gy, z)])}"/>`
+    }
+    const short = shortFlag(n.flag)
+    const badge = short
+      ? `<text x="${c[0].toFixed(1)}" y="${(c[1] + 12).toFixed(1)}" text-anchor="middle" style="font-size:6.5px;letter-spacing:.1em;opacity:.8">${short}</text>`
+      : ''
+    // Flagged blocks (desktop-only / web-only) get a denser cross-hatch, so the
+    // fork between the two distributions is visible on the map itself.
+    const sfx = n.flag ? 'X' : ''
+    return `<g class="${cls}" data-id="${id}">
+      <polygon class="fl" points="${pts(fl)}"${n.ext ? '' : ` style="fill:url(#hatchL${sfx})"`}/>
+      <polygon class="fr" points="${pts(fr)}"${n.ext ? '' : ` style="fill:url(#hatchR${sfx})"`}/>
+      ${layers}
+      <polygon class="top" points="${pts(t)}"/>
+      <text x="${c[0].toFixed(1)}" y="${c[1].toFixed(1)}" text-anchor="middle" dominant-baseline="central">${id}</text>
+      ${badge}
+    </g>`
+  }
+
+  function related(a, b) {
+    if (a === b) return true
+    return scene().edges.some(e => (e[0] === a && e[1] === b) || (e[1] === a && e[0] === b))
+  }
+
+  function drawWire(e, byId) {
+    const A = byId[e[0]], B = byId[e[1]]
+    if (!A || !B) return ''
+    const a = [A.gx + A.w / 2, A.gy + A.d / 2]
+    const b = [B.gx + B.w / 2, B.gy + B.d / 2]
+    const bend = [b[0], a[1]]
+    const p = [P(a[0], a[1], 0), P(bend[0], bend[1], 0), P(b[0], b[1], 0)]
+    const lit = hover && (e[0] === hover || e[1] === hover) ? ' lit' : ''
+    const soft = e[2] === 'soft' ? ' soft' : ''
+    const j = P(bend[0], bend[1], 0)
+    return `<polyline class="wire${soft}${lit}" points="${pts(p)}"/>
+      <polygon class="joint" points="${pts([[j[0], j[1] - 3], [j[0] + 3.5, j[1]], [j[0], j[1] + 3], [j[0] - 3.5, j[1]]])}"/>`
+  }
+
+  function draw() {
+    const list = placed()
+    const byId = {}; list.forEach(b => byId[b.id] = b)
+    // ground grid
+    let maxX = 0, maxY = 0
+    list.forEach(b => { maxX = Math.max(maxX, b.gx + b.w); maxY = Math.max(maxY, b.gy + b.d) })
+    maxX += 2; maxY += 2
+    let g = ''
+    for (let x = -1; x <= maxX; x++) g += `<line class="grid" x1="${P(x, -1, 0)[0]}" y1="${P(x, -1, 0)[1]}" x2="${P(x, maxY, 0)[0]}" y2="${P(x, maxY, 0)[1]}"/>`
+    for (let y = -1; y <= maxY; y++) g += `<line class="grid" x1="${P(-1, y, 0)[0]}" y1="${P(-1, y, 0)[1]}" x2="${P(maxX, y, 0)[0]}" y2="${P(maxX, y, 0)[1]}"/>`
+    // painter's algorithm: back (small gx+gy) to front
+    list.sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy) || a.gy - b.gy)
+    const wires = scene().edges.map(e => drawWire(e, byId)).join('')
+    svg.innerHTML = `${DEFS}<g id="cam">${g}${wires}${list.map(drawBlock).join('')}</g>`
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`)
+  }
+
+  function fit() {
+    const list = placed()
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
+    list.forEach(b => {
+      ;[[b.gx, b.gy, b.h], [b.gx + b.w, b.gy, b.h], [b.gx + b.w, b.gy + b.d, 0], [b.gx, b.gy + b.d, 0], [b.gx, b.gy, 0], [b.gx + b.w, b.gy + b.d, b.h]]
+        .forEach(([x, y, z]) => {
+          const p = P(x, y, z)
+          x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0])
+          y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1])
+        })
+    })
+    const pad = 90
+    const r = svg.getBoundingClientRect()
+    const w = (x1 - x0) + pad * 2, h = (y1 - y0) + pad * 2
+    const ar = r.width / Math.max(r.height, 1)
+    let vw = w, vh = h
+    if (w / h > ar) vh = w / ar; else vw = h * ar
+    vb = { x: x0 - pad - (vw - w) / 2, y: y0 - pad - (vh - h) / 2, w: vw, h: vh }
+    draw()
+  }
+
+  /* ── content rendering ─────────────────────────────────────── */
+  function blocks(arr) {
+    if (!arr) return ''
+    return arr.map(b => {
+      if (typeof b === 'string') return `<p>${b}</p>`
+      const [k, v] = b
+      if (k === 'p') return `<p>${v}</p>`
+      if (k === 'h') return `<h2>${v}</h2>`
+      if (k === 'ul') return `<ul>${v.map(i => `<li>${i}</li>`).join('')}</ul>`
+      if (k === 'flow') return `<div class="flow">${v}</div>`
+      if (k === 'files') return `<ul class="files">${v.map(i => `<li><span class="f">${i}</span></li>`).join('')}</ul>`
+      if (k === 'tags') return `<div>${v.map(i => `<span class="tag">${i}</span>`).join('')}</div>`
+      return ''
+    }).join('')
+  }
+
+  function paint() {
+    const id = sel || hover
+    if (!id) {
+      const o = MAP.overview
+      body.innerHTML = `<div class="kicker">${o.kicker}</div><h1>${o.title}</h1>
+        <p class="sub">${o.sub}</p>${blocks(tab === 'what' ? o.what : o.how)}`
+      body.scrollTop = 0
+      return
+    }
+    const n = node(id)
+    if (!n) return
+    const s = scene()
+    const links = s.edges.filter(e => e[0] === id || e[1] === id)
+      .map(e => (e[0] === id ? '&#8594; ' : '&#8592; ') + (node(e[0] === id ? e[1] : e[0])?.name || ''))
+    let html = `<div class="kicker">${id} &#183; ${n.kind || 'module'}${n.flag ? ' &#183; ' + n.flag : ''}</div>
+      <h1>${n.name}</h1>
+      <p class="sub">${n.path || ''}</p>
+      <div class="meta">
+        ${n.size ? `<div><span class="k">Size</span><br>${n.size}</div>` : ''}
+        ${n.deps ? `<div><span class="k">Leans on</span><br>${n.deps}</div>` : ''}
+      </div>`
+    if (tab === 'what') {
+      html += blocks(n.what)
+      if (n.add) html += `<h2>Where new code goes</h2>${blocks(n.add)}`
+      if (links.length) html += `<h2>Wired to</h2><ul>${links.map(l => `<li>${l}</li>`).join('')}</ul>`
+    } else {
+      html += blocks(n.how)
+      if (n.files) html += `<h2>Key files</h2><ul class="files">${n.files.map(f => `<li><span class="f">${f}</span></li>`).join('')}</ul>`
+    }
+    if (n.inside && !stack.length) html += `<button class="link" data-go="${id}">&#8594; go inside ${n.name}</button>`
+    if (stack.length) html += `<button class="link" data-out="1">&#8592; come back out</button>`
+    body.innerHTML = html
+    body.scrollTop = 0
+  }
+
+  /* ── left rail ─────────────────────────────────────────────── */
+  function buildRail() {
+    let h = ''
+    if (stack.length) {
+      const p = MAP.nodes[stack[0]]
+      h += `<div class="grp">Inside &#183; ${p.name}</div>`
+      for (const id in p.inside.nodes) {
+        const n = p.inside.nodes[id]
+        h += row(id, n, false)
+      }
+    } else {
+      for (const g of MAP.groups) {
+        h += `<div class="grp">${g.title}</div>`
+        for (const id of g.ids) {
+          const n = MAP.nodes[id]
+          if (!n) continue
+          h += row(id, n, false)
+          if (n.inside) for (const cid in n.inside.nodes) h += row(cid, n.inside.nodes[cid], true, id)
+        }
+      }
+    }
+    rail.innerHTML = h
+  }
+  function row(id, n, child, parent) {
+    const on = id === sel ? ' on' : ''
+    return `<button class="row${child ? ' child' : ''}${on}" data-row="${id}"${parent ? ` data-parent="${parent}"` : ''}>
+      <span class="rc">${id}</span><span class="rn">${n.name}</span><span class="rx">${shortFlag(n.flag) || n.count || ''}</span>
+    </button>`
+  }
+
+  /* ── navigation ────────────────────────────────────────────── */
+  function goInside(id) {
+    if (!MAP.nodes[id] || !MAP.nodes[id].inside) return
+    stack = [id]; sel = null; hover = null
+    document.getElementById('b-back').disabled = false
+    document.getElementById('crumb').textContent = MAP.nodes[id].name
+    buildRail(); fit(); paint()
+  }
+  function goOut() {
+    if (!stack.length) return
+    sel = stack[0]; stack = []; hover = null
+    document.getElementById('b-back').disabled = true
+    document.getElementById('crumb').textContent = ''
+    buildRail(); fit(); paint()
+  }
+  function select(id, parent) {
+    if (parent && !stack.length) { goInside(parent); }
+    sel = id; hover = null
+    buildRail(); draw(); paint()
+  }
+
+  /* ── events ────────────────────────────────────────────────── */
+  svg.addEventListener('pointerover', e => {
+    const g = e.target.closest('.blk'); if (!g) return
+    hover = g.dataset.id; draw(); paint()
+  })
+  svg.addEventListener('pointerout', e => {
+    const g = e.target.closest('.blk'); if (!g) return
+    if (hover === g.dataset.id) { hover = null; draw(); paint() }
+  })
+  svg.addEventListener('click', e => {
+    const g = e.target.closest('.blk')
+    if (!g) { sel = null; buildRail(); draw(); paint(); return }
+    sel = g.dataset.id; buildRail(); draw(); paint()
+  })
+  svg.addEventListener('dblclick', e => {
+    const g = e.target.closest('.blk'); if (!g) return
+    goInside(g.dataset.id)
+  })
+  rail.addEventListener('click', e => {
+    const b = e.target.closest('.row'); if (!b) return
+    select(b.dataset.row, b.dataset.parent)
+  })
+  body.addEventListener('click', e => {
+    const go = e.target.closest('[data-go]'); if (go) return goInside(go.dataset.go)
+    const out = e.target.closest('[data-out]'); if (out) return goOut()
+  })
+  document.getElementById('tabs').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return
+    tab = b.dataset.tab
+    ;[...document.querySelectorAll('#tabs button')].forEach(x => x.classList.toggle('on', x === b))
+    paint()
+  })
+  document.getElementById('b-fit').onclick = () => fit()
+  document.getElementById('b-back').onclick = () => goOut()
+  const zoom = (f, cx, cy) => {
+    const r = svg.getBoundingClientRect()
+    const px = cx === undefined ? .5 : (cx - r.left) / r.width
+    const py = cy === undefined ? .5 : (cy - r.top) / r.height
+    const nx = vb.x + vb.w * px, ny = vb.y + vb.h * py
+    vb.w *= f; vb.h *= f
+    vb.x = nx - vb.w * px; vb.y = ny - vb.h * py
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`)
+  }
+  document.getElementById('b-in').onclick = () => zoom(1 / 1.25)
+  document.getElementById('b-out').onclick = () => zoom(1.25)
+  svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY) }, { passive: false })
+
+  let drag = null
+  svg.addEventListener('pointerdown', e => {
+    drag = { x: e.clientX, y: e.clientY, vx: vb.x, vy: vb.y }
+    svg.classList.add('drag'); svg.setPointerCapture(e.pointerId)
+  })
+  svg.addEventListener('pointermove', e => {
+    if (!drag) return
+    const r = svg.getBoundingClientRect()
+    vb.x = drag.vx - (e.clientX - drag.x) * (vb.w / r.width)
+    vb.y = drag.vy - (e.clientY - drag.y) * (vb.h / r.height)
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`)
+  })
+  const endDrag = e => { if (drag) { drag = null; svg.classList.remove('drag'); try { svg.releasePointerCapture(e.pointerId) } catch (_) { } } }
+  svg.addEventListener('pointerup', endDrag)
+  svg.addEventListener('pointercancel', endDrag)
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (stack.length) goOut(); else { sel = null; buildRail(); draw(); paint() } }
+    if (e.key === 'Enter' && sel) goInside(sel)
+  })
+  window.addEventListener('resize', () => fit())
+
+  /* ── boot ──────────────────────────────────────────────────── */
+  document.title = MAP.title
+  document.getElementById('s-repo').textContent = MAP.repo
+  document.getElementById('stats').innerHTML = MAP.stats
+    .map(s => `<div class="stat"><span class="k">${s.k}</span><span class="v">${s.v}</span></div>`).join('')
+  buildRail(); paint(); fit()
+  // #E opens that block (and drills in if it has an inside) — handy for linking
+  // straight to a subsystem from notes or a README.
+  const h = decodeURIComponent((location.hash || '').slice(1))
+  if (h && MAP.nodes[h]) {
+    if (MAP.nodes[h].inside) goInside(h)
+    else { sel = h; buildRail(); draw(); paint() }
+  }
+})()
+</script>
+</body>
+</html>

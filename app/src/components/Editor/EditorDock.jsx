@@ -1,14 +1,14 @@
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { FaQuestion } from 'react-icons/fa'
-import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuPaperclip, LuImage, LuFileText, LuMessageSquare, LuChevronDown, LuChevronUp } from 'react-icons/lu'
+import { LuShapes, LuCalendarDays, LuStickyNote, LuListTodo, LuPaperclip, LuImage, LuFileText, LuCode, LuFileInput, LuMessageSquare, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { TbBracketsContain } from 'react-icons/tb'
 import { useNavigate } from 'react-router-dom'
 import { useCalendarView } from '../../contexts/CalendarViewContext'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
-import { usePdfView } from '../../contexts/PdfViewContext'
+import { useSidePane } from '../../contexts/SidePaneContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidebar } from '../../contexts/SidebarContext'
-import { attachImageViaPicker, attachPdfViaPicker } from '../../desktop/media'
+import { attachImageViaPicker, attachPdfViaPicker, attachHtmlViaPicker, importHtmlAsMarkdownViaPicker } from '../../desktop/media'
 import { insertWikilink } from './cm/formatting'
 import { EDITOR_COMMANDS } from './editorCommands'
 import styles from './EditorDock.module.css'
@@ -29,7 +29,7 @@ const WIKILINK_TYPES = [
 function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) {
   const calView = useCalendarView()
   const sandboxView = useSandboxView()
-  const pdfView = usePdfView()
+  const sidePane = useSidePane()
   const split = useNoteSplit()
   const navigate = useNavigate()
   const { collapsed: sidebarCollapsed } = useSidebar()
@@ -57,9 +57,10 @@ function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) 
     }
   }, [viewRef])
 
-  const handleAttachPdf = useCallback(async () => {
+  // PDF and HTML share the whole flow — pick, insert a link, open the side pane.
+  const handleAttachDoc = useCallback(async (pick) => {
     setMediaOpen(false)
-    const r = await attachPdfViaPicker()
+    const r = await pick()
     if (!r) return
     // Persist a clickable link in the note, then open the viewer.
     const view = viewRef.current
@@ -69,13 +70,47 @@ function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) 
       view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } })
       view.focus()
     }
-    // Opening the PDF collapses a note split to the route note; if the right pane
-    // was focused, promote it first so the PDF opens beside the note we edited.
+    // Opening the viewer collapses a note split to the route note; if the right pane
+    // was focused, promote it first so the file opens beside the note we edited.
     if (split.enabled && split.focusedSide === 'right' && split.splitTarget?.type === 'note') {
       navigate(`/notes/${split.splitTarget.id}`)
     }
-    pdfView.requestOpen(r.path, r.name)
-  }, [pdfView, viewRef, split, navigate])
+    sidePane.requestOpen(r.path, r.name)
+  }, [sidePane, viewRef, split, navigate])
+
+  // Import converts and inserts text — no attachment, no side pane.
+  const handleImportHtml = useCallback(async () => {
+    setMediaOpen(false)
+    const r = await importHtmlAsMarkdownViaPicker()
+    const view = viewRef.current
+    if (!r || !view) return
+    const { from, to } = view.state.selection.main
+    const insert = `${r.markdown}\n`
+    view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } })
+    view.focus()
+  }, [viewRef])
+
+  const handleAttachPdf = useCallback(() => handleAttachDoc(attachPdfViaPicker), [handleAttachDoc])
+  const handleAttachHtml = useCallback(() => handleAttachDoc(attachHtmlViaPicker), [handleAttachDoc])
+
+  // The command palette lives at App level and can't reach this editor's caret, so
+  // it asks by event and the insert happens here — same path as the Media menu, so
+  // the two can't drift. `handled` guards against a second dock instance (split
+  // view) inserting the same file twice.
+  useEffect(() => {
+    const onAttach = (e) => {
+      if (e.detail?.handled) return
+      const run = {
+        image: handleAttachImage, pdf: handleAttachPdf,
+        html: handleAttachHtml, 'import-html': handleImportHtml,
+      }[e.detail?.kind]
+      if (!run) return
+      e.detail.handled = true
+      run()
+    }
+    window.addEventListener('siddran:attach', onAttach)
+    return () => window.removeEventListener('siddran:attach', onAttach)
+  }, [handleAttachImage, handleAttachPdf, handleAttachHtml, handleImportHtml])
 
   const toggleDock = useCallback(() => {
     setDockVisible(prev => {
@@ -185,6 +220,12 @@ function EditorDock({ viewRef, sandboxes = [], variant = 'sticky', onComment }) 
               </button>
               <button className={styles.dropdownItem} onMouseDown={e => { e.preventDefault(); handleAttachPdf() }}>
                 <LuFileText size={14} /> PDF
+              </button>
+              <button className={styles.dropdownItem} onMouseDown={e => { e.preventDefault(); handleAttachHtml() }}>
+                <LuCode size={14} /> HTML page
+              </button>
+              <button className={styles.dropdownItem} onMouseDown={e => { e.preventDefault(); handleImportHtml() }}>
+                <LuFileInput size={14} /> HTML as markdown
               </button>
             </div>
           )}
