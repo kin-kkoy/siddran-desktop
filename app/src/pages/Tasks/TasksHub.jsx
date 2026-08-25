@@ -379,6 +379,19 @@ function TasksHub({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasksByPriority, routineCards, placements])
 
+  // Routines is the only column that hides when it is empty. The three priority
+  // columns are a fixed scale — a missing "High priority" would read as "you have no
+  // high-priority work" only by its absence, which is worse than an empty box — but
+  // Routines is a parking space, and an empty parking space is just clutter.
+  //
+  // It stays in the DOM regardless, hidden by a class, so a drag can bring it back
+  // without a re-render: revealing it by changing state mid-drag would replace the
+  // card being dragged and the browser would cancel the drag outright.
+  const routinesEmpty = boardCols[ROUTINES_COL].length === 0
+  const routinesEmptyRef = useRef(routinesEmpty)
+  routinesEmptyRef.current = routinesEmpty
+  const boardElRef = useRef(null)
+
   const dragIdRef = useRef(null)
   const colBodyRefs = useRef({})
   const colElRefs = useRef({})     // the visible board box — where the glow belongs
@@ -399,6 +412,19 @@ function TasksHub({
     }
   }, [])
 
+  // Class toggles only, on nodes React already owns — never setState during a drag.
+  const showRoutinesForDrag = useCallback(() => {
+    if (!routinesEmptyRef.current) return
+    boardElRef.current?.classList.remove(styles.boardNoRoutines)
+    colDropRefs.current[ROUTINES_COL]?.classList.remove(styles.colHidden)
+  }, [])
+
+  const restoreRoutines = useCallback(() => {
+    if (!routinesEmptyRef.current) return
+    boardElRef.current?.classList.add(styles.boardNoRoutines)
+    colDropRefs.current[ROUTINES_COL]?.classList.add(styles.colHidden)
+  }, [])
+
   const clearDropUI = useCallback(() => {
     dropTargetRef.current = null
     if (paintRef.current) { cancelAnimationFrame(paintRef.current); paintRef.current = null }
@@ -412,7 +438,12 @@ function TasksHub({
     for (const key of Object.keys(colDropRefs.current)) {
       colDropRefs.current[key]?.classList.remove(styles.hitOver)
     }
-  }, [clearSlots])
+    // Put Routines away again. On a drop that filled it, the re-render that follows
+    // changes the className prop and React overwrites this; on a drop that left it
+    // empty the prop is unchanged, so React never touches the attribute and this is
+    // the only thing that hides it.
+    restoreRoutines()
+  }, [clearSlots, restoreRoutines])
 
   // Which index the pointer sits at, ignoring the card being dragged.
   const dropIndexAt = useCallback((body, clientY) => {
@@ -678,12 +709,15 @@ function TasksHub({
             {loading ? (
               <p>Loading tasks...</p>
             ) : (
-              <div className={styles.kanbanBoard}>
+              <div
+                ref={boardElRef}
+                className={`${styles.kanbanBoard} ${routinesEmpty ? styles.boardNoRoutines : ''}`}
+              >
                 {KANBAN_COLS.map(col => (
                   <div
                     key={col.key}
                     ref={el => { colDropRefs.current[col.key] = el }}
-                    className={styles.kanbanCol}
+                    className={`${styles.kanbanCol} ${col.key === ROUTINES_COL && routinesEmpty ? styles.colHidden : ''}`}
                     onDragOver={e => onKanbanDragOver(e, col.key)}
                     onDrop={e => onKanbanDrop(e, col.key)}
                   >
@@ -711,6 +745,10 @@ function TasksHub({
                             // Class only — a re-render here would kill the drag.
                             const el = e.currentTarget
                             requestAnimationFrame(() => el.classList.add(styles.lifted))
+                            // Bring a hidden Routines column back for the duration of
+                            // the drag, or there would be no way to park a card there
+                            // again once the last one left.
+                            showRoutinesForDrag()
                           }}
                           onDragEnd={e => {
                             e.currentTarget.classList.remove(styles.lifted)

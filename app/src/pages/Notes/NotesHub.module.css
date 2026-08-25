@@ -11,7 +11,10 @@
     z-index: 50;
     background: var(--bg-primary);
     padding: 24px 20px 16px;
-    margin: 0 -20px 8px;
+    /* Breathing room before the add-note row: at 8px the header ran straight into
+       it. The paged list measures from its own top, so it just shows one fewer row
+       when this grows — no other number needs touching. */
+    margin: 0 -20px 24px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -271,6 +274,28 @@
 .listView {
     overflow: hidden;
     align-content: start;
+
+    /* Every row is exactly --row-h tall, so "how many fit" is division rather than
+       measurement. Rows were NOT uniform before: a note with tags is taller than one
+       without, a long title wrapped to two lines, and notebook rows come from a
+       different stylesheet — so sampling one row and multiplying under-counted the
+       height and overflow:hidden sliced the last row in half.
+       Measuring the tallest RENDERED row instead would make the count depend on
+       which notes happen to be on the current page, so it would change as you page.
+       Read from JS via getPropertyValue('--row-h') — one source of truth.
+
+       This is a MINIMUM, not the final height. Rounding down to whole rows always
+       leaves a remainder — up to one row's worth of dead space at the bottom — so JS
+       divides by this to get the row COUNT, then stretches the rows to consume the
+       remainder exactly and sets grid-auto-rows inline. The value below is the
+       smallest a row may be without clipping a title-plus-tags card (32px padding +
+       2px border + ~38px of content), and it only applies before the first
+       measurement lands. */
+    --row-h: 72px;
+    grid-auto-rows: var(--row-h);
+    /* stretch, not start: the cells must fill their row exactly, not sit at their
+       natural height inside it. */
+    align-items: stretch;
 }
 
 .pagerBar {

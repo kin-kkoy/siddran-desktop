@@ -175,6 +175,19 @@
     color: var(--text-muted);
     font-size: 0.82rem;
 }
+/* Routines hidden: the board drops to the three priority columns rather than
+   leaving a blank quarter where it used to be. Declared BEFORE the narrow-window
+   rule below so that rule still wins there — equal specificity, later wins. */
+.boardNoRoutines {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* The column itself stays mounted so a drag can reveal it with a class toggle.
+   `display: none` rather than visibility: it must give up its grid track too. */
+.colHidden {
+    display: none;
+}
+
 @media (max-width: 900px) {
     .kanbanBoard { grid-template-columns: 1fr; }
 }

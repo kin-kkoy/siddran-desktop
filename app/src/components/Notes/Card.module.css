@@ -270,6 +270,22 @@
   color: var(--text-primary);
 }
 
+/* The paged list gives every row a fixed height, so nothing inside a horizontal card
+   may grow it: a two-line title would push past the row and be sliced. */
+.horizontalCard {
+  overflow: hidden;
+}
+.horizontalCard h4 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* min-width:0 or the flex child refuses to shrink and the ellipsis never appears. */
+.horizontalCardContent {
+  min-width: 0;
+  justify-content: center;
+}
+
 .horizontalCard p {
   font-size: 12px;
   color: var(--text-dim);

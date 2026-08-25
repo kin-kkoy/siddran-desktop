@@ -20,12 +20,11 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
     // the OPEN notes instead: off the note page a second copy of the whole note
     // list is just noise (NotesHub already lists every note in its main area).
     const onNotePage = location.pathname.startsWith('/notes/') && location.pathname !== '/notes';
-    // The SandBoxes hub is the one exception: its own grid of boards is the
-    // subject there, and a notes list beside it is off-topic. An individual
-    // sandbox still shows it — notes are useful reference while you work on a
-    // board.
-    const onSandboxHub = location.pathname === '/sandboxes';
-    const showOpenNotes = !onNotePage && !onSandboxHub;
+    // SandBoxes is the exception, hub and individual board alike: a board is a
+    // full-bleed canvas you work inside, and a list of notes down the side is
+    // off-topic there in exactly the way it is on the hub's grid of boards.
+    const onSandbox = location.pathname.startsWith('/sandboxes');
+    const showOpenNotes = !onNotePage && !onSandbox;
 
     // Section buttons return you to where you were in that section. Read on every
     // render so it can't go stale: `location.pathname` is already a render input,

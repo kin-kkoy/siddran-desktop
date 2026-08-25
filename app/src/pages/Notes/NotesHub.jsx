@@ -18,6 +18,11 @@ import { compareByOrder, compareByFavoriteThenOrder } from '../../utils/noteSort
 import { useDragReorder } from '../../hooks/useDragReorder'
 import Skeleton from '../../components/Common/Skeleton'
 
+// Height of the prev/next bar, reserved whether or not it is showing. A measured
+// value would oscillate: the bar only appears at 2+ pages, so its height changes
+// the row count, which changes the page count, which removes the bar.
+const PAGER_BAR_H = 48
+
 // obtains the notes and
 function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, reorderNotebooks, authFetch, API }) {
 
@@ -269,32 +274,80 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     ? pagedItems.slice(safePage * perPage, safePage * perPage + perPage)
     : pagedItems
 
-  // How many rows fit between the top of the list and the bottom of the window.
+  // How many rows fit between the top of the list and the bottom of the scrolling
+  // pane. Nothing in list view may ever scroll — the wheel turns pages instead — so
+  // the list has to be sized to what is actually left, at every window size.
   //
   // Deliberately NOT a ResizeObserver on the list: the list's height depends on
   // perPage, so observing it means each measurement triggers another — that fed back
-  // on itself and locked the window up. The viewport is the only input that doesn't
-  // depend on the result.
+  // on itself and locked the window up. The pane and the row height are the only
+  // inputs that don't depend on the result.
   const [pageHeight, setPageHeight] = useState(null)
+  const [rowHeight, setRowHeight] = useState(null)
   useLayoutEffect(() => {
     if (viewMode !== 'list') return
     let raf = null
     const measure = () => {
       const el = pagerRef.current
       if (!el) return
-      const top = el.getBoundingClientRect().top
-      const barH = pagerBarRef.current?.getBoundingClientRect().height || 44
-      const avail = window.innerHeight - top - barH - 8
-      if (avail < 120) return
-      const row = el.querySelector('[data-row]')
-      const rowH = Math.max(40, row ? row.getBoundingClientRect().height : 56)
-      const gap = 12
-      const rows = Math.max(1, Math.floor((avail + gap) / (rowH + gap)))
+
+      // Measure against the scrolling pane, not the window. Both rects are in
+      // viewport coordinates, so their difference is independent of how far that
+      // pane is currently scrolled — reading window.innerHeight while it was
+      // scrolled fed the previous overflow straight into the next measurement.
+      let scroller = el.parentElement
+      while (scroller && scroller !== document.body) {
+        const oy = getComputedStyle(scroller).overflowY
+        if (oy === 'auto' || oy === 'scroll') break
+        scroller = scroller.parentElement
+      }
+      const bottom = (scroller && scroller !== document.body)
+        ? scroller.getBoundingClientRect().bottom
+        : window.innerHeight
+
+      const cs = getComputedStyle(el)
+      // border-box is global, so the list's own vertical padding eats into the
+      // height we set — count it separately from the rows.
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+      // Everything that still has to fit below the list. The pager bar is a
+      // constant, never measured: it only exists at 2+ pages, so measuring it would
+      // let the row count decide its own input. The container's bottom padding was
+      // previously unaccounted for and overflowed the pane by exactly its 40px.
+      const container = el.closest('.' + styles.container)
+      const padBottom = container
+        ? (parseFloat(getComputedStyle(container).paddingBottom) || 0)
+        : 0
+      const avail = bottom - el.getBoundingClientRect().top - PAGER_BAR_H - padBottom
+
+      // The row height is a CSS constant, not a measurement. Rows are forced to it
+      // by `grid-auto-rows`, so this is exact for every row — reading one rendered
+      // row instead under-counted whenever a later row was taller (tags, a wrapped
+      // title, a notebook row), and overflow:hidden then sliced the last one.
+      // It is a MINIMUM: it decides how many rows fit, not how tall they end up.
+      const minRow = Math.max(40, parseFloat(cs.getPropertyValue('--row-h')) || 72)
+      const gap = parseFloat(cs.rowGap) || 12
+      // Columns come from the grid itself. Below 900px it collapses to one, and
+      // assuming two packed twice as many rows in as could fit — which is what made
+      // a narrow window scroll.
+      const cols = Math.max(1, cs.gridTemplateColumns.split(' ').filter(Boolean).length)
+      const rows = Math.max(1, Math.floor((avail - padY + gap) / (minRow + gap)))
+      // Then spend the remainder on the rows rather than leaving it at the bottom.
+      // Dividing by a fixed row height always rounds down, and the leftover — up to a
+      // whole row's worth — was dead space under the pager. Stretching absorbs it,
+      // and it can't run away: the leftover is by definition less than one row, so
+      // spread across `rows` rows it adds at most (minRow + gap) / rows pixels each.
+      const rowH = Math.max(24, Math.floor((avail - padY - (rows - 1) * gap) / rows))
       // Size the box to a WHOLE number of rows. Using `avail` directly left a partial
       // row visible at the bottom, which overflow:hidden then sliced in half.
-      const exact = rows * rowH + (rows - 1) * gap
-      setPerPage(prev => (prev === rows * 2 ? prev : rows * 2))
-      setPageHeight(prev => (prev === exact ? prev : exact))
+      const exact = rows * rowH + (rows - 1) * gap + padY
+      // Never bail out on a cramped window. Returning early left the previous, larger
+      // height in place, and that is precisely what let the list outgrow the pane and
+      // put a scrollbar on it. Clip the single row instead — a shrinking window may
+      // cost you the bottom of a row, but it never starts scrolling.
+      const height = Math.max(0, Math.min(exact, avail))
+      setPerPage(prev => (prev === rows * cols ? prev : rows * cols))
+      setRowHeight(prev => (prev === rowH ? prev : rowH))
+      setPageHeight(prev => (prev === height ? prev : height))
     }
     // After layout, so `top` reflects the real header height rather than a
     // pre-paint estimate — measuring too early made `avail` too generous, which is
@@ -302,7 +355,9 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     raf = requestAnimationFrame(measure)
     window.addEventListener('resize', measure)
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
-  }, [viewMode])
+    // isSelectionMode is a dependency because entering it swaps the header buttons
+    // and drops the add-note row, both of which move the top of the list.
+  }, [viewMode, isSelectionMode])
 
   useEffect(() => { setPage(0) }, [viewMode, searchQuery])
 
@@ -436,7 +491,9 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
         ref={pagerRef}
         className={viewMode === "grid" ? styles.gridView : styles.listView}
         onWheel={onPagerWheel}
-        style={viewMode === 'list' && pageHeight ? { height: pageHeight } : undefined}
+        style={viewMode === 'list' && pageHeight
+          ? { height: pageHeight, gridAutoRows: rowHeight ? `${rowHeight}px` : undefined }
+          : undefined}
       >
 
         {/* list view by default, change if it's in grid view */}
