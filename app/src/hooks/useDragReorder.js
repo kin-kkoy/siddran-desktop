@@ -11,8 +11,24 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 // opts.animate — when true, items SLIDE to their new positions via FLIP as the order
 // changes (browser-tab feel) instead of snapping. Off by default so existing callers
 // (the vertical note/notebook lists) keep their current instant behaviour untouched.
+// opts.glue — the dragged item follows the cursor. Separate from `animate`: FLIP
+// for the OTHER items is only sane for a handful of them, and on a grid of forty
+// notes it thrashes (every reorder re-measures every card, and stale rects from a
+// previous filter make the whole grid slide in from wherever it used to be).
+// `glue` gives the "I am holding this" feedback without any of that.
+//
+// opts.dropSelector / opts.onDropZone — external targets a dragged item can be
+// released onto instead of being reordered (the notebook strip, so a note can be
+// filed by dragging). Any element matching `dropSelector` with a `data-drop-zone`
+// is a target; while the pointer is over one, reordering is suspended and
+// `hoverZone` names it so the target can light up. Hit-tested with
+// elementFromPoint rather than a registry of rects, so nothing has to stay in
+// sync as the strip re-renders under the drag.
+//
+// Pointer events, not HTML5 drag: WebKitGTK swallows `drop` when Tauri's
+// file-drop is on, which is why this hook exists at all.
 export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reorder', opts = {}) {
-  const { animate = false, axis = 'both' } = opts
+  const { animate = false, axis = 'both', glue = animate, dropSelector = null, onDropZone = null } = opts
   const [order, setOrder] = useState(ids)
   const [activeId, setActiveId] = useState(null)
   const reactId = useId()
@@ -23,6 +39,10 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
   const onReorderRef = useRef(onReorder)
   const suppressClickRef = useRef(false)
   const pointerRef = useRef({ x: 0, y: 0 })   // latest pointer, for cursor-glue
+  const [hoverZone, setHoverZone] = useState(null)
+  const hoverZoneRef = useRef(null)
+  const onDropZoneRef = useRef(onDropZone)
+  onDropZoneRef.current = onDropZone
   const prevRects = useRef(new Map())          // last measured item positions, for FLIP
   onReorderRef.current = onReorder
 
@@ -90,7 +110,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
   // (tabs: 'x'), so a tab doesn't fly out of the strip.
   const glueActive = useCallback(() => {
     const d = drag.current
-    if (!animate || !d.active || d.id == null) return
+    if (!glue || !d.active || d.id == null) return
     const el = itemRefs.current.get(String(d.id))
     if (!el) return
     el.style.transition = 'none'
@@ -101,7 +121,23 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
     const ty = axis === 'x' ? 0 : (y - d.grabDY) - base.top
     el.style.transform = `translate(${tx}px, ${ty}px)`
     el.style.zIndex = '6'
-  }, [animate, axis])
+  }, [glue, axis])
+
+  // Which registered zone contains the pointer, or null. Cheap: a handful of
+  // elements, and only while a drag is actually in flight.
+  const zoneAt = useCallback((x, y) => {
+    if (!dropSelector) return null
+    // The dragged card is glued under the cursor, so it would be the topmost
+    // element at that point and every hit test would find itself. Lift it out of
+    // hit-testing for the length of the call rather than leaving it
+    // pointer-events:none, which can drop the pointer capture mid-drag.
+    const self = itemRefs.current.get(String(drag.current.id))
+    const prev = self ? self.style.pointerEvents : null
+    if (self) self.style.pointerEvents = 'none'
+    const hit = document.elementFromPoint(x, y)
+    if (self) self.style.pointerEvents = prev || ''
+    return hit?.closest?.(dropSelector)?.dataset?.dropZone ?? null
+  }, [dropSelector])
 
   useEffect(() => {
     const move = (e) => {
@@ -118,7 +154,15 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       }
       e.preventDefault()
       pointerRef.current = { x: e.clientX, y: e.clientY }
-      reorderAtPoint(d.id, e.clientX, e.clientY)
+
+      // A drop zone wins over the grid: while the pointer is over one, the item is
+      // being filed, not moved, so the grid must stop reshuffling under it.
+      const zone = zoneAt(e.clientX, e.clientY)
+      if (zone !== hoverZoneRef.current) {
+        hoverZoneRef.current = zone
+        setHoverZone(zone)
+      }
+      if (zone == null) reorderAtPoint(d.id, e.clientX, e.clientY)
       glueActive() // follow the cursor even when the pointer moves without a reorder
     }
     const up = (e) => {
@@ -126,8 +170,10 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       if (!d.id || (d.pointerId != null && e.pointerId !== d.pointerId)) return
       if (d.active) {
         e.preventDefault()
-        onReorderRef.current(orderRef.current)
-        if (animate) {
+        const zone = hoverZoneRef.current
+        if (zone != null && onDropZoneRef.current) onDropZoneRef.current(d.id, zone)
+        else onReorderRef.current(orderRef.current)
+        if (glue) {
           // Settle the lifted item into its committed slot, then let the next FLIP
           // pass treat it as fresh (drop its stale rect so it doesn't jump).
           const el = itemRefs.current.get(String(d.id))
@@ -142,6 +188,8 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       }
       try { d.captured?.releasePointerCapture?.(d.pointerId) } catch { /* ignore */ }
       drag.current = { id: null, pointerId: null, active: false, x0: 0, y0: 0, grabDX: 0, grabDY: 0, captured: null }
+      hoverZoneRef.current = null
+      setHoverZone(null)
       setActiveId(null)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
@@ -154,14 +202,20 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
-  }, [reorderAtPoint, glueActive, animate])
+  }, [reorderAtPoint, glueActive, animate, glue, zoneAt])
 
   // FLIP for the NON-dragged items: after each reorder, measure where each landed,
   // snap it back to its previous spot with no transition, then release it next frame
   // so it slides. The dragged item is glued to the cursor instead (skipped here).
   // Runs only for `animate` callers (a handful of items); never touches transform off.
   useLayoutEffect(() => {
-    if (!animate) { prevRects.current = new Map(); return }
+    if (!animate) {
+      prevRects.current = new Map()
+      // Glue still has to be re-applied after a reorder re-render: the item's slot
+      // has moved, and its inline transform is now measured against the old one.
+      if (glue && drag.current.active) glueActive()
+      return
+    }
     const activeKey = drag.current.active ? String(drag.current.id) : null
     const next = new Map()
     for (const [key, el] of itemRefs.current) {
@@ -206,5 +260,5 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
     },
   })
 
-  return { order, dragProps, activeId }
+  return { order, dragProps, activeId, hoverZone }
 }

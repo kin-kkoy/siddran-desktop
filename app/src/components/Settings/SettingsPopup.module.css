@@ -138,14 +138,17 @@
 .settingRow {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  /* Centred, not top-aligned. A row with no description is one line tall, and
+     top-aligning it left the control floating above its own label. */
+  align-items: center;
+  gap: 20px;
+  padding: 7px 0;
 }
 
 .settingInfo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -160,6 +163,16 @@
   color: var(--text-dim);
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* A consequence of the row above it, not a description of it — indented and
+   dimmer so it reads as a footnote rather than as another setting. */
+.settingNote {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-style: italic;
+  padding-left: 2px;
+  margin-top: -4px;
 }
 
 .settingControl {
@@ -235,7 +248,29 @@
 .settingBlock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--tw-set-gap, 14px);
+}
+/* The block's own heading stays close to its first row. */
+.settingBlock > .settingLabel { margin-bottom: -10px; }
+.settingBlock > .settingDesc { margin-bottom: 2px; }
+
+/* A group needs to look like one. The block's first child is its title, so it
+   gets the small-caps treatment headings use elsewhere in the app, and every
+   block after the first is separated by a rule — without it, "Notebooks" read
+   as one more row of "Note Cards". */
+.settingBlock > .settingLabel:first-child {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.settingBlock + .settingBlock,
+.settingBlock ~ .settingRow:first-of-type {
+  border-top: 1px solid var(--border-default);
+  padding-top: 22px;
+  margin-top: 8px;
 }
 
 .settingBlock .themeGrid {

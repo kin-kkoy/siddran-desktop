@@ -5,6 +5,7 @@ import { compareByOrder, compareByFavoriteThenOrder } from '../../../utils/noteS
 import { HiChevronDown } from 'react-icons/hi'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 import { readCollapsedNotebooks, writeCollapsedNotebooks } from '../../../hooks/sidebarState'
+import { coverTone, lipTone } from '../../Notebooks/notebookTones'
 
 
 // hideTitle: drop the inner "List of Notes" heading when this list is rendered
@@ -84,7 +85,12 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
                             <div
                                 key={group.notebook.id}
                                 className={styles.notebookGroup}
-                                style={{ '--notebook-color': group.notebook.color || '#4a9eff' }}
+                                /* The same two strengths the notebook strip uses, so a
+                                   notebook is the same colour wherever you meet it. */
+                                style={{
+                                    '--nb-cover': coverTone(group.notebook.color),
+                                    '--nb-lip': lipTone(group.notebook.color),
+                                }}
                             >
                                 <div
                                     className={styles.notebookHeader}

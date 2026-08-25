@@ -1,18 +1,17 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Card from '../../components/Notes/Card'
 import HorizontalCard from '../../components/Notes/HorizontalCard'
-import AddCard from '../../components/Notes/AddCard'
-import AddCardList from '../../components/Notes/AddCardList'
 import styles from './NotesHub.module.css'
-import HorizontalNotebookCard from '../../components/Notebooks/HorizontalNotebookCard'
-import NotebookCard from '../../components/Notebooks/NotebookCard'
+import NotebookStrip, { UNFILED, EVERYTHING } from '../../components/Notebooks/NotebookStrip'
+import { coverTone, lipTone } from '../../components/Notebooks/notebookTones'
 import NotebookModal from '../../components/Notebooks/NotebookModal'
 import CreateNotebookModal from '../../components/Notebooks/CreateNotebookModal'
 import ImportNotebookModal from '../../components/Notebooks/ImportNotebookModal'
 import ConfirmModal from '../../components/Common/ConfirmModal'
 import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineViewList, HiOutlineUpload } from 'react-icons/hi'
-import { LuNotebookPen } from 'react-icons/lu'
+import { LuNotebookPen, LuFilePlus } from 'react-icons/lu'
+import { useSettings } from '../../contexts/SettingsContext'
 import { toast } from '../../utils/toast'
 import { compareByOrder, compareByFavoriteThenOrder } from '../../utils/noteSorting'
 import { useDragReorder } from '../../hooks/useDragReorder'
@@ -24,11 +23,12 @@ import Skeleton from '../../components/Common/Skeleton'
 const PAGER_BAR_H = 48
 
 // obtains the notes and
-function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, reorderNotebooks, authFetch, API }) {
+function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, authFetch, API }) {
 
   // List view is PAGED, not scrolled: the area is fixed to the viewport and the
   // wheel swaps which notes are shown rather than moving the window. Rows are a
   // uniform height here, so how many fit is arithmetic — measured once per resize.
+  const navigate = useNavigate()
   const pagerRef = useRef(null)
   const pagerBarRef = useRef(null)
   const [page, setPage] = useState(0)
@@ -38,6 +38,13 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('notesViewMode') || 'list'
   })
+  // Which notebook the hub is showing. Notebooks are a filter now, so this is
+  // the hub's main state rather than a detail — persisted, because coming back to
+  // the notebook you were in is the whole reason to have opened it.
+  const [filter, setFilter] = useState(() => localStorage.getItem('notesFilter') || UNFILED)
+  const [density, setDensity] = useState(() => localStorage.getItem('notesDensity') || 'comfortable')
+  const { settings } = useSettings()
+  const notebookView = settings.notebookView || 'notebooks'
   // Selection mode can be: null, 'delete', or 'create'
   const [selectionMode, setSelectionMode] = useState(null)
   const [selectedNotes, setSelectedNotes] = useState([])
@@ -134,6 +141,24 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     localStorage.setItem('notesViewMode', newMode)
   }
 
+  const chooseFilter = useCallback((key) => {
+    // Clicking the notebook you are already in opens it for renaming, retagging
+    // and bulk moves — the only way into NotebookModal now that notebooks are no
+    // longer cards you can click.
+    if (key === filter && key !== UNFILED && key !== EVERYTHING) {
+      const nb = notebooks.find(n => String(n.id) === key)
+      if (nb) setSelectedNotebook(nb)
+      return
+    }
+    setFilter(key)
+    localStorage.setItem('notesFilter', key)
+    setPage(0)
+    setSearchQuery('')
+  }, [filter, notebooks])
+
+  const chooseDensity = (v) => { setDensity(v); localStorage.setItem('notesDensity', v) }
+
+
   // Batch delete selected notes
   const handleBatchDelete = () => {
     if (selectedNotes.length === 0) return
@@ -166,12 +191,29 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     setSelectedNotes(prevNote => prevNote.includes(noteId) ? prevNote.filter(id => id !== noteId) : [...prevNote, noteId])
   }, [])
 
-  const handleOpenCreateModal = () => {
-    if(selectedNotes.length === 0){
-      toast.warning('Please select at least one note to create a notebook')
-      return
+  // An empty notebook is worth creating now that notes are filed by dragging
+  // them onto one, so no selection is required — pick notes first if you want it
+  // to start with some, or make it empty and drag into it.
+  const handleOpenCreateModal = () => setShowCreateModal(true)
+
+  // The only way to add a note. The grid tile and the list row are gone, so this
+  // is also the only place that has to guard against a double-click.
+  const [addingNote, setAddingNote] = useState(false)
+  const handleAddNote = async () => {
+    if (addingNote) return
+    setAddingNote(true)
+    const toastId = toast.loading('Creating note…')
+    try {
+      const result = await addNote(
+        'Untitled',
+        (optimistic) => { if (optimistic?.id) navigate(`/notes/${optimistic.id}`) },
+        (real) => { if (real?.id) navigate(`/notes/${real.id}`, { replace: true }) },
+      )
+      if (result) toast.update(toastId, 'Note created', 'success')
+      else toast.dismiss(toastId)
+    } finally {
+      setAddingNote(false)
     }
-    setShowCreateModal(true)
   }
 
   const handleCreateNotebook = async (name, tags) => {
@@ -200,12 +242,10 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     if (files) await importMarkdownFiles(files, notebookName)
   }
 
-  const handleOpenNotebook = notebook => setSelectedNotebook(notebook)
-
   const handleCloseModal = () => setSelectedNotebook(null)
 
   // One pass over notes → note-count per notebook + a Set of notebook ids, so the render below
-  // doesn't do an O(notes) scan per notebook row and the orphan test isn't O(notebooks) per note.
+  // doesn't do an O(notes) scan per notebook and the orphan test isn't O(notebooks) per note.
   const notebookIdSet = useMemo(() => new Set(notebooks.map(nb => nb.id)), [notebooks])
   const countByNotebook = useMemo(() => {
     const m = new Map()
@@ -213,60 +253,110 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     return m
   }, [notes])
 
-  // Search/sort derivations are memoized — they ran on every render (incl. each search keystroke),
-  // and notes/notebooks grow unbounded via infinite scroll, so doing this inline was O(notes·notebooks).
-  const filteredNotebooks = useMemo(() => notebooks.filter(notebook => {
-    if (!searchQuery.trim()) return true // if search bar is empty then return everything (show everythign basically)
+  const isFiled = useCallback((note) => (
+    note.notebook_id != null
+    && note.notebook_id !== 'null'
+    && notebookIdSet.has(note.notebook_id)
+  ), [notebookIdSet])
 
+  const sortedNotebooks = useMemo(() => notebooks.slice().sort(compareByOrder), [notebooks])
+  // A note filed in a notebook borrows that notebook's paper unless it was given
+  // a colour of its own. Resolved here rather than written to the note — see
+  // paperTone() for why that matters.
+  const toneByNotebook = useMemo(() => {
+    const m = new Map()
+    for (const nb of notebooks) m.set(String(nb.id), coverTone(nb.color))
+    return m
+  }, [notebooks])
+
+  const activeNotebook = useMemo(
+    () => notebooks.find(nb => String(nb.id) === filter) || null,
+    [notebooks, filter])
+  // The open notebook colours the page. Not decoration — it is the answer to
+  // "where am I", repeated quietly in the few places you are already looking:
+  // the stats rule, the search focus ring, the empty state, a card's hover edge.
+  const hue = activeNotebook
+    ? lipTone(activeNotebook.color)
+    : filter === EVERYTHING ? 'var(--text-muted)' : 'var(--accent-warning)'
+  const unfiledCount = useMemo(() => notes.filter(n => !isFiled(n)).length, [notes, isFiled])
+
+  // A stale filter is only stale once the notebooks have actually arrived. On the
+  // first render `notebooks` is [], so testing against it there would throw the
+  // user back to Unfiled on every launch — the same trap that wiped the kanban
+  // placements. `notebooksPagination` only exists after a real response.
+  useEffect(() => {
+    if (!notebooksPagination) return
+    if (filter === UNFILED || filter === EVERYTHING) return
+    if (!notebooks.some(nb => String(nb.id) === filter)) setFilter(UNFILED)
+  }, [notebooksPagination, notebooks, filter])
+
+  const matchesQuery = useCallback((note) => {
     const query = searchQuery.toLowerCase().trim()
-    const name = notebook.name?.toLowerCase() || ''
-    const tags = notebook.tags?.toLowerCase() || ''
+    if (!query) return true
+    const title = note.title?.toLowerCase() || ''
+    const tags = note.tags?.toLowerCase() || ''
+    if (title.includes(query)) return true
+    // "#work" and "work" are the same search, but only against tags.
+    const term = query.startsWith('#') ? query.slice(1) : query
+    return tags.includes(term)
+  }, [searchQuery])
 
-    if (name.includes(query)) return true // Check if query matches notebook name
+  // What the grid holds. Search deliberately ignores the open notebook and spans
+  // all of them: filing a note takes it out of the hub, so a search scoped to the
+  // open notebook would make a filed note genuinely unreachable.
+  const visibleNotes = useMemo(() => {
+    const searching = !!searchQuery.trim()
+    return notes.filter(note => {
+      if (!matchesQuery(note)) return false
+      if (searching) return true
+      if (filter === EVERYTHING) return true
+      if (filter === UNFILED) return !isFiled(note)
+      return String(note.notebook_id) === filter
+    }).sort(compareByFavoriteThenOrder)
+  }, [notes, filter, searchQuery, matchesQuery, isFiled])
 
-    // Check if query matches tags (with or without # prefix; "#work" == "work" && "work" == "#work" IN TAGS only)
-    const searchTerm = query.startsWith('#') ? query.slice(1) : query
-    if (tags.includes(searchTerm)) return true
+  // Drag-to-reorder, and drag-to-file onto the notebook strip. Reordering is off
+  // while searching or selecting — you would only be reordering the filtered
+  // subset — but filing stays on, because it is the point of the strip.
+  // Also off in Everything: reorderNotes renumbers the ids it is handed 0..n, so
+  // reordering a view that mixes filed and unfiled notes would hand the same
+  // positions to two different scopes and scramble both.
+  const canReorder = !searchQuery.trim() && !isSelectionMode && filter !== EVERYTHING
+  const visibleNoteIds = useMemo(() => visibleNotes.map(n => n.id), [visibleNotes])
+  const noteById = useMemo(() => new Map(visibleNotes.map(n => [String(n.id), n])), [visibleNotes])
 
-    return false
-  }).sort(compareByOrder), [notebooks, searchQuery])
+  const fileNote = useCallback(async (noteId, key) => {
+    const note = notes.find(n => String(n.id) === String(noteId))
+    if (!note || key === EVERYTHING) return
+    if (key === UNFILED) {
+      if (!isFiled(note)) return
+      await removeNoteFromNotebook(note.notebook_id, note.id)
+      toast.success('Taken out of its notebook')
+      return
+    }
+    if (String(note.notebook_id) === key) return
+    // The API adds without removing, and a note has one notebook_id, so moving
+    // between notebooks has to give the old one its count back explicitly.
+    if (isFiled(note)) await removeNoteFromNotebook(note.notebook_id, note.id)
+    await addNotesToNotebook(key, [note.id])
+    const target = notebooks.find(nb => String(nb.id) === key)
+    toast.success(`Filed in ${target?.name || 'notebook'}`)
+  }, [notes, notebooks, isFiled, removeNoteFromNotebook, addNotesToNotebook])
 
-  // Filter notes that aren't a part of any notebook, then apply search filter, then sort by favorites first
-  const loneNotes = useMemo(() => notes.filter(note =>
-      !note.notebook_id
-      || note.notebook_id === "null"
-      || !notebookIdSet.has(note.notebook_id)
-    ).filter(note => {
-      if (!searchQuery.trim()) return true // if search bar is empty then return everything (show everythign basically)
+  // glue, not animate. Glue is the part that matters: the card you grabbed follows
+  // the cursor, so the drag is visible. FLIP for the other forty cards is what was
+  // making them jump around and flicker — it re-measures every card on every
+  // reorder, and its stored rects survive a filter change, so opening a notebook
+  // slid the new notes in from wherever the old ones happened to be.
+  const noteDrag = useDragReorder(visibleNoteIds, reorderNotes, canReorder, 'notes', {
+    glue: true,
+    dropSelector: '[data-drop-zone]',
+    onDropZone: fileNote,
+  })
 
-      const query = searchQuery.toLowerCase().trim()
-      const title = note.title?.toLowerCase() || ''
-      const tags = note.tags?.toLowerCase() || ''
-
-      if (title.includes(query)) return true // Check if query matches title then return the note/s
-
-      const searchTerm = query.startsWith('#') ? query.slice(1) : query
-      if (tags.includes(searchTerm)) return true
-
-      return false
-    })
-    .sort(compareByFavoriteThenOrder), [notes, notebookIdSet, searchQuery])
-
-  // Drag-to-reorder (disabled while searching or selecting — you'd only be
-  // reordering the filtered subset). The sidebar mirrors the same `order`.
-  const canReorder = !searchQuery.trim() && !isSelectionMode
-  const notebookIds = useMemo(() => filteredNotebooks.map(n => n.id), [filteredNotebooks])
-  const loneNoteIds = useMemo(() => loneNotes.map(n => n.id), [loneNotes])
-  const notebookById = useMemo(() => new Map(filteredNotebooks.map(n => [String(n.id), n])), [filteredNotebooks])
-  const loneNoteById = useMemo(() => new Map(loneNotes.map(n => [String(n.id), n])), [loneNotes])
-  const nbDrag = useDragReorder(notebookIds, reorderNotebooks, canReorder, 'notebooks')
-  const noteDrag = useDragReorder(loneNoteIds, reorderNotes, canReorder, 'notes')
-
-  // One flat sequence so a page can straddle the notebooks/notes boundary.
-  const pagedItems = useMemo(() => ([
-    ...nbDrag.order.map(id => ({ kind: 'nb', id })),
-    ...noteDrag.order.map(id => ({ kind: 'note', id })),
-  ]), [nbDrag.order, noteDrag.order])
+  const pagedItems = useMemo(
+    () => noteDrag.order.map(id => ({ kind: 'note', id })),
+    [noteDrag.order])
 
   const pageCount = Math.max(1, Math.ceil(pagedItems.length / perPage))
   const safePage = Math.min(page, pageCount - 1)
@@ -406,16 +496,11 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
   }
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} style={{ '--hue': hue }}>
 
 
       <div className={styles.header}>
         <h1>Notes</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-          {filteredNotebooks.length} {filteredNotebooks.length === 1 ? 'notebook · ' : 'notebooks · '}
-          {loneNotes.length} {loneNotes.length === 1 ? 'note' : 'notes'}
-          {isSelectionMode && ` (${selectedNotes.length} selected)`}
-        </p>
 
         <input
           type="text"
@@ -435,133 +520,189 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
             onChange={handleImportFilesSelected}
           />
 
+          {/* Only the two that CREATE something keep a button around them, so the
+              row has one weight for "make a thing" and a quieter one for the rest.
+              These are also the ONLY way to add: the add-note tile in the grid and
+              the add-note row above the list are gone, so a new note always starts
+              from the same place whichever view you are in. */}
           {!isSelectionMode && (
-            <button
-              onClick={handleImportClick}
-              className={styles.toggleBtn}
-              title="Import markdown files"
-            >
-              <HiOutlineUpload size={18} />
+            <button onClick={handleAddNote} className={styles.createNotebookBtn} disabled={addingNote}>
+              <LuFilePlus size={15} />
+              Note
             </button>
           )}
 
-          {/* Create Notebook button - visible when not in delete mode */}
           {selectionMode !== 'delete' && (
             <button
               onClick={selectionMode === 'create' ? handleOpenCreateModal : enterCreateMode}
               className={styles.createNotebookBtn}
-              disabled={selectionMode === 'create' && selectedNotes.length === 0}
             >
-              <LuNotebookPen size={16} />
-              {selectionMode === 'create' ? `Create (${selectedNotes.length})` : 'Create Notebook'}
+              <LuNotebookPen size={15} />
+              {selectionMode === 'create'
+                ? (selectedNotes.length ? `Create (${selectedNotes.length})` : 'Create empty')
+                : 'Notebook'}
             </button>
           )}
 
-          {/* Delete button - visible when not in create mode */}
-          {selectionMode !== 'create' && (
-            <button
-              onClick={selectionMode === 'delete' ? handleBatchDelete : enterDeleteMode}
-              className={styles.batchDeleteBtn}
-              disabled={selectionMode === 'delete' && selectedNotes.length === 0}
-              title={selectionMode === 'delete' ? "Delete selected notes" : "Select notes to delete"}
-            >
-              <HiOutlineTrash size={18} />
-            </button>
-          )}
-
-          {/* Cancel button - only in selection mode */}
           {isSelectionMode && (
             <button onClick={exitSelectionMode} className={styles.toggleBtn}>
               Cancel
             </button>
           )}
 
-          <button onClick={changeView} className={styles.toggleBtn} title={viewMode === "list" ? "Card View" : "List View"}>
-            {viewMode === "list" ? <HiOutlineViewGrid size={18} /> : <HiOutlineViewList size={18} />}
-          </button>
+          <span className={styles.iconGroup}>
+            {!isSelectionMode && (
+              <button onClick={handleImportClick} className={styles.iconBtn} title="Import markdown files">
+                <HiOutlineUpload size={17} />
+              </button>
+            )}
+
+            {selectionMode !== 'create' && (
+              <button
+                onClick={selectionMode === 'delete' ? handleBatchDelete : enterDeleteMode}
+                className={`${styles.iconBtn} ${selectionMode === 'delete' ? styles.iconBtnDanger : ''}`}
+                disabled={selectionMode === 'delete' && selectedNotes.length === 0}
+                title={selectionMode === 'delete' ? "Delete selected notes" : "Select notes to delete"}
+              >
+                <HiOutlineTrash size={17} />
+              </button>
+            )}
+
+            <button onClick={changeView} className={styles.iconBtn} title={viewMode === "list" ? "Card View" : "List View"}>
+              {viewMode === "list" ? <HiOutlineViewGrid size={17} /> : <HiOutlineViewList size={17} />}
+            </button>
+          </span>
         </div>
       </div>
 
 
-      {/* ADD NOTE FOR LIST VIEW - above list */}
-      {viewMode === "list" && !isSelectionMode && <AddCardList addNote={addNote}/>}
-
-      {/* notes display area && ADD NOTE FOR CARD VIEW */}
-      <div
-        ref={pagerRef}
-        className={viewMode === "grid" ? styles.gridView : styles.listView}
-        onWheel={onPagerWheel}
-        style={viewMode === 'list' && pageHeight
-          ? { height: pageHeight, gridAutoRows: rowHeight ? `${rowHeight}px` : undefined }
-          : undefined}
-      >
-
-        {/* list view by default, change if it's in grid view */}
-        {viewMode === "grid" && !isSelectionMode && <AddCard addNote={addNote}/>}
-        
-        {/* display NOTEBOOKS FIRST */}
-        {!isSelectionMode && (
-          visibleItems.filter(i => i.kind === 'nb').map(({ id: nbId }) => {
-            const notebook = notebookById.get(String(nbId))
-            if (!notebook) return null
-            const noteCount = countByNotebook.get(notebook.id) || 0
-            return (
-              <div key={notebook.id} data-row className={styles.dragCell} {...nbDrag.dragProps(notebook.id)}>
-                {viewMode === "list" ? (
-                  <HorizontalNotebookCard
-                    notebook={notebook}
-                    noteCount={noteCount}
-                    deleteNotebook={deleteNotebook}
-                    onOpen={handleOpenNotebook}
-                    toggleFavoriteNotebook={toggleFavoriteNotebook}
-                    updateNotebookColor={updateNotebookColor}
-                  />
-                ) : (
-                  <NotebookCard
-                    notebook={notebook}
-                    noteCount={noteCount}
-                    deleteNotebook={deleteNotebook}
-                    onOpen={handleOpenNotebook}
-                    toggleFavoriteNotebook={toggleFavoriteNotebook}
-                    updateNotebookColor={updateNotebookColor}
-                  />
-                )}
-              </div>
-            )
-          })
+      {/* Notebooks: a filter above the notes, not cards among them. The rail is
+          the one presentation that sits beside the grid rather than over it. */}
+      <div className={`${styles.hubBody} ${notebookView === 'rail' ? styles.hubRail : ''}`}>
+        {notebookView === 'rail' && (
+          <NotebookStrip
+            view="rail"
+            notebooks={sortedNotebooks}
+            countByNotebook={countByNotebook}
+            unfiledCount={unfiledCount}
+            totalCount={notes.length}
+            active={filter}
+            onSelect={chooseFilter}
+            hoverZone={noteDrag.hoverZone}
+          />
         )}
 
-        {/* afterwards display the LONE NOTES (notes that aren't part of a notebook) */}
-        {visibleItems.filter(i => i.kind === 'note').map(({ id: nId }) => {
-          const note = loneNoteById.get(String(nId))
-          if (!note) return null
-          return (
-            <div key={note.id} data-row className={styles.dragCell} {...noteDrag.dragProps(note.id)}>
-              {viewMode === "list" ? (
-                <HorizontalCard
-                  note={note}
-                  deleteNote={deleteNote}
-                  toggleFavorite={toggleFavorite}
-                  updateColor={updateColor}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedNotes.includes(note.id)}
-                  onToggleSelect={toggleNoteSelection}
-                />
-              ) : (
-                <Card
-                  note={note}
-                  deleteNote={deleteNote}
-                  toggleFavorite={toggleFavorite}
-                  updateColor={updateColor}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedNotes.includes(note.id)}
-                  onToggleSelect={toggleNoteSelection}
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
+        <div className={styles.hubMain}>
+          {notebookView !== 'rail' && (
+            <NotebookStrip
+              view={notebookView}
+              notebooks={sortedNotebooks}
+              countByNotebook={countByNotebook}
+              unfiledCount={unfiledCount}
+              totalCount={notes.length}
+              active={filter}
+              onSelect={chooseFilter}
+              hoverExpand={settings.notebookHoverExpand !== false}
+              hoverZone={noteDrag.hoverZone}
+            />
+          )}
+
+          {/* One stats line, on the row with the view controls. It used to be split
+              between the header and here, which said the same thing twice. */}
+          <div className={styles.toolbar}>
+            <span className={styles.stats}>
+              <b>{visibleNotes.length}</b>{' '}
+              {searchQuery.trim()
+                ? `match${visibleNotes.length === 1 ? '' : 'es'} across every notebook`
+                : filter === UNFILED
+                  ? `unfiled · ${notes.length - unfiledCount} filed`
+                  : filter === EVERYTHING
+                    ? 'notes, filed and not'
+                    : `in ${activeNotebook?.name || 'this notebook'}`}
+              {' · '}{notebooks.length} {notebooks.length === 1 ? 'notebook' : 'notebooks'}
+              {isSelectionMode && ` · ${selectedNotes.length} selected`}
+            </span>
+
+            {viewMode === 'grid' && (
+              <div className={styles.densityGroup} role="group" aria-label="Card size">
+                {['comfortable', 'compact', 'dense'].map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`${styles.densityBtn} ${density === d ? styles.densityOn : ''}`}
+                    onClick={() => chooseDensity(d)}
+                  >
+                    {d[0].toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* notes display area && ADD NOTE FOR CARD VIEW */}
+          <div
+            ref={pagerRef}
+            className={`${viewMode === "grid" ? styles.gridView : styles.listView} ${viewMode === 'grid' ? styles['d_' + density] : ''}`}
+            onWheel={onPagerWheel}
+            style={viewMode === 'list' && pageHeight
+              ? { height: pageHeight, gridAutoRows: rowHeight ? `${rowHeight}px` : undefined }
+              : undefined}
+          >
+            {visibleItems.map(({ id: nId }) => {
+              const note = noteById.get(String(nId))
+              if (!note) return null
+              return (
+                <div
+                  key={note.id}
+                  data-row
+                  className={styles.dragCell}
+                  /* Set only on the card actually in flight, and only while it is
+                     over a notebook: it shrinks into the gap the notebook opens. */
+                  data-swallowed={
+                    noteDrag.hoverZone != null && String(noteDrag.activeId) === String(note.id)
+                      ? '' : undefined
+                  }
+                  {...noteDrag.dragProps(note.id)}
+                >
+                  {viewMode === "list" ? (
+                    <HorizontalCard
+                      note={note}
+                      deleteNote={deleteNote}
+                      toggleFavorite={toggleFavorite}
+                      updateColor={updateColor}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedNotes.includes(note.id)}
+                      onToggleSelect={toggleNoteSelection}
+                    />
+                  ) : (
+                    <Card
+                      note={note}
+                      deleteNote={deleteNote}
+                      toggleFavorite={toggleFavorite}
+                      updateColor={updateColor}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedNotes.includes(note.id)}
+                      onToggleSelect={toggleNoteSelection}
+                      inheritTone={toneByNotebook.get(String(note.notebook_id))}
+                    />
+                  )}
+                </div>
+              )
+            })}
+
+            {visibleNotes.length === 0 && !notesLoading && (
+              <div className={styles.emptyState}>
+                <h3>{searchQuery.trim() ? 'Nothing matches that' : 'Nothing filed here yet'}</h3>
+                <p>
+                  {searchQuery.trim()
+                    ? 'Search covers every notebook, so this note is not in the Bag under that name or tag.'
+                    : filter === UNFILED
+                      ? 'Every note is put away. Open a notebook above, or start a new note.'
+                      : 'Drag a note onto this notebook to file it. Filed notes show up here and nowhere else.'}
+                </p>
+              </div>
+            )}
+          </div>
 
       {/* Page controls. The wheel already turns pages; these make that discoverable
           and give the keyboard a way in. */}
@@ -588,7 +729,9 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
       )}
 
       {/* Infinite scroll sentinels */}
-      {viewMode !== "list" && hasMoreNotebooks && (
+      {/* Notebooks are the strip now, not rows in the grid — but they still page
+          in, so the sentinel stays and simply sits under the notes. */}
+      {hasMoreNotebooks && (
         <div ref={notebooksSentinelRef} className={styles.sentinel}>
           {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
         </div>
@@ -598,6 +741,8 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
           {loadingMore ? <span className={styles.loadingDots}>...</span> : <span className={styles.moreDots}>...</span>}
         </div>
       )}
+        </div>
+      </div>
 
 
       {/* Modal area */}
@@ -613,6 +758,9 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
           addNotesToNotebook={addNotesToNotebook}
           notebookNotes={notebookNotesById[selectedNotebook.id]}
           allNotes={notes}
+          deleteNotebook={deleteNotebook}
+          toggleFavoriteNotebook={toggleFavoriteNotebook}
+          updateNotebookColor={updateNotebookColor}
         />
       )}
 

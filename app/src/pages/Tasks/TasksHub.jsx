@@ -412,18 +412,16 @@ function TasksHub({
     }
   }, [])
 
-  // Class toggles only, on nodes React already owns — never setState during a drag.
-  const showRoutinesForDrag = useCallback(() => {
-    if (!routinesEmptyRef.current) return
-    boardElRef.current?.classList.remove(styles.boardNoRoutines)
-    colDropRefs.current[ROUTINES_COL]?.classList.remove(styles.colHidden)
-  }, [])
-
-  const restoreRoutines = useCallback(() => {
-    if (!routinesEmptyRef.current) return
-    boardElRef.current?.classList.add(styles.boardNoRoutines)
-    colDropRefs.current[ROUTINES_COL]?.classList.add(styles.colHidden)
-  }, [])
+  // An empty Routines leaves the board and nothing takes its place — no rail, no
+  // overlay, nothing that appears mid-drag. Every version of putting it back on
+  // the board was wrong: a target that shows up only while you are dragging is
+  // one you cannot plan for, and restoring a grid track during `dragstart`
+  // re-lays-out the column the dragged card came from, which WebKitGTK treats as
+  // grounds to cancel the drag.
+  //
+  // The way back lives on the card instead — the thing being moved carries its
+  // own way home, so the board needs no furniture for a column that is not there.
+  const liftRafRef = useRef(null)
 
   const clearDropUI = useCallback(() => {
     dropTargetRef.current = null
@@ -438,12 +436,7 @@ function TasksHub({
     for (const key of Object.keys(colDropRefs.current)) {
       colDropRefs.current[key]?.classList.remove(styles.hitOver)
     }
-    // Put Routines away again. On a drop that filled it, the re-render that follows
-    // changes the className prop and React overwrites this; on a drop that left it
-    // empty the prop is unchanged, so React never touches the attribute and this is
-    // the only thing that hides it.
-    restoreRoutines()
-  }, [clearSlots, restoreRoutines])
+  }, [clearSlots])
 
   // Which index the pointer sits at, ignoring the card being dragged.
   const dropIndexAt = useCallback((body, clientY) => {
@@ -506,6 +499,18 @@ function TasksHub({
       }
     })
   }, [clearSlots, dropIndexAt])
+
+  // Park a routine card back in Routines. Appending rather than inserting: the
+  // column it is going to is empty or nearly so, and there is no pointer position
+  // to read an index from.
+  const sendToRoutines = useCallback((key) => {
+    const order = boardCols[ROUTINES_COL].filter(it => it.key !== key).length
+    const next = setPlacement(placements, key, ROUTINES_COL, order)
+    if (next === placements) return
+    setPlacements(next)
+    writePlacements(next)
+    if (sortBy !== 'manual') setSortBy('manual')
+  }, [boardCols, placements, sortBy, setSortBy])
 
   const onKanbanDrop = (e, colKey) => {
     e.preventDefault()
@@ -743,20 +748,42 @@ function TasksHub({
                             e.dataTransfer.effectAllowed = 'move'
                             e.dataTransfer.setData('text/plain', item.key)
                             // Class only — a re-render here would kill the drag.
+                            // The rAF id is kept because a drag that is refused
+                            // fires `dragend` BEFORE this frame runs: the class
+                            // would be removed and then added, and the card would
+                            // stay lifted with no drag to end it.
                             const el = e.currentTarget
-                            requestAnimationFrame(() => el.classList.add(styles.lifted))
-                            // Bring a hidden Routines column back for the duration of
-                            // the drag, or there would be no way to park a card there
-                            // again once the last one left.
-                            showRoutinesForDrag()
+                            liftRafRef.current = requestAnimationFrame(() => {
+                              liftRafRef.current = null
+                              el.classList.add(styles.lifted)
+                            })
                           }}
                           onDragEnd={e => {
+                            if (liftRafRef.current) {
+                              cancelAnimationFrame(liftRafRef.current)
+                              liftRafRef.current = null
+                            }
                             e.currentTarget.classList.remove(styles.lifted)
                             dragIdRef.current = null
                             dragFromColRef.current = null
                             clearDropUI()
                           }}
                         >
+                          {/* A routine card parked under a priority has no column
+                              to be dragged back to once Routines empties out, so
+                              it carries its own way home. */}
+                          {item.kind !== 'task' && col.key !== ROUTINES_COL && (
+                            <button
+                              type="button"
+                              className={styles.toRoutines}
+                              title="Put back in Routines"
+                              onClick={e => { e.stopPropagation(); sendToRoutines(item.key) }}
+                            >
+                              <span className={`${styles.kanbanDot} ${styles['dot_' + ROUTINES_COL]}`} />
+                              Back to Routines
+                            </button>
+                          )}
+
                           {item.kind === 'task' && (
                             <TaskCard task={item.task} deleteTask={deleteTask} toggleCompletion={toggleTaskCompletion} viewMode="card" isSelectionMode={isSelectionMode} isSelected={selectedTasks.includes(item.task.id)} onToggleSelect={toggleTaskSelection} onOpenDetail={openCardDetails} />
                           )}

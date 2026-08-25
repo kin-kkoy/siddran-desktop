@@ -4,12 +4,22 @@ import { useNavigate } from 'react-router-dom'
 import { MdChromeReaderMode } from 'react-icons/md'
 import { HiOutlineX, HiPlus } from 'react-icons/hi'
 
-function NotebookModal({ notebook, onClose, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, notebookNotes, allNotes }) {
+const SPINE_COLORS = [
+    { key: null, name: 'Default' },
+    { key: '#4a9eff', name: 'Blue' },
+    { key: '#fbbf24', name: 'Yellow' },
+    { key: '#10b981', name: 'Green' },
+    { key: '#8b5cf6', name: 'Purple' },
+    { key: '#ef4444', name: 'Red' },
+]
+
+function NotebookModal({ notebook, onClose, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, notebookNotes, allNotes, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor }) {
     const [tags, setTags] = useState(notebook?.tags || '')
     const [name, setName] = useState(notebook?.name || '')
     const [showPicker, setShowPicker] = useState(false)
     const [selectedNoteIds, setSelectedNoteIds] = useState([])
     const [isAdding, setIsAdding] = useState(false)
+    const [confirmDelete, setConfirmDelete] = useState(false)
     const navigate = useNavigate()
 
     const availableNotes = allNotes.filter(n => !n.notebook_id)
@@ -219,6 +229,59 @@ function NotebookModal({ notebook, onClose, updateNotebookTags, renameNotebook, 
                             )}
                         </>
                     )}
+                </div>
+
+                {/* Colour, pin and delete used to live on the notebook card's menu.
+                    Notebooks are a filter strip now and have no card, so the
+                    controls move here — this modal is the notebook's own page. */}
+                <div className={styles.manageBar}>
+                    <div className={styles.spineColors}>
+                        <span className={styles.manageLabel}>Spine</span>
+                        {SPINE_COLORS.map(c => (
+                            <button
+                                key={c.name}
+                                type="button"
+                                className={`${styles.spineSwatch} ${(notebook.color || null) === c.key ? styles.spineOn : ''}`}
+                                style={{ backgroundColor: c.key || 'var(--bg-hover)' }}
+                                title={c.name}
+                                aria-label={`Spine colour: ${c.name}`}
+                                onClick={() => updateNotebookColor?.(notebook.id, c.key)}
+                            />
+                        ))}
+                    </div>
+
+                    <div className={styles.manageActions}>
+                        <button
+                            type="button"
+                            className={styles.manageBtn}
+                            onClick={() => toggleFavoriteNotebook?.(notebook.id)}
+                        >
+                            {notebook.is_favorite ? 'Unpin' : 'Pin'}
+                        </button>
+                        {confirmDelete ? (
+                            <>
+                                <span className={styles.manageLabel}>Delete this notebook?</span>
+                                <button type="button" className={styles.manageBtn} onClick={() => setConfirmDelete(false)}>
+                                    Keep
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`${styles.manageBtn} ${styles.manageDanger}`}
+                                    onClick={() => { deleteNotebook?.(notebook.id); onClose() }}
+                                >
+                                    Delete
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                className={`${styles.manageBtn} ${styles.manageDanger}`}
+                                onClick={() => setConfirmDelete(true)}
+                            >
+                                Delete notebook
+                            </button>
+                        )}
+                    </div>
                 </div>
 
             </div>

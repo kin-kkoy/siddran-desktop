@@ -101,6 +101,7 @@ export default function CommandPalette({ notes = [], tasks = [], addNote, closeB
     const cmds = [
       { id: 'app-settings', title: 'Open Settings', keywords: 'preferences options', icon: LuSettings, kind: 'nav', hint: 'app', run: () => openSettings() },
       { id: 'app-settings-themes', title: 'Settings: Themes', keywords: 'colour color appearance brightness', icon: LuPalette, kind: 'nav', hint: 'app', run: () => openSettings('appearance') },
+      { id: 'app-settings-cards', title: 'Settings: Cards', keywords: 'note card paper stack tilt colour color', icon: LuPalette, kind: 'nav', hint: 'app', run: () => openSettings('cards') },
       { id: 'app-settings-sync', title: 'Settings: Sync', keywords: 'endpoint token worker', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: () => openSettings('sync') },
       { id: 'app-sync-now', title: 'Sync now', keywords: 'push pull upload', icon: LuRefreshCw, kind: 'nav', hint: 'app', run: runSync },
       { id: 'app-new-note', title: 'New note', keywords: 'create add', icon: LuFilePlus, kind: 'nav', hint: 'app', run: newNote },

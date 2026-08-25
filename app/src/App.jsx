@@ -1029,6 +1029,7 @@ function App() {
               </>
             )}
           </div>
+
         </div>
 
         {/* Calendar peek drawer (root-mounted so it persists across routes) */}

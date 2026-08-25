@@ -1,24 +1,149 @@
-/* Grid Card */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Grid Card — a stack of two sheets of paper.
+
+   Four layers, and the order is what makes the tilt work:
+
+     .card        the grid cell. Never transformed — it owns the layout slot.
+       .sheetUnder  the coloured sheet
+       .sheetTop    the neutral sheet, the readable surface
+       .cardInner   the words, ABOVE both sheets and never transformed
+
+   .cardInner is a SIBLING of the sheets, not a child of one. That is the whole
+   trick: either sheet can lean a degree or two and the title stays perfectly
+   level, because it was never inside the thing that rotated.
+
+   Everything visual below is one of four independent axes — exposure, anchor,
+   tilt, and which sheet turns — resolved in hooks/noteCardStyle.js. They
+   compose, so a handful of classes cover every combination.
+   ═══════════════════════════════════════════════════════════════════════════ */
 .card {
   font-family: var(--font-body);
-  background-color: var(--bg-surface-alt);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 20px;
+  position: relative;
+  /* The hub sets --card-h per density; 200px is the comfortable default so the
+     card still stands up if it is ever rendered outside that grid. */
+  min-height: var(--card-h, 200px);
   cursor: pointer;
-  transition: box-shadow 0.2s, background-color 0.2s, border-color 0.2s;
+  /* The sheets carry the surface now; the cell itself is just the slot. */
+  background: none;
+  border: 0;
+  padding: 0;
+  --reach: 5px;   /* how far the sheet underneath extends past the top one */
+  --tilt: 0deg;
+}
+
+.sheet {
+  position: absolute;
+  border-radius: 7px;
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.22s ease;
+}
+
+.sheetTop {
+  inset: var(--top-inset);
+  background-color: var(--bg-surface-alt);
+  /* A hairline lighter than the fill, so the sheet has a cut edge rather than
+     just ending. The only "material" detail — no gradient, no texture. */
+  border: 1px solid var(--border-default);
+  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.65);
+  z-index: 2;
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1),
+              box-shadow 0.22s ease, background-color 0.2s, border-color 0.2s;
+}
+
+.sheetUnder {
+  inset: var(--under-inset);
+  background-color: var(--paper, #454560);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.7);
+  z-index: 1;
+}
+
+.cardInner {
+  position: absolute;
+  /* Tracks the top sheet's box, so the words always sit on the neutral surface
+     and never on the colour, whichever corner the colour shows at. */
+  inset: var(--top-inset);
+  z-index: 3;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 200px;
-  position: relative;
   justify-content: space-between;
 }
 
-.card:hover {
+.card:hover .sheetTop {
   border-color: var(--text-faint);
   background-color: var(--bg-elevated);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 26px -8px rgba(0, 0, 0, 0.75);
+}
+
+/* ── Axis: anchor — which corner the sheet underneath shows at ──────────────
+   The two sheets are the same size; they just sit in opposite corners of the
+   cell, --reach apart. Moving the exposed paper is swapping two inset values,
+   not new geometry. */
+.atBr {
+  --top-inset: 0 var(--reach) var(--reach) 0; --under-inset: var(--reach) 0 0 var(--reach);
+  /* Which way the TOP sheet points. The sheet underneath gets the negation, so
+     hovering slides the two apart instead of nudging both the same way — two
+     sheets moving together read as one card twitching. */
+  --sep-x: calc(var(--tw-sep, 4px) * -1); --sep-y: calc(var(--tw-sep, 4px) * -1);
+}
+.atBl {
+  --top-inset: 0 0 var(--reach) var(--reach); --under-inset: var(--reach) var(--reach) 0 0;
+  --sep-x: var(--tw-sep, 4px); --sep-y: calc(var(--tw-sep, 4px) * -1);
+}
+.atTr {
+  --top-inset: var(--reach) var(--reach) 0 0; --under-inset: 0 0 var(--reach) var(--reach);
+  --sep-x: calc(var(--tw-sep, 4px) * -1); --sep-y: var(--tw-sep, 4px);
+}
+.atTl {
+  --top-inset: var(--reach) 0 0 var(--reach); --under-inset: 0 var(--reach) var(--reach) 0;
+  --sep-x: var(--tw-sep, 4px); --sep-y: var(--tw-sep, 4px);
+}
+
+/* ── Axis: exposure ────────────────────────────────────────────────────────
+   At xMin the offset is almost nothing and the tilt does the work: the colour
+   reads as a wedge along one edge rather than a border. */
+.xMin { --reach: 5px; }
+.xSm { --reach: 12px; }
+.xWide { --reach: 24px; }
+
+/* A different shape, not just a smaller reach: the sheet underneath is cut down
+   to a strip on the anchor's side. The quietest of the four at a full grid. */
+.xTab { --reach: 11px; }
+.xTab .sheetUnder { inset: 26px 0 26px 55%; border-radius: 0 6px 6px 0; }
+.xTab.atTl .sheetUnder,
+.xTab.atBl .sheetUnder { inset: 26px 55% 26px 0; border-radius: 6px 0 0 6px; }
+
+/* ── Axes: tilt, and which sheet owns it ───────────────────────────────────
+   turnsUnder leaves the readable sheet perfectly square and leans only the
+   colour beneath it — calmer, because the edge you read along stays true. */
+.leanNone { --tilt: 0deg; }
+.leanLeft { --tilt: calc(var(--tw-tilt, 1.6deg) * -1); }
+.leanRight { --tilt: var(--tw-tilt, 1.6deg); }
+
+.turnsTop .sheetTop { transform: rotate(var(--tilt)); }
+.turnsUnder .sheetUnder { transform: rotate(var(--tilt)); }
+
+/* Hover: the two sheets slide APART along the axis the stack is offset on, and
+   the leaning one straightens a fraction as if a hand pressed it flat. The
+   separation is what makes it read as two sheets of paper rather than as one
+   card lifting. */
+.card:hover .sheetTop {
+  transform: translate(var(--sep-x, 0), var(--sep-y, 0)) rotate(var(--hover-top-tilt, 0deg));
+}
+.card:hover .sheetUnder {
+  transform: translate(calc(var(--sep-x, 0) * -1), calc(var(--sep-y, 0) * -1))
+             rotate(var(--hover-under-tilt, 0deg));
+}
+.card.turnsTop:hover { --hover-top-tilt: calc(var(--tilt) * var(--tw-hover-tilt, 0.35)); }
+.card.turnsUnder:hover { --hover-under-tilt: calc(var(--tilt) * var(--tw-hover-under, 1.5)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { transition: none; }
+  .card:hover .sheetTop { transform: none; }
+  .card:hover .sheetUnder { transform: none; }
+  .turnsTop .sheetTop { transform: rotate(var(--tilt)); }
+  .turnsUnder .sheetUnder { transform: rotate(var(--tilt)); }
 }
 
 .cardHeader {
@@ -39,7 +164,7 @@
 
 .title {
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: var(--card-title, 20px);
   font-weight: 700;
   margin: 0;
   color: var(--text-primary);
@@ -85,6 +210,61 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ── Tags, in the footer where the timestamp used to be ────────────────────
+   Under the title they read as a subtitle — a line describing the note rather
+   than something you can filter by. Down in the card's furniture they read as
+   what they are.
+   All three treatments take their colour from the note's OWN paper tone, so a
+   tag belongs to the card instead of sitting on top of it; a bordered chip read
+   as web furniture glued onto a sheet of paper. */
+.cardTags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+.cardTag {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+/* Marker — a turned square in the paper tone. Echoes the coloured dot the
+   kanban columns already use, so it is the app's own idiom, not a new one. */
+.tgMarker .cardTag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background-color: var(--paper, var(--text-faint));
+  transform: rotate(45deg);
+}
+/* Stamp — set on a wash of its own colour. Ink on the sheet, not a control. */
+.tgStamp .cardTag {
+  gap: 0;
+  padding: 3px 7px;
+  border-radius: 3px;
+  color: color-mix(in srgb, var(--paper, #666) 40%, var(--text-secondary));
+  background-color: color-mix(in srgb, var(--paper, #666) 26%, transparent);
+}
+/* Rule — underlined in the paper tone, the way you would mark up a page. */
+.tgRule .cardTag {
+  gap: 0;
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--paper, var(--text-faint));
+}
+.cardTag.more { color: var(--text-faint); }
+.tgMarker .cardTag.more::before { display: none; }
+.tgStamp .cardTag.more { background: none; color: var(--text-faint); padding-left: 0; }
+.tgRule .cardTag.more { border-bottom-color: transparent; }
 
 .footerActions {
   display: flex;
@@ -421,8 +601,9 @@
 
 
 /* Selection mode styles */
-.card.selected,
-.card.isSelected {
+/* Selection marks the sheet you read, not the cell — the cell has no surface. */
+.card.selected .sheetTop,
+.card.isSelected .sheetTop {
   border: 2px solid var(--accent-warning);
   background-color: var(--accent-warning-alpha);
 }
@@ -453,7 +634,42 @@
 }
 
 /* Hover for colored cards */
-.card.hasColor:hover,
 .horizontalCard.hasColor:hover {
   filter: brightness(1.15);
+}
+
+/* The grid card's colour is a sheet, so brighten that rather than the whole
+   card — brightening the cell washed out the title along with it. */
+.card.hasColor:hover .sheetUnder {
+  filter: brightness(1.18);
+}
+
+
+/* ── Pinned marker ─────────────────────────────────────────────────────────
+   Pinned notes sort ahead of everything else, so dragging one somewhere else
+   looks like the drag silently failed. It did not — the pin outranks the order
+   you dropped it in. Saying so on the card is the whole fix. */
+.pinMark {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-warning);
+  pointer-events: none;
+}
+/* On a grid card it sits on the sheet you read, opposite the menu. */
+.card .pinMark {
+  left: calc(var(--reach, 5px) + 13px);
+  top: 14px;
+  font-size: 11px;
+  transform: rotate(-20deg);
+}
+/* On a row there is no corner to spare, so it leads the title instead. */
+.horizontalCard .pinMark {
+  position: static;
+  flex: 0 0 auto;
+  margin-right: 9px;
+  font-size: 11px;
+  transform: rotate(-20deg);
 }

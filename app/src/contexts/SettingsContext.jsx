@@ -35,6 +35,22 @@ const DEFAULTS = {
   htmlWebFonts: false,      // let viewed HTML pages fetch Google Fonts (the app's only network egress)
   htmlTrustPrompt: 'once',  // ask before trusting an HTML page: 'always' | 'once' (per page) | 'never'
 
+  // Note cards in the grid view are two sheets of paper. Four axes decide how the
+  // two sit, plus how much each note varies from its neighbours. See
+  // hooks/noteCardStyle.js — these values are validated there, not here.
+  noteCardExposure: 'minimal',    // 'minimal' | 'small' | 'wide' | 'tab'
+  noteCardAnchor: 'bottom-left',  // which corner the coloured sheet shows at
+  noteCardTilt: 'left',           // 'none' | 'left' | 'right'
+  noteCardTurns: 'under',         // which sheet leans: 'top' | 'under'
+  noteCardVary: false,            // each note gets its own angle, the same one every launch
+  noteCardVaryEachLaunch: false,  // ... re-rolled on each launch instead
+  noteCardSurprise: 'off',        // 'off' | 'tilt' (lean only) | 'all' (geometry too)
+  noteCardTags: 'rule',           // how a tag is drawn: 'marker' | 'stamp' | 'rule'
+  // Notebooks are a filter above the grid rather than cards inside it. This is
+  // how that filter is presented; see components/Notebooks/NotebookStrip.jsx.
+  notebookView: 'notebooks',      // 'tabs' | 'rail' | 'notebooks'
+  notebookHoverExpand: true,      // the notebook row unfolds to every row on hover
+
   centerNowLine: true,
   bgBrightness: 0, // background lightness offset, applied on every page; -20..+20
   noteLayout: 'scroll', // reading-view layout: 'scroll' (continuous) | 'book' (two pages)

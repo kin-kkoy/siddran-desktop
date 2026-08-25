@@ -106,6 +106,12 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
         </div>
       )}
 
+      {note.is_favorite && (
+        <span className={styles.pinMark} title="Pinned — pinned notes stay at the front">
+          <FaThumbtack />
+        </span>
+      )}
+
       <div className={styles.horizontalCardContent}>
         <h4>{note.title}</h4>
         {note.tags && <p className={styles.horizontalTags}>{note.tags.split(',').map(t => t.trim()).filter(Boolean).join(' · ')}</p>}

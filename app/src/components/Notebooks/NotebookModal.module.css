@@ -357,3 +357,50 @@
 @keyframes btnSpin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Manage bar ────────────────────────────────────────────────────────────
+   Colour, pin and delete moved here from the notebook card's menu when
+   notebooks became a filter strip and stopped having a card. */
+.manageBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--border-default);
+}
+.manageLabel {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+.spineColors { display: flex; align-items: center; gap: 7px; }
+.spineSwatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.spineSwatch:hover { transform: scale(1.15); }
+.spineOn { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 3px var(--text-secondary); }
+.manageActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.manageBtn {
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 11px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.manageBtn:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+.manageDanger { color: var(--accent-danger); border-color: rgba(224, 92, 92, 0.4); }
+.manageDanger:hover { background-color: rgba(224, 92, 92, 0.1); color: var(--accent-danger); }

@@ -182,11 +182,55 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-/* The column itself stays mounted so a drag can reveal it with a class toggle.
-   `display: none` rather than visibility: it must give up its grid track too. */
+/* Routines, when empty, leaves the board completely: three columns, full width,
+   no gap and no marker. It is a parking space, and an empty parking space is
+   clutter.
+
+   Nothing brings it back mid-drag. A column that appears only while you are
+   dragging is a target you cannot plan for, and restoring a grid track during
+   `dragstart` re-lays-out the column the dragged card came from, which WebKitGTK
+   treats as grounds to cancel the drag. The way back is on the card instead —
+   see .toRoutines. */
+.boardNoRoutines {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .colHidden {
     display: none;
 }
+
+/* ── The way back to Routines ─────────────────────────────────────────────
+   Only on a routine card, only when it is parked in a priority column, and only
+   on hover. It lives on the card because that is the thing being moved — no
+   board furniture required, so an empty Routines can stay properly gone. */
+.toRoutines {
+    position: absolute;
+    /* Bottom right, not top right: the top of a bundle card already holds its
+       title, its priority badge and its delete button, so anything landing there
+       is a fourth thing fighting for the same corner. The footer's right side is
+       empty on every routine card. */
+    bottom: 7px;
+    right: 9px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    border: 1px solid var(--border-strong);
+    background-color: var(--bg-elevated);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.16s, color 0.16s, border-color 0.16s;
+}
+.kanbanCardWrap:hover .toRoutines { opacity: 1; }
+.toRoutines:hover { color: var(--text-primary); border-color: var(--accent-warning); }
+.toRoutines:focus-visible { opacity: 1; outline: 2px solid var(--accent-warning); outline-offset: 1px; }
 
 @media (max-width: 900px) {
     .kanbanBoard { grid-template-columns: 1fr; }

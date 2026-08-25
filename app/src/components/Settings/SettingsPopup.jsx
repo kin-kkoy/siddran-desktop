@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSettings, THEMES } from '../../contexts/SettingsContext'
 import { DIRECTION_ANGLES } from '../Layout/StarCanvas/StarCanvas'
 import { LuRotateCcw, LuRefreshCw } from 'react-icons/lu'
@@ -14,6 +14,16 @@ function SettingsPopup() {
   const { settings, updateSetting, isSettingsOpen, closeSettings, settingsTab, setSettingsTab } = useSettings()
   const activeTab = settingsTab
   const setActiveTab = setSettingsTab
+
+  // Escape closes it, the same as every other modal in the app. Bound on window
+  // rather than the panel so it works before anything inside has been focused,
+  // and hooked before the early return so the hook order never changes.
+  useEffect(() => {
+    if (!isSettingsOpen) return
+    const onKey = (e) => { if (e.key === 'Escape') closeSettings() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isSettingsOpen, closeSettings])
 
   if (!isSettingsOpen) return null
 
@@ -41,6 +51,12 @@ function SettingsPopup() {
               onClick={() => setActiveTab('appearance')}
             >
               Appearance
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'cards' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('cards')}
+            >
+              Cards
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'editor' ? styles.tabActive : ''}`}
@@ -73,12 +89,13 @@ function SettingsPopup() {
               rather than on a blank pane. */}
           <div className={styles.content}>
             {activeTab === 'sync' && <SyncTab />}
+            {activeTab === 'cards' && <CardsTab settings={settings} updateSetting={updateSetting} />}
             {activeTab === 'editor' && <EditorTab settings={settings} updateSetting={updateSetting} />}
             {activeTab === 'behaviour' && <BehaviourTab settings={settings} updateSetting={updateSetting} />}
             {activeTab === 'pages' && <PagesTab settings={settings} updateSetting={updateSetting} />}
             {/* Appearance is the fallback, so a stale tab value (the command palette
                 still opens 'interface') lands somewhere real rather than on a blank pane. */}
-            {!['sync', 'editor', 'behaviour', 'pages'].includes(activeTab) && (
+            {!['sync', 'cards', 'editor', 'behaviour', 'pages'].includes(activeTab) && (
               <AppearanceTab settings={settings} updateSetting={updateSetting} />
             )}
           </div>
@@ -328,8 +345,6 @@ function AppearanceTab({ settings, updateSetting }) {
         </div>
       </SettingRow>
 
-      {/* Reading layout: continuous scroll vs two-page book */}
-
       {/* Star canvas toggle */}
       <SettingRow
         label="Twinkling Stars"
@@ -354,6 +369,159 @@ function AppearanceTab({ settings, updateSetting }) {
           </SettingRow>
           <StarTuningBlock settings={settings} updateSetting={updateSetting} />
         </>
+      )}
+    </div>
+  )
+}
+
+// ── Cards Tab ──────────────────────────────────────────────────────
+// Its own tab rather than a block on Appearance: seven controls for one look
+// swamped the tab they were on, and card styling is a subject of its own — this
+// is where notebook cards will land too.
+function CardsTab({ settings, updateSetting }) {
+  return (
+    <div className={styles.tabContent}>
+      <NoteCardBlock settings={settings} updateSetting={updateSetting} />
+      <NotebookBlock settings={settings} updateSetting={updateSetting} />
+    </div>
+  )
+}
+
+// How notebooks are presented above the note grid. They are a filter, not cards
+// in the grid — this is only the shape that filter takes.
+function NotebookBlock({ settings, updateSetting }) {
+  return (
+    <div className={styles.settingBlock}>
+      <span className={styles.settingLabel}>Notebooks</span>
+      <span className={styles.settingDesc}>A filter above your notes. Filed notes leave the main view.</span>
+
+      <SettingRow label="Shown As">
+        <SegmentedControl
+          options={[
+            { value: 'tabs', label: 'Tabs' },
+            { value: 'rail', label: 'Rail' },
+            { value: 'notebooks', label: 'Notebooks' },
+          ]}
+          value={settings.notebookView}
+          onChange={(v) => updateSetting('notebookView', v)}
+        />
+      </SettingRow>
+
+      {settings.notebookView === 'notebooks' && (
+        <SettingRow label="Unfold On Hover" description="One row until you point at it.">
+          <ToggleSwitch
+            checked={settings.notebookHoverExpand !== false}
+            onChange={(v) => updateSetting('notebookHoverExpand', v)}
+          />
+        </SettingRow>
+      )}
+    </div>
+  )
+}
+
+// Note cards in the grid view are drawn as two sheets of paper. Four axes decide
+// how the two sit; the last three rows decide how much each note varies from its
+// neighbours.
+function NoteCardBlock({ settings, updateSetting }) {
+  const varying = settings.noteCardVary === true || settings.noteCardVaryEachLaunch === true
+  return (
+    <div className={styles.settingBlock}>
+      <span className={styles.settingLabel}>Note Cards</span>
+      <span className={styles.settingDesc}>A neutral sheet with a coloured one underneath.</span>
+
+      <SettingRow label="Paper Offset">
+        <SegmentedControl
+          options={[
+            { value: 'minimal', label: 'Minimal' },
+            { value: 'small', label: 'Small' },
+            { value: 'wide', label: 'Wide' },
+            { value: 'tab', label: 'Tab' },
+          ]}
+          value={settings.noteCardExposure}
+          onChange={(v) => updateSetting('noteCardExposure', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Colour Shows At">
+        <SegmentedControl
+          options={[
+            { value: 'top-left', label: 'Top left' },
+            { value: 'top-right', label: 'Top right' },
+            { value: 'bottom-left', label: 'Bottom left' },
+            { value: 'bottom-right', label: 'Bottom right' },
+          ]}
+          value={settings.noteCardAnchor}
+          onChange={(v) => updateSetting('noteCardAnchor', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Tilt">
+        <SegmentedControl
+          options={[
+            { value: 'none', label: 'Straight' },
+            { value: 'left', label: 'Left' },
+            { value: 'right', label: 'Right' },
+          ]}
+          value={settings.noteCardTilt}
+          onChange={(v) => updateSetting('noteCardTilt', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="What Tilts">
+        <SegmentedControl
+          options={[
+            { value: 'top', label: 'Top sheet' },
+            { value: 'under', label: 'Sheet underneath' },
+          ]}
+          value={settings.noteCardTurns}
+          onChange={(v) => updateSetting('noteCardTurns', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Vary The Tilt" description="Every note gets its own angle.">
+        <ToggleSwitch
+          checked={settings.noteCardVary === true}
+          onChange={(v) => updateSetting('noteCardVary', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Differ The Tilt Every Launch" description="Deal them again at each launch.">
+        <ToggleSwitch
+          checked={settings.noteCardVaryEachLaunch === true}
+          onChange={(v) => updateSetting('noteCardVaryEachLaunch', v)}
+        />
+      </SettingRow>
+
+      {varying && settings.noteCardTilt === 'none' && (
+        <span className={styles.settingNote}>Needs Tilt on to show.</span>
+      )}
+
+      <SettingRow label="Tags">
+        <SegmentedControl
+          options={[
+            { value: 'marker', label: 'Marker' },
+            { value: 'stamp', label: 'Stamp' },
+            { value: 'rule', label: 'Rule' },
+          ]}
+          value={settings.noteCardTags}
+          onChange={(v) => updateSetting('noteCardTags', v)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Surprise Me Every Launch" description="Tilt re-rolls the lean; Everything re-rolls the layout.">
+        <SegmentedControl
+          options={[
+            { value: 'off', label: 'Off' },
+            { value: 'tilt', label: 'Tilt' },
+            { value: 'all', label: 'Everything' },
+          ]}
+          value={settings.noteCardSurprise}
+          onChange={(v) => updateSetting('noteCardSurprise', v)}
+        />
+      </SettingRow>
+
+      {settings.noteCardSurprise !== 'off' && (
+        <span className={styles.settingNote}>Overriding the rows above.</span>
       )}
     </div>
   )

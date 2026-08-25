@@ -62,11 +62,115 @@
 }
 
 .searchInput:focus {
-    border-color: var(--text-faint);
+    border-color: var(--hue, var(--text-faint));
 }
 
 .searchInput::placeholder {
     color: var(--text-dim);
+}
+
+/* ── The hub body ─────────────────────────────────────────────────────────
+   The rail is the one notebook presentation that sits BESIDE the notes rather
+   than above them, so the body becomes a row for it and a column otherwise. */
+.hubBody { display: block; }
+.hubRail { display: flex; align-items: flex-start; gap: 20px; }
+.hubMain { flex: 1; min-width: 0; }
+
+/* ── Bare icon buttons ────────────────────────────────────────────────────
+   Only the buttons that CREATE something keep a container, so the header has
+   one weight for "make a thing" and a quieter one for the utilities. */
+.iconGroup { display: flex; align-items: center; gap: 2px; margin-left: 2px; }
+.iconBtn {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    background: none;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background-color 0.15s;
+}
+.iconBtn:hover { color: var(--text-primary); background-color: var(--bg-surface); }
+.iconBtn:disabled { opacity: 0.4; cursor: default; }
+.iconBtnDanger { color: var(--accent-danger); }
+.iconBtnDanger:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.1); }
+
+/* ── Toolbar: one stats line and the card-size control ────────────────────
+   The stats used to be split between the header and here, which said the same
+   thing twice. */
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 15px 0 14px;
+}
+.stats { font-size: 14px; color: var(--text-muted); }
+.stats b { color: var(--hue, var(--accent-warning)); font-weight: 600; }
+/* A short rule in the current colour, so the row has an anchor rather than
+   floating in the middle of the page. */
+.stats::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+    background-color: var(--hue, var(--accent-warning));
+    margin-right: 9px;
+    vertical-align: 4px;
+    transition: background-color 0.3s ease;
+}
+.densityGroup {
+    display: flex;
+    padding: 3px;
+    border: 1px solid var(--border-default);
+    background-color: var(--bg-surface);
+    border-radius: 7px;
+}
+.densityBtn {
+    height: 26px;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    border-radius: 5px;
+    padding: 0 10px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+.densityOn { background-color: var(--bg-elevated); color: var(--text-primary); }
+
+/* ── Card size ────────────────────────────────────────────────────────────
+   Density sets the column width and the card height only. It deliberately does
+   NOT touch --reach: how far the coloured sheet shows is the user's setting,
+   and a density preset silently overriding it would be a setting that lies. */
+.d_comfortable { --col: 320px; --card-h: 200px; --card-title: 20px; }
+.d_compact { --col: 250px; --card-h: 160px; --card-title: 18px; }
+.d_dense { --col: 195px; --card-h: 124px; --card-title: 16px; }
+
+.emptyState {
+    grid-column: 1 / -1;
+    border: 1px dashed color-mix(in srgb, var(--hue, var(--accent-warning)) 35%, var(--border-strong));
+    border-radius: 10px;
+    padding: 46px 20px;
+    text-align: center;
+}
+.emptyState h3 {
+    font-family: var(--font-heading);
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--hue, var(--accent-warning));
+}
+.emptyState p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 8px auto 0;
+    max-width: 46ch;
+    line-height: 1.55;
 }
 
 /* Controls section */
@@ -152,6 +256,7 @@
    Reorder is pointer-based (see hooks/useDragReorder.js); surrounding items reflow
    live as you drag, and the grabbed card lifts. */
 .dragCell {
+    position: relative;
     display: flex;
     min-width: 0;
     touch-action: none; /* let pointer-drag work without the page scrolling/panning */
@@ -166,18 +271,57 @@
 .dragCell:active {
     cursor: grabbing;
 }
+/* The card in your hand. It is glued to the cursor (see the `animate` option on
+   useDragReorder), so this only has to say "lifted": bigger, tilted a touch, a
+   deeper shadow, and no transition — a transition would fight the cursor-glue,
+   which rewrites `transform` every pointer move. */
 .dragCell[data-dragging] {
-    opacity: 0.85;
-    transform: scale(1.02);
-    z-index: 3;
-    box-shadow: 0 12px 30px var(--shadow-color);
+    z-index: 8;
+    box-shadow: 0 22px 44px -12px rgba(0, 0, 0, 0.75);
     border-radius: 12px;
-    cursor: grabbing;
+    /* No `!important` here: the hook clears the transition inline while gluing and
+       restores a short one to settle the card into its slot on release. An
+       important rule would win over both and the card would snap back. */
+}
+.dragCell[data-dragging] > * {
+    transform: scale(var(--tw-drag-scale, 1.04)) rotate(var(--tw-drag-tilt, -2deg));
+    opacity: var(--tw-drag-opacity, 0.7);
+    pointer-events: none;
+}
+/* The cursor lives on the cards, so setting it on <body> is not enough — the
+   card's own `cursor: pointer` wins. Force it for the duration of the drag. */
+.dragCell[data-dragging],
+.dragCell[data-dragging] * {
+    cursor: grabbing !important;
+}
+/* Over a notebook: the card shrinks into the gap the notebook has opened for it,
+   so the two motions are one gesture — the notebook comes apart, the note goes
+   in. Not smaller than about half, or the title stops being readable and you
+   lose track of which note you are actually filing. */
+.dragCell[data-swallowed] > * {
+    transform: scale(var(--tw-swallow, 0.45)) rotate(var(--tw-swallow-tilt, -3deg));
+    opacity: 1;
+    transition: transform var(--tw-boom-time, 0.5s) cubic-bezier(0.2, 1.4, 0.4, 1) !important;
+}
+/* The lift shadow is on the CELL, and a cell does not scale with the card inside
+   it — so once the card shrank, its shadow stayed full size and read as a ghost
+   outline of the note that was no longer there. Drop it while swallowed. */
+.dragCell[data-swallowed] {
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* A slot where the card came from, so the gap it left reads as a gap. */
+.dragCell[data-dragging]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
 }
 
 .gridView {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--col, 320px), 1fr));
     gap: 20px;
     padding: 20px 0;
     position: relative;
