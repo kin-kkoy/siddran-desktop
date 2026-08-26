@@ -4,6 +4,10 @@ A running list of what's implemented and what's planned. Add freely.
 
 > Legend: `[x]` done · `[~]` partially done / needs verification · `[ ]` not started · `⚠️` known issue
 
+> **Queued work lives in `references/next/`** — one brief per task, written to be
+> handed straight to a session. This file is the record of what was built; that
+> directory is the queue of what has not been.
+
 ---
 
 ## ✅ Implemented this session (2026-07-10)
