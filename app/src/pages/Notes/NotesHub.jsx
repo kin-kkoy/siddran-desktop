@@ -23,6 +23,27 @@ import Skeleton from '../../components/Common/Skeleton'
 const PAGER_BAR_H = 48
 
 // obtains the notes and
+// Remembered list-view page. localStorage rather than settings.siddran for the same
+// reason as notesViewMode / notesFilter above it: this is device-local UI state, not
+// something to carry between machines.
+const PAGE_KEY = 'notesPage'
+
+function readStoredPage() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PAGE_KEY) || 'null')
+    if (!v || typeof v.page !== 'number') return 0
+    // Only honour it for the view + notebook it was stored against; anything else
+    // and page 3 of a list you are no longer looking at is just a wrong start.
+    const sameView = v.viewMode === (localStorage.getItem('notesViewMode') || 'list')
+    const sameFilter = v.filter === (localStorage.getItem('notesFilter') || UNFILED)
+    return sameView && sameFilter ? Math.max(0, v.page) : 0
+  } catch { return 0 }
+}
+
+function writeStoredPage(page, viewMode, filter) {
+  try { localStorage.setItem(PAGE_KEY, JSON.stringify({ page, viewMode, filter })) } catch { /* ignore */ }
+}
+
 function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, toggleFavorite, updateColor, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, reorderNotes, authFetch, API }) {
 
   // List view is PAGED, not scrolled: the area is fixed to the viewport and the
@@ -31,7 +52,11 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
   const navigate = useNavigate()
   const pagerRef = useRef(null)
   const pagerBarRef = useRef(null)
-  const [page, setPage] = useState(0)
+  // Which page you were on survives leaving NotesHub: opening a note from page 2
+  // and coming back landed you on page 1, so you had to page forward again every
+  // time. Stored alongside the view mode and filter it belongs to — a remembered
+  // page means nothing once you've switched notebooks or view.
+  const [page, setPage] = useState(readStoredPage)
   const [perPage, setPerPage] = useState(16)
 
   // Persist view mode in localStorage
@@ -449,7 +474,15 @@ function NotesHub({ notes, notebooks, notesLoading, notebookNotesById, notesPagi
     // and drops the add-note row, both of which move the top of the list.
   }, [viewMode, isSelectionMode])
 
-  useEffect(() => { setPage(0) }, [viewMode, searchQuery])
+  // Switching view or searching starts over — but NOT on mount, which would throw
+  // away the page we just restored.
+  const didMount = useRef(false)
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return }
+    setPage(0)
+  }, [viewMode, searchQuery])
+
+  useEffect(() => { writeStoredPage(safePage, viewMode, filter) }, [safePage, viewMode, filter])
 
   // The wheel turns pages instead of scrolling — nothing here actually moves.
   const onPagerWheel = useCallback((e) => {
