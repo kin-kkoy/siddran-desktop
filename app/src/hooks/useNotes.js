@@ -12,7 +12,10 @@ import {
 } from "../utils/markdownIO";
 
 // Custom hook for the notes/notebooks
-export const useNotes = (authFetch, API, isAuthed) => {
+// reloadKey: bump it to re-read everything from the store. Nothing else in the
+// dep arrays changes when a Bag is reloaded in place — same fetcher, same API,
+// still authed — so without it the hook would keep showing the old picture.
+export const useNotes = (authFetch, API, isAuthed, reloadKey = 0) => {
 
     const [notes, setNotes] = useState([])
     const [notebooks, setNotebooks] = useState([])
@@ -60,10 +63,15 @@ export const useNotes = (authFetch, API, isAuthed) => {
 
         fetchData()
 
-    }, [isAuthed, authFetch, API])
+    }, [isAuthed, authFetch, API, reloadKey])
 
     // ----------- Prefetch notebook notes in ONE batched request ===========================
     // (was one GET /notebooks/:id/notes per notebook — an N+1 on every load.)
+    // A reload invalidates what was prefetched — those notes came from the old read.
+    useEffect(() => {
+        prefetchedNotebookIdsRef.current.clear()
+    }, [reloadKey])
+
     useEffect(() => {
         if (!isAuthed || notebooks.length === 0) return
 

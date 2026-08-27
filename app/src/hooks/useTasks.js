@@ -93,7 +93,7 @@ function whatMessage(action, subAction = null) {
 
 
 // Custom hook for tasks, daily tasks, and bundles
-export const useTasks = (authFetch, API, isAuthed) => {
+export const useTasks = (authFetch, API, isAuthed, reloadKey = 0) => {
 
     const [tasks, setTasks] = useState([])
     const [dailyTasks, setDailyTasks] = useState([])
@@ -142,7 +142,7 @@ export const useTasks = (authFetch, API, isAuthed) => {
 
         fetchAllTasks()
 
-    }, [isAuthed, authFetch, API])
+    }, [isAuthed, authFetch, API, reloadKey])
 
 
     // ----------- Load More Functions (Pagination) ==========================================

@@ -250,6 +250,27 @@ export async function openBagStore(fs, bagPath) {
   await hydrate(fs, bagPath)
   resetDirty()
 }
+// Re-read the Bag from disk, discarding the in-memory picture of it.
+//
+// The app reads the folder once, at open, and owns it from then on — so a note
+// renamed, edited or added by anything else (your file manager, a sync tool, a
+// script) is invisible until this runs. Worse, the app would keep writing to the
+// path it still believes in.
+//
+// flushNow() first, and it matters that it's a no-op when nothing is dirty: any
+// edit you have just made is yours and newer, so it goes to disk before we read
+// disk back. What this canNOT rescue is an outside rename that happened while
+// edits were pending — reconcileNotes prunes files it doesn't recognise, so that
+// flush deletes the renamed file. That is a pre-existing hazard of editing a Bag
+// from two places at once; reloading does not add to it, but it does not undo it.
+export async function reloadBagStore() {
+  if (!_fs || !_bag) return false
+  await flushNow()
+  await hydrate(_fs, _bag)
+  resetDirty()
+  return true
+}
+
 export async function closeBagStore() {
   await flushNow()
   _fs = null; _bag = null; db = emptyDb()

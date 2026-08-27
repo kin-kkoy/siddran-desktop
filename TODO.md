@@ -165,6 +165,22 @@ to hand anything to the OS — so they were done together.
 - [x] **Fails loudly** — a note whose file moved or was deleted outside the app toasts;
   a note not yet flushed to disk (1.5 s debounce) says so rather than doing nothing.
 
+### Reload Bag (2026-08-27)
+- [x] **Profile menu ▸ Reload Bag** — re-reads the Bag folder without restarting, so a
+  note renamed/edited/added from outside (file manager, sync tool, hand-edited `.md`)
+  becomes visible. Sits with Switch Bag / Close Bag because it is about *this* Bag.
+- [x] **Flushes first, and that is deliberate** — an edit you just made is yours and
+  newer, so it reaches disk before disk is read back. `flushNow()` writes nothing when
+  nothing is dirty, which is the common case for a reload.
+- [x] **`reloadKey` on the data hooks** — nothing else in `useNotes`/`useTasks`'
+  dependencies changes when the same Bag is reloaded in place, so without it they keep
+  showing the old picture. It also clears the notebook prefetch cache.
+- ⚠️ **What reload does NOT fix.** `reconcileNotes` prunes any `.md` under `notes/` it
+  doesn't recognise, so if you rename a note's file outside the app *while edits are
+  pending*, the next flush deletes the renamed file and recreates the old name. That
+  is a pre-existing hazard of editing a Bag from two places at once — reload neither
+  adds to it nor undoes it. Worth its own brief.
+
 ### Notes for whoever is next
 - ⚠️ **The `bag_*` commands do no path confinement at all** — they take an absolute path
   from the webview and hand it to `std::fs` (deliberate: a Bag lives anywhere). Brief 07

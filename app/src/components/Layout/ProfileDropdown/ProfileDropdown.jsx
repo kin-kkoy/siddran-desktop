@@ -3,10 +3,10 @@ import { createPortal } from "react-dom"
 import styles from './ProfileDropdown.module.css'
 import { IoMdSettings } from "react-icons/io";
 import { TbLogout2 } from "react-icons/tb";
-import { LuCheck } from "react-icons/lu";
+import { LuCheck, LuRefreshCw } from "react-icons/lu";
 import { useSettings } from "../../../contexts/SettingsContext";
 
-function ProfileDropdown({ username, isCollapsed, handleLogout, recentBags = [], currentBagPath, onSwitchBag }) {
+function ProfileDropdown({ username, isCollapsed, handleLogout, recentBags = [], currentBagPath, onSwitchBag, onReloadBag }) {
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef(null)
     const buttonRef = useRef(null) // This refers to the profile button
@@ -37,6 +37,11 @@ function ProfileDropdown({ username, isCollapsed, handleLogout, recentBags = [],
     const Logout = () => {
         setIsOpen(false)
         handleLogout()
+    }
+
+    const reloadBag = () => {
+        setIsOpen(false)
+        onReloadBag?.()
     }
 
     const selectBag = (bag) => {
@@ -121,6 +126,14 @@ function ProfileDropdown({ username, isCollapsed, handleLogout, recentBags = [],
                             </div>
                             <div className={styles.divider}></div>
                         </>
+                    )}
+                    {/* Sits with Switch Bag / Close Bag because it is about THIS Bag —
+                        it re-reads the folder for anything changed outside the app. */}
+                    {onReloadBag && (
+                        <button onClick={reloadBag} className={styles.dropdownItem}>
+                            <span className={styles.itemIcon}><LuRefreshCw /></span>
+                            <span>Reload Bag</span>
+                        </button>
                     )}
                     <button onClick={navigateSettings} className={styles.dropdownItem}>
                         <span className={styles.itemIcon}><IoMdSettings /></span>

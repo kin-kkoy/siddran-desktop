@@ -9,7 +9,7 @@ import { readListOpen, writeListOpen } from "../../../hooks/sidebarState";
 import { readSession, sectionTarget } from "../../../hooks/sessionRouteCache";
 
 
-function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag }) {
+function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag, onReloadBag }) {
 
     const navigate = useNavigate()
     const location = useLocation()
@@ -63,6 +63,7 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                             recentBags={recentBags}
                             currentBagPath={currentBagPath}
                             onSwitchBag={onSwitchBag}
+                            onReloadBag={onReloadBag}
                         />
                     </div>
                     <button

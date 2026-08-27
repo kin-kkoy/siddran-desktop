@@ -48,7 +48,7 @@ import SplashScreen from "./components/Splash/SplashScreen.jsx"
 import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, getLastBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
-import { openBagStore, closeBagStore, localFetch, isOpen as isLocalOpen, setActiveNote, flushNow } from "./desktop/localStore.js"
+import { openBagStore, closeBagStore, reloadBagStore, localFetch, isOpen as isLocalOpen, setActiveNote, flushNow } from "./desktop/localStore.js"
 import { createTauriFs } from "./desktop/fs/tauriFs.js"
 import { createMemFs } from "./desktop/fs/memFs.js"
 import { resetForGuest as resetSandboxStore } from "./hooks/sandboxStore.js"
@@ -97,6 +97,8 @@ function App() {
   // The open Bag (vault). Desktop has no accounts — opening a Bag is what unlocks
   // the app. `{ name, path }` or null. `unlocked` (computed below) gates the shell.
   const [currentBag, setCurrentBag] = useState(null)
+  // Bumped by reloadBag so the data hooks re-fetch — see reloadBag below.
+  const [dataEpoch, setDataEpoch] = useState(0)
   const [recentBags, setRecentBags] = useState(() => getRecentBags())
   // True while flushing one Bag and loading another (profile bag-switcher). Holds a
   // blank frame instead of flashing the picker during the swap.
@@ -360,6 +362,29 @@ function App() {
     setRecentBags(getRecentBags())
   }, [])
 
+  // Re-read the Bag from disk without restarting.
+  //
+  // The app reads the folder once, at open, and owns its picture of it from then
+  // on — so anything that changes the files from outside (renaming a note in your
+  // file manager, a sync tool, editing a .md by hand) is invisible until this
+  // runs. Bumping the epoch is what makes the data hooks fetch again; nothing else
+  // in their dependencies changes when the same Bag is reloaded in place.
+  const reloadBag = useCallback(async () => {
+    if (!currentBag) return
+    const id = toast.loading('Reloading Bag…')
+    try {
+      resetSandboxStore()   // board list and items were read from the old picture too
+      resetSandboxItems()
+      const ok = await reloadBagStore()
+      if (!ok) { toast.update(id, 'No Bag is open', 'error'); return }
+      setDataEpoch((n) => n + 1)
+      toast.update(id, 'Bag reloaded', 'success')
+    } catch (e) {
+      logger.error('reload bag failed', e)
+      toast.update(id, e?.message || 'Could not reload the Bag', 'error')
+    }
+  }, [currentBag])
+
   // Auto-reopen the last Bag on launch. Verifies the folder still exists first, so
   // a moved/deleted Bag falls through to the picker instead of resurrecting an
   // empty one. Runs once on mount.
@@ -436,12 +461,12 @@ function App() {
   // ------------- DATA LOGIC (Adding, deleting, etc. of Notes and Notebooks) ===================================
   const {
     notes, notebooks, loading: notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, editTitle, editBody, toggleFavorite, updateColor, updateTags, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, exportNote, reorderNotes, reorderNotebooks
-  } = useNotes(authFetch, API, unlocked)
+  } = useNotes(authFetch, API, unlocked, dataEpoch)
 
   // ------------- TASKS DATA LOGIC ===================================
   const {
     tasks, dailyTasks, bundles, tasksPagination, dailyTasksPagination, bundlesPagination, loadMoreTasks, loadMoreDailyTasks, loadMoreBundles, loadingMore: tasksLoadingMore, loading: tasksLoading, addTask, updateTask, patchTaskInCache, setDailyTime, deleteTask, setTaskOrders, toggleTaskCompletion, addDailyTask, updateDailyTask, deleteDailyTask, toggleDailyTaskCompletion, batchToggleDailyTasks, batchDeleteDailyTasks, addBundle, updateBundle, deleteBundle, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion, batchDeleteBundleTasks
-  } = useTasks(authFetch, API, unlocked)
+  } = useTasks(authFetch, API, unlocked, dataEpoch)
 
   // ------------- CALENDAR DATA LOGIC ===================================
   const calView = useCalendarView()
@@ -931,6 +956,7 @@ function App() {
               recentBags={recentBags}
               currentBagPath={currentBag?.path}
               onSwitchBag={switchBag}
+              onReloadBag={reloadBag}
             />
           )}
 
