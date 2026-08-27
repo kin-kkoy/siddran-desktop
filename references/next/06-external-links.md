@@ -1,5 +1,15 @@
 # Clicking a link navigates the whole app away — no way back
 
+> **DONE 2026-08-26.** Decided: confirm prompt → system browser (option 3 → 2);
+> the side-pane option was rejected. See `TODO.md`. Kept for the record.
+>
+> On the open question at the bottom: Tauri v2 **does** offer
+> `WebviewWindowBuilder::on_navigation(|url| bool)`, but using it means building the
+> window in Rust instead of declaring it in `tauri.conf.json` — a structural change
+> with its own regression surface. Deferred in favour of the capture-phase JS guard
+> (`app/src/desktop/linkGuard.js`). **Don't re-investigate this.**
+
+
 **Area:** Misc · **Size:** medium · **Priority: highest of these**
 
 ## What was seen

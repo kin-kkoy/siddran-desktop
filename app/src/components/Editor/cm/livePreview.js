@@ -204,7 +204,12 @@ function scanInline(state, ranges) {
         if (over(nf, nt)) {
           mk(nf, nt, 'cm-link-active')
         } else if (marks.length >= 2) {
-          mk(marks[0].to, marks[1].from, 'cm-external-link', { 'data-href': href })
+          // The hint is the only affordance for the modifier — nothing about the
+          // rendered text says a plain click just moves the caret.
+          mk(marks[0].to, marks[1].from, 'cm-external-link', {
+            'data-href': href,
+            title: `${href}\nCtrl+click to open`,
+          })
           hide(nf, marks[0].to)
           hide(marks[1].from, nt)
         }

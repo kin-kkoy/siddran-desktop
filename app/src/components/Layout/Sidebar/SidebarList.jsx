@@ -3,6 +3,9 @@ import { Link } from "react-router-dom"
 import styles from './SidebarList.module.css'
 import { compareByOrder, compareByFavoriteThenOrder } from '../../../utils/noteSorting'
 import { HiChevronDown } from 'react-icons/hi'
+import { FaRegFolderOpen } from 'react-icons/fa'
+import RowContextMenu from './RowContextMenu'
+import { canReveal, revealNote, revealNotebook } from '../../../desktop/reveal'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 import { readCollapsedNotebooks, writeCollapsedNotebooks } from '../../../hooks/sidebarState'
 import { coverTone, lipTone } from '../../Notebooks/notebookTones'
@@ -22,6 +25,24 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
         // We no longer intercept clicks for the right pane.
         // Sidebar always navigates the main app route.
     }
+
+    // Right-click a row to reach the file behind it. Nothing else in the sidebar
+    // handles pointer events (handleSelect above is a no-op and no row is a drag
+    // source), so there is nothing here for a context menu to fight with.
+    const [ctxMenu, setCtxMenu] = useState(null)   // { x, y, items } | null
+
+    const openContextMenu = (items) => (e) => {
+        if (!canReveal()) return
+        e.preventDefault()      // rows are <Link>s; and we want ours, not the webview's
+        e.stopPropagation()
+        setCtxMenu({ x: e.clientX, y: e.clientY, items })
+    }
+
+    const revealItem = (label, run) => [{
+        label,
+        icon: <FaRegFolderOpen style={{ opacity: 0.7 }} />,
+        onSelect: run,
+    }]
 
     // Highlight both open notes: the route note (left) and the split note (right).
     const splitNoteId = split.splitTarget?.type === 'note' ? split.splitTarget.id : null
@@ -95,6 +116,7 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
                                 <div
                                     className={styles.notebookHeader}
                                     onClick={() => toggleNotebook(group.notebook.id)}
+                                    onContextMenu={openContextMenu(revealItem('Show notebook in file manager', () => revealNotebook(group.notebook)))}
                                 >
                                     <span className={styles.notebookLabel}>
                                         {group.notebook.name || 'Untitled Notebook'}
@@ -110,6 +132,7 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
                                                 key={note.id}
                                                 to={`/notes/${note.id}`}
                                                 onClick={handleSelect(note.id)}
+                                                onContextMenu={openContextMenu(revealItem('Show in file manager', () => revealNote(note)))}
                                                 className={`${styles.noteItem} ${styles.groupedNote} ${isActive(note.id) ? styles.active : ''}`}
                                             >
                                                 <span className={styles.noteTitle}>{note.title || 'Untitled'}</span>
@@ -125,6 +148,7 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
                             <Link key={note.id}
                                 to={`/notes/${note.id}`}
                                 onClick={handleSelect(note.id)}
+                                onContextMenu={openContextMenu(revealItem('Show in file manager', () => revealNote(note)))}
                                 className={`${styles.noteItem} ${isActive(note.id) ? styles.active : ''}`}
                             >
                                 <span className={styles.noteTitle}>{note.title || 'Untitled'}</span>
@@ -133,6 +157,10 @@ function SidebarList({ isCollapsed, notes, notebooks = [], currentNoteID, hideTi
                     </>
                 )}
             </div>
+
+            {ctxMenu && (
+                <RowContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />
+            )}
         </div>
     )
 }

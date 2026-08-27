@@ -79,3 +79,11 @@ have a genuinely different angle.
 `TODO.md` at the repo root is the historical progress log — what was built and
 when. It is not a queue. These briefs are the queue. If one gets done, tick it
 here and add a line to `TODO.md`.
+
+## Done
+
+- `06-external-links.md` — done 2026-08-26.
+- `07-reveal-in-file-manager.md` — done 2026-08-26.
+
+Both files are kept, marked done at the top, because each records a decision and a
+correction worth not rediscovering. Everything else in this directory is still open.

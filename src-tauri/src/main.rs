@@ -129,6 +129,90 @@ fn bag_read_bytes(path: String) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+// ── Handing things to the OS ────────────────────────────────────────
+//
+// The webview must never navigate away from Siddran — a note's link replacing the
+// app takes unsaved editor state with it and offers no way back. So a link is
+// opened by the real browser instead, and both of these commands validate before
+// handing anything over: the frontend never gets a general "open anything"
+// capability, only these two.
+//
+// Deliberately NOT exposed as plugin permissions in capabilities/default.json.
+// tauri_plugin_opener's open_url/reveal_item_in_dir are plain Rust functions, so
+// the plugin never has to be registered and `opener:allow-open-url` never has to
+// be granted to the frontend. That keeps the grant at nothing, which is the same
+// reason the asset scope was narrowed from `$HOME/**` to empty.
+
+// The scheme allowlist is the whole security of open_external_url. Handing an
+// arbitrary scheme to the platform opener is how `file://`, a `javascript:` URL, or
+// a path to a .desktop launcher turns a note into code execution — so anything that
+// is not plain web browsing or mail is refused before it reaches the OS, not after.
+// An ALLOWLIST, never a blocklist: an unknown scheme is refused, not permitted.
+fn checked_url(url: &str) -> Result<&str, String> {
+    let trimmed = url.trim();
+    let scheme = match trimmed.split_once(':') {
+        Some((s, _)) => s.to_ascii_lowercase(),
+        None => return Err("not a URL".into()),
+    };
+    if !matches!(scheme.as_str(), "http" | "https" | "mailto") {
+        return Err(format!("refusing to open a {scheme}: link"));
+    }
+    Ok(trimmed)
+}
+
+// Open a URL in the user's browser.
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    let target = checked_url(&url)?;
+    tauri_plugin_opener::open_url(target, None::<&str>).map_err(|e| e.to_string())
+}
+
+// Resolve a path the webview handed us and refuse it unless it really is inside
+// the Bag.
+//
+// Canonicalize before comparing, exactly as serve_viewer does: a naive prefix check
+// would let `<bag>/../../etc` through. Canonicalizing also resolves symlinks, so a
+// link inside the Bag pointing out of it is refused too — and it is what reports a
+// note whose file was moved or deleted outside the app.
+fn confine_to_bag(path: &str, bag: &Path) -> Result<PathBuf, String> {
+    // The raw io error here is "No such file or directory (os error 2)", which tells
+    // the user nothing. The realistic cause is that the file was renamed or moved
+    // outside Siddran, and the app's picture of the Bag is now stale — so say that,
+    // and say what fixes it.
+    let resolved = fs::canonicalize(path).map_err(|_| {
+        "That file isn't where Siddran expects it. If you renamed or moved it outside          the app, reopen the Bag to pick up the change."
+            .to_string()
+    })?;
+    if !resolved.starts_with(bag) {
+        return Err("that file is outside the Bag".into());
+    }
+    Ok(resolved)
+}
+
+// Show a note or notebook in the user's file manager.
+//
+// Confined to the open Bag using the same canonicalize-then-starts_with check as
+// serve_viewer below — the bag_* commands do no confinement at all by design, so
+// there is nothing to inherit from them and a shell open needs its own.
+#[tauri::command]
+fn reveal_in_file_manager(state: tauri::State<ViewerState>, path: String) -> Result<(), String> {
+    let bag = match state.bag.lock().unwrap().clone() {
+        Some(b) => b,
+        None => return Err("no bag".into()),
+    };
+
+    let resolved = confine_to_bag(&path, &bag)?;
+
+    // The plugin owns the platform split, so nothing here hard-codes xdg-open. On
+    // Linux this is the D-Bus ShowItems call, which pre-selects the file. Where no
+    // file manager answers it, fall back to just opening the containing folder.
+    if tauri_plugin_opener::reveal_item_in_dir(&resolved).is_ok() {
+        return Ok(());
+    }
+    let parent = resolved.parent().ok_or("no containing folder")?;
+    tauri_plugin_opener::open_path(parent, None::<&str>).map_err(|e| e.to_string())
+}
+
 // ── HTML attachment viewer protocol ─────────────────────────────────
 //
 // Attached HTML pages are served over their own URI scheme rather than the asset
@@ -158,7 +242,8 @@ struct ViewerState {
 }
 
 // Which Bag the viewer may read from. Set on every Bag open; clearing it closes
-// the protocol entirely.
+// the protocol entirely. reveal_in_file_manager confines against this same root —
+// it is the app's canonical Bag path, not the viewer's alone.
 #[tauri::command]
 fn viewer_set_bag(state: tauri::State<ViewerState>, path: String) {
     let mut bag = state.bag.lock().unwrap();
@@ -519,6 +604,8 @@ fn main() {
             bag_write_bytes,
             bag_read_bytes,
             bag_copy_dir,
+            open_external_url,
+            reveal_in_file_manager,
             app_close,
             bag_allow_asset,
             viewer_set_bag,
@@ -528,4 +615,83 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Siddran desktop app");
+}
+
+// These two guards are the only thing between a note's contents and the OS, so
+// they are tested directly rather than through the window.
+#[cfg(test)]
+mod tests {
+    use super::{checked_url, confine_to_bag};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn allows_web_and_mail() {
+        assert_eq!(checked_url("https://example.com/a"), Ok("https://example.com/a"));
+        assert!(checked_url("http://example.com").is_ok());
+        assert!(checked_url("mailto:someone@example.com").is_ok());
+        assert!(checked_url("  https://example.com  ").is_ok());
+        // Scheme comparison is case-insensitive, or `HTTPS://` would be refused.
+        assert!(checked_url("HTTPS://example.com").is_ok());
+    }
+
+    #[test]
+    fn refuses_everything_else() {
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,<script>x</script>",
+            "smb://host/share",
+            "/home/user/notes.desktop",   // no scheme at all
+            "",
+        ] {
+            assert!(checked_url(bad).is_err(), "should have refused {bad:?}");
+        }
+    }
+
+    // A temp Bag with a note in it, plus a sibling file outside the Bag.
+    // Named per test: cargo runs these in parallel, and a shared directory that
+    // each one wipes on entry would race.
+    fn fixture(name: &str) -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!("siddran-confine-{name}"));
+        let _ = fs::remove_dir_all(&root);
+        let bag = root.join("bag");
+        fs::create_dir_all(bag.join("notes")).unwrap();
+        fs::write(bag.join("notes/a.md"), "note").unwrap();
+        fs::write(root.join("outside.md"), "not yours").unwrap();
+        (fs::canonicalize(&bag).unwrap(), fs::canonicalize(&root).unwrap())
+    }
+
+    #[test]
+    fn allows_a_file_inside_the_bag() {
+        let (bag, _) = fixture("inside");
+        let note = bag.join("notes/a.md");
+        assert_eq!(confine_to_bag(note.to_str().unwrap(), &bag).unwrap(), note);
+    }
+
+    #[test]
+    fn refuses_a_traversal_out_of_the_bag() {
+        let (bag, root) = fixture("traversal");
+        let escape = format!("{}/notes/../../outside.md", bag.display());
+        assert!(confine_to_bag(&escape, &bag).is_err());
+        assert!(confine_to_bag(root.join("outside.md").to_str().unwrap(), &bag).is_err());
+    }
+
+    // starts_with on a PathBuf compares whole components, so a sibling directory
+    // whose name merely begins with the Bag's name is not inside it.
+    #[test]
+    fn refuses_a_sibling_with_the_bags_name_as_a_prefix() {
+        let (bag, root) = fixture("sibling");
+        let evil = root.join("bag-evil");
+        fs::create_dir_all(&evil).unwrap();
+        fs::write(evil.join("a.md"), "x").unwrap();
+        assert!(confine_to_bag(evil.join("a.md").to_str().unwrap(), &bag).is_err());
+    }
+
+    #[test]
+    fn reports_a_file_that_is_gone() {
+        let (bag, _) = fixture("missing");
+        let missing = bag.join("notes/deleted-outside-the-app.md");
+        assert!(confine_to_bag(missing.to_str().unwrap(), &bag).is_err());
+    }
 }

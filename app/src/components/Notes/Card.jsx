@@ -1,4 +1,4 @@
-import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
+import { FaThumbtack, FaEllipsisV, FaRegFolderOpen } from 'react-icons/fa'
 import { HiOutlineTrash } from 'react-icons/hi'
 import styles from './Card.module.css'
 import { Link, useNavigate } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { MdChromeReaderMode } from 'react-icons/md'
 import { NOTE_COLORS, getNoteBackground, paperTone, getPaperSwatch } from './noteColors'
 import { useSettings } from '../../contexts/SettingsContext'
 import { resolveCardStyle, cardClassNames, tiltFor } from '../../hooks/noteCardStyle'
+import { canReveal, revealNote } from '../../desktop/reveal'
 
 function Card({ note, deleteNote, isSelectionMode, isSelected, onToggleSelect, toggleFavorite, updateColor, inheritTone }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -87,7 +88,7 @@ function Card({ note, deleteNote, isSelectionMode, isSelected, onToggleSelect, t
       // Calculate if there's enough space below
       const buttonRect = buttonRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - buttonRect.bottom
-      const menuHeight = 180 // Approximate menu height
+      const menuHeight = 220 // Approximate menu height
 
       // If not enough space below, show above
       setMenuPosition(spaceBelow < menuHeight ? 'above' : 'below')
@@ -100,6 +101,13 @@ function Card({ note, deleteNote, isSelectionMode, isSelected, onToggleSelect, t
     e.preventDefault()
     e.stopPropagation()
     toggleFavorite(note.id)
+    setMenuOpen(false)
+  }
+
+  const handleReveal = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    revealNote(note)
     setMenuOpen(false)
   }
 
@@ -160,6 +168,15 @@ function Card({ note, deleteNote, isSelectionMode, isSelected, onToggleSelect, t
                   {note.is_favorite ? <FaThumbtack color="#fbbf24" /> : <FaThumbtack style={{ opacity: 0.45 }} />}
                   <span>{note.is_favorite ? 'Unpin' : 'Pin'}</span>
                 </button>
+
+                {/* Only when there's a real file behind the note — no Bag open (or
+                    running outside the desktop shell) means nothing to show. */}
+                {canReveal() && (
+                  <button onClick={handleReveal} className={styles.menuItem}>
+                    <FaRegFolderOpen style={{ opacity: 0.7 }} />
+                    <span>Show in file manager</span>
+                  </button>
+                )}
 
                 <div className={styles.colorPicker}>
                   <span className={styles.colorLabel}>Color:</span>

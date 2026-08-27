@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   hrefKind, isPdfHref, isHtmlHref, isRemoteHref, isViewableHtmlHref,
-  isAttachmentHref, nameFromHref, canonicalAttachmentPath, ATTACHMENT_KINDS,
+  isAttachmentHref, isExternalHref, nameFromHref, canonicalAttachmentPath,
+  ATTACHMENT_KINDS,
 } from './attachmentLinks.js'
 
 describe('hrefKind', () => {
@@ -115,5 +116,26 @@ describe('canonicalAttachmentPath', () => {
   it('tolerates junk', () => {
     expect(canonicalAttachmentPath(null)).toBe('')
     expect(canonicalAttachmentPath('')).toBe('')
+  })
+})
+
+describe('isExternalHref', () => {
+  it('accepts web addresses and mail', () => {
+    expect(isExternalHref('https://example.com/a')).toBe(true)
+    expect(isExternalHref('http://example.com')).toBe(true)
+    expect(isExternalHref('//example.com/a')).toBe(true)
+    expect(isExternalHref('mailto:someone@example.com')).toBe(true)
+    expect(isExternalHref('  https://example.com  ')).toBe(true)
+  })
+
+  // An allowlist, not a blocklist: the platform opener will happily act on a
+  // file: URL or a .desktop launcher, so anything unrecognised stays inert.
+  it('refuses anything that is not web browsing or mail', () => {
+    expect(isExternalHref('file:///etc/passwd')).toBe(false)
+    expect(isExternalHref('javascript:alert(1)')).toBe(false)
+    expect(isExternalHref('attachments/a.pdf')).toBe(false)
+    expect(isExternalHref('/register')).toBe(false)
+    expect(isExternalHref('')).toBe(false)
+    expect(isExternalHref(null)).toBe(false)
   })
 })

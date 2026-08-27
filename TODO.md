@@ -127,6 +127,58 @@ A running list of what's implemented and what's planned. Add freely.
 
 ---
 
+## ✅ Implemented this session (2026-08-26) — OS integration
+
+Both from `references/next/` (06 + 07); they shared one blocker — the app had no way
+to hand anything to the OS — so they were done together.
+
+### External links no longer navigate the app away (`06-external-links.md`)
+- [x] **The bug** — a `http(s)` link in a note's reading view reached the DOM as a real
+  `<a href>`; clicking it replaced the whole SPA, unsaved editor state included, with
+  no back affordance. `markdownToHtml` stripped `href` off *attachment* links only.
+- [x] **The fix, at the source** — `rehypeCinderLinks` (was `rehypeCinderPdfLinks`) now
+  drops `href` off **every** anchor and classifies it onto `data-href`: attachment →
+  side viewer, web/mail → browser, anything else → inert. Safe by construction rather
+  than by remembering to bind a handler on each surface.
+- [x] **Confirm, then the real browser** — `ExternalLinkGate` (app-level, beside
+  `ToastContainer`) shows the full URL and Open/Cancel. Chosen behaviour: prompt then
+  system browser; the side-pane option was rejected (that viewer serves local files
+  under its own CSP — pointing it at the internet is a different security question).
+- [x] **Backstop** — `desktop/linkGuard.js`, a capture-phase click guard installed from
+  `main.jsx` beside `dropGuard`, catches any live remote `href` from a surface the
+  renderer doesn't own (e.g. the sandbox's `AttachedNoteCard`, which has no handler).
+- [x] **Edit mode too** — `cm/wikilinks.js` routes an external `.cm-external-link` to the
+  same gate. Only the display text is decorated, so a link stays editable.
+- [x] **Rust** — `open_external_url`, with an **allowlist** of `http`/`https`/`mailto`.
+  Anything else is refused before it reaches the OS; handing an arbitrary scheme to the
+  platform opener is how `file://` or a `.desktop` launcher becomes code execution.
+
+### Show a note in the file manager (`07-reveal-in-file-manager.md`)
+- [x] **`reveal_in_file_manager`** — pre-selects the file via the D-Bus `ShowItems` call
+  the opener plugin makes, falling back to opening the containing folder. Verified in
+  Dolphin: the `.md` comes up already selected, not just its folder.
+- [x] **Confined to the Bag** — canonicalize-then-`starts_with`, the same check
+  `serve_viewer` uses, against the canonical Bag root already in `ViewerState.bag`.
+- [x] **Entry points** — the note card kebab (grid + list), right-click on a sidebar note
+  row, on the Opened Notes rows, and on a notebook header (a notebook is a directory).
+  `RowContextMenu` is new — the app had no context menu anywhere before this.
+- [x] **Fails loudly** — a note whose file moved or was deleted outside the app toasts;
+  a note not yet flushed to disk (1.5 s debounce) says so rather than doing nothing.
+
+### Notes for whoever is next
+- ⚠️ **The `bag_*` commands do no path confinement at all** — they take an absolute path
+  from the webview and hand it to `std::fs` (deliberate: a Bag lives anywhere). Brief 07
+  assumed otherwise. Anything new that reaches the OS must bring its own check.
+- **No new capability was granted.** `tauri-plugin-opener` is called as a plain Rust
+  library from our own commands, so the plugin is never registered and
+  `capabilities/default.json` still grants only `core:default` + `dialog:default`.
+- **Window navigation guard:** Tauri v2 does offer
+  `WebviewWindowBuilder::on_navigation`, but it needs the window built in Rust rather
+  than declared in `tauri.conf.json` — a structural change. Deferred; the capture-phase
+  JS guard covers the same ground. Don't re-investigate.
+
+---
+
 ## 🔜 To implement / deferred
 
 ### Task deadline

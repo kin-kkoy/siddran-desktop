@@ -22,7 +22,8 @@ import { useComments } from '../../hooks/useComments'
 import CommentsPanel from '../../components/Comments/CommentsPanel'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidePane } from '../../contexts/SidePaneContext'
-import { isAttachmentHref, nameFromHref } from '../../utils/attachmentLinks'
+import { isAttachmentHref, isExternalHref, nameFromHref } from '../../utils/attachmentLinks'
+import { requestOpenExternal } from '../../desktop/openExternal'
 import { toast } from '../../utils/toast'
 import Skeleton from '../../components/Common/Skeleton'
 import { NOTE_COLORS } from '../../components/Notes/noteColors'
@@ -356,7 +357,9 @@ function NotePane({
     if (kind === 'sandbox') { handleOpenSandbox(el.getAttribute('data-link-id')); return }
     if (kind === 'bundle') { navigate(`/tasks?bundle=${el.getAttribute('data-link-id')}`); return }
     const href = el.getAttribute('data-href')
+    // Attachments first: a remote PDF is an attachment, not web browsing.
     if (href && isAttachmentHref(href)) { handleOpenPdf(href); return }
+    if (href && isExternalHref(href)) { requestOpenExternal(href); return }
     const target = (el.getAttribute('data-target') || '').trim()
     const found = (notes || []).find(n => (n.title || '').trim().toLowerCase() === target.toLowerCase())
     if (found) navigateToNote(found.id)

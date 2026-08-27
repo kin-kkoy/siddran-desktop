@@ -1,34 +1,46 @@
 import { Link, useNavigate } from 'react-router-dom'
 import styles from './Card.module.css'
-import { FaThumbtack, FaEllipsisV } from 'react-icons/fa'
+import { FaThumbtack, FaEllipsisV, FaRegFolderOpen } from 'react-icons/fa'
 import { HiOutlineTrash } from 'react-icons/hi'
 import { useState, useRef, useEffect, memo } from 'react'
+import { createPortal } from 'react-dom'
 import ConfirmModal from '../Common/ConfirmModal'
 import { MdChromeReaderMode } from 'react-icons/md'
 import { NOTE_COLORS, getNoteBackground, getSwatchColor } from './noteColors'
+import { canReveal, revealNote } from '../../desktop/reveal'
 
 function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggleSelect, toggleFavorite, updateColor }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPosition, setMenuPosition] = useState('below') // 'above' or 'below'
+  const [menuCoords, setMenuCoords] = useState(null)   // viewport position, see toggleMenu
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const menuRef = useRef(null)
   const buttonRef = useRef(null)
+  const floatingRef = useRef(null)   // the portalled menu, outside menuRef's subtree
   const navigate = useNavigate();
   const noteBackground = getNoteBackground(note.color)
 
   useEffect(() => {
+    // The menu is portalled to <body>, so it is NOT inside menuRef — check both or
+    // clicking your own menu closes it before the click lands.
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuOpen(false)
-      }
+      const inRow = menuRef.current?.contains(event.target)
+      const inMenu = floatingRef.current?.contains(event.target)
+      if (!inRow && !inMenu) setMenuOpen(false)
     }
+    // Positioned in viewport coordinates when it opened, so anything that moves the
+    // row out from under it has to dismiss it rather than leave it stranded.
+    const close = () => setMenuOpen(false)
 
     if (menuOpen) {
       document.addEventListener('mousedown', handleClickOutside)
+      window.addEventListener('scroll', close, true)
+      window.addEventListener('resize', close)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
     }
   }, [menuOpen])
 
@@ -62,13 +74,19 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
     e.stopPropagation()
 
     if (!menuOpen && buttonRef.current) {
-      // Calculate if there's enough space below
-      const buttonRect = buttonRef.current.getBoundingClientRect()
-      const spaceBelow = window.innerHeight - buttonRect.bottom
-      const menuHeight = 180 // Approximate menu height
-
-      // If not enough space below, show above
-      setMenuPosition(spaceBelow < menuHeight ? 'above' : 'below')
+      // A list row is `overflow: hidden` (the paged list gives every row a fixed
+      // height, so a two-line title can't grow it) — which also SLICES this menu.
+      // So it renders in a portal, positioned here in viewport coordinates from
+      // the button, rather than absolutely inside the clipped row.
+      const r = buttonRef.current.getBoundingClientRect()
+      const menuHeight = 220 // Approximate menu height
+      const above = window.innerHeight - r.bottom < menuHeight
+      setMenuCoords({
+        // Right-aligned to the button, like the in-flow menu was.
+        right: Math.max(8, window.innerWidth - r.right),
+        top: above ? undefined : r.bottom + 4,
+        bottom: above ? window.innerHeight - r.top + 4 : undefined,
+      })
     }
 
     setMenuOpen(!menuOpen)
@@ -78,6 +96,13 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
     e.preventDefault()
     e.stopPropagation()
     toggleFavorite(note.id)
+    setMenuOpen(false)
+  }
+
+  const handleReveal = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    revealNote(note)
     setMenuOpen(false)
   }
 
@@ -126,12 +151,24 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
                 <FaEllipsisV />
               </button>
 
-              {menuOpen && (
-                <div className={`${styles.menu} ${menuPosition === 'above' ? styles.menuAbove : styles.menuBelow}`}>
+              {menuOpen && menuCoords && createPortal(
+                <div
+                  className={`${styles.menu} ${styles.menuFloating}`}
+                  style={menuCoords}
+                  ref={floatingRef}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button onClick={handleFavoriteToggle} className={styles.menuItem}>
                     {note.is_favorite ? <FaThumbtack color="#fbbf24" /> : <FaThumbtack style={{ opacity: 0.45 }} />}
                     <span>{note.is_favorite ? 'Unpin' : 'Pin'}</span>
                   </button>
+
+                  {canReveal() && (
+                    <button onClick={handleReveal} className={styles.menuItem}>
+                      <FaRegFolderOpen style={{ opacity: 0.7 }} />
+                      <span>Show in file manager</span>
+                    </button>
+                  )}
 
                   <div className={styles.colorPicker}>
                     <span className={styles.colorLabel}>Color:</span>
@@ -147,7 +184,8 @@ function HorizontalCard({ note, deleteNote, isSelectionMode, isSelected, onToggl
                       ))}
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body,
               )}
             </div>
             

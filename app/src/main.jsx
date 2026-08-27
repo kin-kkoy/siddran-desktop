@@ -4,11 +4,14 @@ import './index.css'
 import App from './App.jsx'
 import { CalendarViewProvider } from './contexts/CalendarViewContext.jsx'
 import { installDropGuard } from './desktop/dropGuard'
+import { installLinkGuard } from './desktop/linkGuard'
 import { installTauriFileDrop } from './desktop/fileDrop'
 
-// Prevent a dragged-in file from navigating the whole webview to it, and wire
-// Tauri's native OS file-drop → embed into the note editor.
+// Prevent a dragged-in file — or a clicked external link — from navigating the
+// whole webview away from the app, and wire Tauri's native OS file-drop → embed
+// into the note editor.
 installDropGuard()
+installLinkGuard()
 installTauriFileDrop()
 
 createRoot(document.getElementById('root')).render(

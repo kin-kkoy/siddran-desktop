@@ -14,7 +14,7 @@ import { remarkHashtag } from './remarkHashtag'
 import { remarkWikilinks } from './remarkWikilinks'
 import { normalizeCalloutWithMap } from './calloutBlocks'
 import { resolveImageUrl } from '../../../utils/imageUpload'
-import { isAttachmentHref, hrefKind } from '../../../utils/attachmentLinks'
+import { isAttachmentHref, hrefKind, isExternalHref } from '../../../utils/attachmentLinks'
 import logger from '../../../utils/logger'
 
 // Markdown → HTML for the reading view. Reuses the same remark plugins the
@@ -72,17 +72,29 @@ function rehypeCinderImages() {
   }
 }
 
-// Route `.pdf` links to the side viewer instead of navigating the webview: tag the
-// anchor as an `rv-link` the reading view's click handler picks up, stash the
-// target in `data-href`, and drop the real `href` so a stray click can't navigate.
-function rehypeCinderPdfLinks() {
+// Take the real `href` off EVERY anchor and say what the link is instead.
+//
+// The reading view's click handler routes `.rv-link`; anything else falls through
+// to the browser, and for an `<a href>` that means the webview navigates and the
+// whole app — unsaved editor state included — is replaced by the page, with no way
+// back. Dropping the href is what makes that impossible by construction rather
+// than by remembering to bind a handler on every surface that renders a note.
+//
+// Three destinations, and the order matters: a REMOTE pdf is still an attachment
+// (isAttachmentHref only excludes remote *html*), so it keeps going to the side
+// viewer rather than out to the browser.
+function rehypeCinderLinks() {
   return (tree) => {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a' || !node.properties) return
       const href = String(node.properties.href || '')
-      if (!isAttachmentHref(href)) return
+      const kind = isAttachmentHref(href)
+        ? `rv-link-${hrefKind(href)}`   // side viewer
+        : isExternalHref(href)
+          ? 'rv-link-external'          // confirm, then the real browser
+          : 'rv-link-inert'             // a bare relative path — nothing to open
       const cls = Array.isArray(node.properties.className) ? node.properties.className : []
-      node.properties.className = [...cls, 'rv-link', `rv-link-${hrefKind(href)}`]
+      node.properties.className = [...cls, 'rv-link', kind]
       node.properties['data-href'] = href
       delete node.properties.href
     })
@@ -201,7 +213,7 @@ const processor = unified()
   .use(rehypeLineNumbers)
   .use(rehypeCallouts)
   .use(rehypeCinderImages)
-  .use(rehypeCinderPdfLinks)
+  .use(rehypeCinderLinks)
   .use(rehypeHighlight, { ignoreMissing: true })
   .use(rehypeStringify)
 

@@ -1,7 +1,7 @@
 import { EditorView, keymap } from '@codemirror/view'
 import { Facet, Prec } from '@codemirror/state'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
-import { isAttachmentHref } from '../../../utils/attachmentLinks'
+import { isAttachmentHref, isExternalHref } from '../../../utils/attachmentLinks'
 
 // Obsidian-style `[[wikilinks]]` between notes: a Lezer inline node, live-preview
 // rendering (in cm/livePreview.js), `[[`-autocomplete over existing note titles,
@@ -122,15 +122,22 @@ const clickHandler = EditorView.domEventHandlers({
     const cfg = view.state.facet(wikilinkConfig)
     const tag = event.target?.closest?.('.cm-hashtag')
     if (tag) { event.preventDefault(); cfg.searchTag?.(tag.getAttribute('data-tag')); return true }
-    // An attachment link (.pdf / local .html) opens in the side viewer instead of
-    // doing nothing. Predicate is shared with the reading view — see
-    // utils/attachmentLinks.js; this used to carry its own copy of the regex.
+    // Attachments (.pdf / local .html) and web links reach the same two
+    // destinations as in the reading view — the side viewer and the browser —
+    // through the same shared predicates (utils/attachmentLinks.js; this used to
+    // carry its own copy of the regex).
+    //
+    // But in WRITE mode they need Ctrl/Cmd. A plain click here is someone putting
+    // the caret in a link they are editing, and stealing it to open a viewer or a
+    // confirm makes the link's own text uneditable. Read mode has no caret to
+    // place, so there a plain click opens.
     const ext = event.target?.closest?.('.cm-external-link')
-    if (ext) {
+    if (ext && (event.ctrlKey || event.metaKey)) {
       const href = ext.getAttribute('data-href') || ''
       if (isAttachmentHref(href)) { event.preventDefault(); cfg.openAttachment?.(href); return true }
-      return false
+      if (isExternalHref(href)) { event.preventDefault(); cfg.openExternal?.(href); return true }
     }
+    if (ext) return false
     const el = event.target?.closest?.('.cm-internal-link')
     if (!el) return false
     event.preventDefault()

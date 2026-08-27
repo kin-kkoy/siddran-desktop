@@ -39,6 +39,7 @@ import { SidePaneProvider } from "./contexts/SidePaneContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
+import ExternalLinkGate from "./components/Common/ExternalLinkGate.jsx"
 import CommandPalette from "./components/CommandPalette/CommandPalette.jsx"
 import logger from "./utils/logger.js"
 import { toast } from "./utils/toast.js"
@@ -1053,6 +1054,9 @@ function App() {
 
         {/* Toast notifications (always available) */}
         <ToastContainer />
+
+        {/* The confirm shown before any link leaves the app for the browser */}
+        <ExternalLinkGate />
 
         </SidebarContext.Provider>
         </NoteTabsProvider>

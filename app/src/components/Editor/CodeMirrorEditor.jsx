@@ -26,6 +26,7 @@ import { useApi } from '../../contexts/ApiContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { readFolds, writeFolds } from '../../hooks/noteFoldsCache'
 import { setActiveEditor, clearActiveEditor } from './activeEditor'
+import { requestOpenExternal } from '../../desktop/openExternal'
 import styles from './CodeMirrorEditor.module.css'
 
 // Autosave cadence — a periodic save to the local Bag. In-session edits also live
@@ -269,6 +270,7 @@ function CodeMirrorEditor({
             openBundle: (id) => onOpenBundleRef.current?.(id),
             searchTag: (tag) => onSearchTagRef.current?.(tag),
             openAttachment: (href) => onOpenPdfRef.current?.(href),
+            openExternal: (href) => requestOpenExternal(href),
             tasks: () => tasksRef.current,
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,

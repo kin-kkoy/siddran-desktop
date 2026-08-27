@@ -1,0 +1,22 @@
+/* The confirm body renders inside a <p>, so these are inline elements made to
+   stack — a <div> here would be invalid HTML. */
+.lead {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.url {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  /* A long URL must wrap, not overflow or get clipped: being able to read all of
+     it is the whole point. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+}

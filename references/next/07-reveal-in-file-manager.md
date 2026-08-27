@@ -1,5 +1,17 @@
 # Show a note in the file manager
 
+> **DONE 2026-08-26.** Decided: pre-select the file (D-Bus `ShowItems`), falling back
+> to the containing folder; offered on note cards, sidebar note rows, Opened Notes
+> rows, and notebook headers. See `TODO.md`. Kept for the record.
+>
+> **One thing below is wrong.** "a reveal command … can reuse whatever path
+> confinement they already do" — the `bag_*` commands do **no** confinement at all;
+> they hand an absolute path straight to `std::fs` by design (`main.rs:13-15`, since a
+> Bag lives anywhere on disk). The confinement that does exist is in `serve_viewer` —
+> canonicalize, then `starts_with` the canonical Bag root — and that is what the reveal
+> command copies. Anything new that reaches the OS must bring its own check.
+
+
 **Area:** Misc · **Size:** small–medium
 
 ## What was seen

@@ -44,6 +44,15 @@ export const isAttachmentHref = (href) => {
   return kind !== null
 }
 
+// A link that belongs to the outside world rather than to the Bag — web browsing
+// or mail. This is the set Siddran hands to the system browser (behind a confirm),
+// and it is deliberately an ALLOWLIST: anything unrecognised is treated as inert
+// rather than passed to the OS, because the platform opener will happily act on a
+// `file:` URL or a .desktop launcher. Rust re-checks the scheme before opening —
+// this is the same rule stated on the side that decides what to offer.
+export const isExternalHref = (href) =>
+  isRemoteHref(href) || (typeof href === 'string' && /^mailto:/i.test(href.trim()))
+
 // Human-readable file name from a (possibly URL-encoded) link target.
 export function nameFromHref(href) {
   const kind = hrefKind(href)

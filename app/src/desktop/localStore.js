@@ -33,7 +33,7 @@ function resetDirty() { dirty.tasks = dirty.calendar = dirty.settings = dirty.no
 
 // ── (de)serialization ───────────────────────────────────────────────
 const RESERVED = /[\\/:*?"<>|]/g
-const safeName = (s) => (String(s || 'Untitled').replace(RESERVED, '_').replace(/\s+/g, ' ').trim().slice(0, 120)) || 'Untitled'
+export const safeName = (s) => (String(s || 'Untitled').replace(RESERVED, '_').replace(/\s+/g, ' ').trim().slice(0, 120)) || 'Untitled'
 
 function noteToMd(note) {
   const fm = [

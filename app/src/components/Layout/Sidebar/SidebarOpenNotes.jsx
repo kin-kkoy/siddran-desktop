@@ -1,4 +1,8 @@
+import { useState } from 'react'
 import { LuX } from 'react-icons/lu'
+import { FaRegFolderOpen } from 'react-icons/fa'
+import RowContextMenu from './RowContextMenu'
+import { canReveal, revealNote } from '../../../desktop/reveal'
 import { useNoteTabs } from '../../../contexts/NoteTabsContext'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
 import styles from './SidebarOpenNotes.module.css'
@@ -15,12 +19,30 @@ import styles from './SidebarOpenNotes.module.css'
 function SidebarOpenNotes({ isCollapsed, notes = [] }) {
   const { openTabs, activeId, activateTab, closeTab } = useNoteTabs()
   const split = useNoteSplit()
+  // Same right-click-to-reveal as the full note list. Hooks run before the
+  // collapsed early-return below, which is why this sits up here.
+  const [ctxMenu, setCtxMenu] = useState(null)
+
+  const noteFor = (id) => notes.find((x) => String(x.id) === String(id))
 
   if (isCollapsed) return null
 
-  const titleFor = (id) => {
-    const n = notes.find((x) => String(x.id) === String(id))
-    return (n?.title || '').trim() || 'Untitled'
+  const titleFor = (id) => (noteFor(id)?.title || '').trim() || 'Untitled'
+
+  const onContextMenu = (id) => (e) => {
+    if (!canReveal()) return
+    e.preventDefault()
+    e.stopPropagation()
+    const note = noteFor(id)
+    setCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [{
+        label: 'Show in file manager',
+        icon: <FaRegFolderOpen style={{ opacity: 0.7 }} />,
+        onSelect: () => revealNote(note),
+      }],
+    })
   }
 
   // Highlight both halves of a split view, matching how the tab strip lights
@@ -41,6 +63,7 @@ function SidebarOpenNotes({ isCollapsed, notes = [] }) {
               className={`${styles.item} ${isActive(id) ? styles.active : ''}`}
               onClick={() => activateTab(id)}
               onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(id) } }}
+              onContextMenu={onContextMenu(id)}
               title={titleFor(id)}
             >
               <span className={styles.title}>{titleFor(id)}</span>
@@ -57,6 +80,10 @@ function SidebarOpenNotes({ isCollapsed, notes = [] }) {
             </div>
           ))}
         </div>
+      )}
+
+      {ctxMenu && (
+        <RowContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />
       )}
     </div>
   )

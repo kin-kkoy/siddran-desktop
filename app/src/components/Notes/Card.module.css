@@ -352,6 +352,13 @@
   box-shadow: 0 4px 12px var(--shadow-color);
 }
 
+/* The list-view menu is portalled to <body> to escape the row's `overflow: hidden`,
+   so it is positioned in viewport coordinates instead of against .menuContainer. */
+.menuFloating {
+  position: fixed;   /* top/bottom/right come from an inline style, see toggleMenu */
+  z-index: 1000;
+}
+
 .menuAbove {
   bottom: calc(100% + 4px);
 }
