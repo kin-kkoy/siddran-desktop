@@ -90,5 +90,17 @@ here and add a line to `TODO.md`.
 - `06-external-links.md` — done 2026-08-26.
 - `07-reveal-in-file-manager.md` — done 2026-08-26.
 
+## Queued from the 2026-08-28 feature brief
+
+- `08-diagrams-in-notes.md` — flowcharts inside a note. **High priority**, large.
+  Its three design questions were asked and answered; the answers are recorded at
+  the top of the brief.
+- `09-table-calculations.md` — **declined 2026-08-28**, kept for the reasoning
+  and for the cheaper alternative it names.
+- `10-latex-math.md` — the investigation is DONE and the answer is "not
+  implemented at all". Kept because that result is worth not re-deriving.
+
+The single-line calculator from the same brief is built — see `TODO.md`.
+
 Both files are kept, marked done at the top, because each records a decision and a
 correction worth not rediscovering. Everything else in this directory is still open.
