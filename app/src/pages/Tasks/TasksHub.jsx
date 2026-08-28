@@ -72,7 +72,22 @@ function TasksHub({
     [viewMode],
   )
   const [sortDir, setSortDir] = useState('asc') // sorting direction (ascending/descending)
-  const [showCompleted, setShowCompleted] = useState(true)
+  // Completed tasks are hidden by default, and the choice is remembered. localStorage
+  // rather than a Settings row for the same reason as tasksViewMode above: this is
+  // device-local view state, and the toolbar button stays the only place to change it.
+  // Read in the initialiser so the first render already has the settled value — the
+  // masonry pass below depends on it, and a default-then-correct would reflow once
+  // on entry and read as a flicker.
+  const [showCompleted, setShowCompleted] = useState(
+    () => localStorage.getItem('tasksShowCompleted') === 'true',
+  )
+  const toggleShowCompleted = useCallback(() => {
+    setShowCompleted(prev => {
+      const next = !prev
+      try { localStorage.setItem('tasksShowCompleted', String(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
   const [deadlineFilter, setDeadlineFilter] = useState('all')
   const [deadlineRange, setDeadlineRange] = useState('all')
   const [isSelectionMode, setIsSelectionMode] = useState(false)
@@ -625,7 +640,7 @@ function TasksHub({
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             {/* Filter options */}
             <button
-              onClick={() => setShowCompleted(prev => !prev)}
+              onClick={toggleShowCompleted}
               className={styles.toggleBtn}
             >
               {showCompleted ? 'Hide completed' : 'Show completed'}

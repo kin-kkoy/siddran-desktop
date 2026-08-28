@@ -1,5 +1,10 @@
 # Completed tasks hidden by default, and the setting should stick
 
+**Done 2026-08-28.** Persisted in `localStorage` under `tasksShowCompleted` (the
+user chose device-local over a Settings row), read in the `useState` initialiser so
+the masonry pass sees the settled value. Kanban shares the same `filteredTasks`
+chain, so no separate filter was needed.
+
 **Area:** Tasks · **Size:** small
 
 ## What was seen
