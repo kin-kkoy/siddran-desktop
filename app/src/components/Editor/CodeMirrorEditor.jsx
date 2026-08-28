@@ -13,6 +13,9 @@ import { codeCopy } from './cm/codeCopy'
 import { imageExtensions } from './cm/imagePaste'
 import { wikilinks, wikilinkMarkdownExtension, resolveNote } from './cm/wikilinks'
 import { calcGhostText } from './cm/calc'
+import { diagrams } from './cm/diagrams'
+import DiagramEditorOverlay from '../Diagram/DiagramEditorOverlay'
+import { diagramFence } from '../../utils/diagramBlock'
 import { obsidianSyntax } from './cm/syntaxNodes'
 import { headingFold, foldedLineSet, applyFolds } from './cm/fold'
 import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, anchorFromRange, commentState } from './cm/comments'
@@ -115,6 +118,10 @@ function CodeMirrorEditor({
   const onCommentClickRef = useRef(onCommentClick)
   const tasksRef = useRef(tasks)
   const bundlesRef = useRef(bundles)
+  // Open diagram-editing session: { doc, replace } handed over by cm/diagrams.js.
+  const [diagramEdit, setDiagramEdit] = useState(null)
+  const onDiagramEditRef = useRef(null)
+  onDiagramEditRef.current = setDiagramEdit
   const sandboxesRef = useRef(sandboxes)
   useEffect(() => { notesRef.current = notes }, [notes])
   useEffect(() => { onNavigateRef.current = onNavigateNote }, [onNavigateNote])
@@ -256,6 +263,9 @@ function CodeMirrorEditor({
           livePreview,
           liveTables,
           tableTypingGuard,
+          // Per-instance config: split view mounts two editors, and each must
+          // open the overlay for its OWN diagram.
+          diagrams({ onEdit: (payload) => onDiagramEditRef.current?.(payload) }),
           tableKeymap,
           collapseTableGap,
           searchExtension,
@@ -584,6 +594,16 @@ function CodeMirrorEditor({
       <div ref={hostRef} className={styles.editorRoot} style={readMode ? { display: 'none' } : undefined} />
       {readMode && <ReadingView markdown={readSnapshot} noteId={noteId} rememberFolds={rememberFolds} onSearchTag={onSearchTag} onOpenLink={onOpenLink} onCheckboxToggle={handleCheckboxToggle} comments={comments} onCommentClick={(id) => onCommentClickRef.current?.(id)} />}
       {!readMode && !interfaceMode && showDock && <EditorDock viewRef={viewRef} sandboxes={sandboxes} onComment={onComment} />}
+      {diagramEdit && (
+        <DiagramEditorOverlay
+          doc={diagramEdit.doc}
+          onSave={(items) => {
+            diagramEdit.replace(diagramFence({ items }))
+            setDiagramEdit(null)
+          }}
+          onCancel={() => setDiagramEdit(null)}
+        />
+      )}
     </div>
   )
 }

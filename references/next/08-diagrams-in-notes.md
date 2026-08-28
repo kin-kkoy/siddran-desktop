@@ -1,5 +1,11 @@
 # Flowcharts and diagrams inside a note
 
+**Done 2026-08-28.** Built as described below. The display path renders SVG via a
+recording ctx over `shapes/registry.js`; the overlay editor reuses `SandboxCanvas`
+with `useDiagramItems` standing in for a board. Notes on what the build actually
+hit are in `TODO.md`. The `exportImage.js` card limitation and the reading-view
+`dangerouslySetInnerHTML` hazard both held up exactly as the brief predicted.
+
 **Area:** Notes · **Size:** large
 
 ## What was seen

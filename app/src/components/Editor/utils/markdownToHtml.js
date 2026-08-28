@@ -14,6 +14,8 @@ import { remarkHashtag } from './remarkHashtag'
 import { remarkWikilinks } from './remarkWikilinks'
 import { normalizeCalloutWithMap } from './calloutBlocks'
 import { resolveImageUrl } from '../../../utils/imageUpload'
+import { parseDiagram, DIAGRAM_LANG } from '../../../utils/diagramBlock'
+import { diagramToSvg } from '../../../utils/diagramSvg'
 import { isAttachmentHref, hrefKind, isExternalHref } from '../../../utils/attachmentLinks'
 import logger from '../../../utils/logger'
 
@@ -24,7 +26,36 @@ import logger from '../../../utils/logger'
 // ReadingView). Raw HTML other than the handled spoiler/underline nodes is
 // dropped (safe default), since these are the user's own notes.
 
+// An <svg> DOM tree → hast, so a diagram can be handed to rehype as real nodes
+// rather than raw HTML. The pipeline drops raw HTML by design (see the note
+// above), and carving an exception for it would open that door for note content
+// too — this keeps the safe default intact.
+function domToHast(node) {
+  if (node.nodeType === 3) return { type: 'text', value: node.nodeValue }
+  if (node.nodeType !== 1) return null
+  const properties = {}
+  for (const attr of node.attributes) properties[attr.name] = attr.value
+  return {
+    type: 'element',
+    tagName: node.tagName,
+    properties,
+    children: Array.from(node.childNodes).map(domToHast).filter(Boolean),
+  }
+}
+
 const handlers = {
+  // A `siddran-diagram` fence becomes the picture it encodes. remarkDiagrams
+  // below marks the node; this turns it into SVG.
+  diagram(state, node) {
+    const svg = node.items ? diagramToSvg(node.items) : null
+    const inner = svg ? domToHast(svg) : null
+    return {
+      type: 'element',
+      tagName: 'figure',
+      properties: { className: ['rv-diagram'] },
+      children: inner ? [inner] : [],
+    }
+  },
   spoiler(state, node) {
     return { type: 'element', tagName: 'span', properties: { className: ['rv-spoiler'] }, children: state.all(node) }
   },
@@ -195,6 +226,21 @@ function preserveIndent(md) {
   }).join('\n')
 }
 
+// Retag `siddran-diagram` fences before remark-rehype sees them, so they are
+// never rendered as a code block. An unparseable payload is left alone: it stays
+// a normal code block, which is the same escape hatch the editor gives.
+function remarkDiagrams() {
+  return (tree) => {
+    visit(tree, 'code', (node) => {
+      if ((node.lang || '').toLowerCase() !== DIAGRAM_LANG) return
+      const doc = parseDiagram(node.value)
+      if (!doc) return
+      node.type = 'diagram'
+      node.items = doc.items
+    })
+  }
+}
+
 const processor = unified()
   .use(remarkParse)
   .use(remarkDisableSetext)
@@ -209,6 +255,7 @@ const processor = unified()
   .use(remarkWikilinks)
   .use(remarkHighlight)
   .use(remarkHashtag)
+  .use(remarkDiagrams)
   .use(remarkRehype, { handlers })
   .use(rehypeLineNumbers)
   .use(rehypeCallouts)

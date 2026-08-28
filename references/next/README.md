@@ -84,6 +84,7 @@ here and add a line to `TODO.md`.
 
 - `01-pane-cycling.md` — done 2026-08-27.
 - `02-split-lock.md` — done 2026-08-27.
+- `08-diagrams-in-notes.md` — done 2026-08-28.
 - `03-sidebar-density.md` — done 2026-08-28.
 - `04-sidebar-drag-to-notebook.md` — done 2026-08-28.
 - `05-hide-completed-default.md` — done 2026-08-28.
@@ -92,9 +93,8 @@ here and add a line to `TODO.md`.
 
 ## Queued from the 2026-08-28 feature brief
 
-- `08-diagrams-in-notes.md` — flowcharts inside a note. **High priority**, large.
-  Its three design questions were asked and answered; the answers are recorded at
-  the top of the brief.
+- `08-diagrams-in-notes.md` — **done 2026-08-28**. Kept for the design decisions
+  and the code-reading at the top, both of which shaped the build.
 - `09-table-calculations.md` — **declined 2026-08-28**, kept for the reasoning
   and for the cheaper alternative it names.
 - `10-latex-math.md` — the investigation is DONE and the answer is "not

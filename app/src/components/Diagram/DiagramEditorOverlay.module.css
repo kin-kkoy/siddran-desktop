@@ -1,0 +1,117 @@
+/* Diagram editor overlay. Sits above the note, deliberately not full-bleed: the
+   note stays visible around the edges so it still reads as "editing a thing in
+   this note" rather than "you are now in the Sandbox". */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(8, 8, 14, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  height: min(760px, 100%);
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-primary);
+  box-shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.panel:focus { outline: none; }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.tools { display: flex; align-items: center; gap: 4px; }
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border-strong);
+}
+
+.toolBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.toolBtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.toolBtn:disabled { opacity: 0.35; cursor: default; }
+.toolActive { background: var(--bg-hover); color: var(--accent-warning); }
+
+.actions { display: flex; align-items: center; gap: 8px; }
+
+/* Connectors are the one gesture that is not discoverable from a toolbar — there
+   is no connector TOOL, you drag from a dot on a selected shape's edge. Saying so
+   costs one line and saves the feature looking half-built. */
+.tip {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.cancel, .done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+}
+
+.cancel { background: transparent; color: var(--text-secondary); }
+.cancel:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.done {
+  background: var(--accent-warning);
+  border-color: var(--accent-warning);
+  color: #23212e;
+  font-weight: 600;
+}
+.done:hover { filter: brightness(1.08); }
+
+/* The canvas fills the rest. position:relative so the selection overlay, the
+   context toolbar and the shape text editor — all absolutely positioned — anchor
+   to the canvas rather than the viewport. */
+.canvasWrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .backdrop { padding: 0; }
+  .panel { height: 100%; border-radius: 0; }
+  .tip { display: none; }
+}

@@ -310,6 +310,57 @@ User's idea, to design & build AFTER the table work and the current desktop back
   details (how pagination maps to a continuous markdown doc, where the editor caret
   goes across page breaks, print/PDF interplay) before building.
 
+### Flowcharts and diagrams inside a note (2026-08-28)
+
+From `references/next/08-diagrams-in-notes.md`. The three design questions were
+asked up front: the diagram lives in a fenced block in the `.md`, editing happens
+in an overlay reusing the Sandbox canvas, and the tool set is the flowchart subset.
+
+- [x] **A ```siddran-diagram fence holds the drawing**, so the note stays ONE
+  self-contained file — copy or move the `.md` and the diagram travels, and nothing
+  can be orphaned by deleting a board. Items are stored in the Sandbox's own item
+  shape rather than a prettier private schema, because the overlay editor IS the
+  Sandbox canvas and a translation layer would be two more places to disagree.
+- [x] **Rendered as SVG, in the editor and the reading view.** `ReadingView.jsx`
+  renders notes through `dangerouslySetInnerHTML` and already warns that a React
+  re-render wipes DOM mutations underneath it, so mounting Konva roots there fights
+  the architecture. An `<svg>` does not, and comes along in the PDF export free.
+- [x] **The shape geometry is NOT written twice.** `shapes/registry.js` draws every
+  shape by calling moveTo/lineTo/arcTo/ellipse/closePath on a canvas context, so
+  `diagramSvg.js` hands it a recorder that emits an SVG path instead. One shape
+  vocabulary, two backends — a shape added to the Sandbox appears in notes for free.
+  Arcs are flattened to short segments rather than converted to SVG arc commands:
+  invisible at note scale, and far harder to get subtly wrong.
+- [x] **Editing reuses the real canvas.** `useDiagramItems` is an in-memory stand-in
+  for `useSandbox(id)` exposing the same add/update/remove/getItemById contract, so
+  `SandboxCanvas`, `SelectionOverlay`, `ContextToolbar`, connectors and undo never
+  learn there is no board behind them.
+- [x] **The flowchart subset only** — shapes, connectors, text-in-shape. The Sandbox's
+  text TOOL is deliberately absent: it places a DOM text card, which is outside the
+  subset and which the SVG renderer cannot draw, so offering it would let a note hold
+  a diagram that renders with pieces missing. Enter (or double-click) labels a shape.
+- [x] **Insert from the editor dock**, which creates an empty block reading "Empty
+  diagram — click to edit" — creating and filling stay two deliberate steps.
+- [x] **`view.focus()` after writing back.** The editor persists on blur, on unmount
+  and on a 2-minute interval; for typing that is fine because you are focused there
+  and a blur always comes. The overlay took focus away BEFORE the change existed, so
+  without this an edit could sit unsaved until the interval fired.
+- [x] **The widget's `ignoreEvent()` returns false**, unlike the table widget's. A
+  table attaches its own listeners and wants CM out; this one is handled by
+  `domEventHandlers`, and those never see an event the widget told CM to ignore.
+- [x] **`ShapePicker` raised to z-index 1300** — it portals to `document.body`, so
+  inside the overlay it is a SIBLING of it, and at 50 it rendered behind the panel
+  that opened it.
+- [x] **Cylinder shape fixed** (`registry.js`) — the two halves of the top rim were
+  swapped, so the silhouette followed the rim's NEAR edge, which dips into the body.
+  That is what made it look chopped flat. One fix, three surfaces: the Sandbox
+  canvas, the shape-picker thumbnail and note diagrams all draw from the registry.
+- [x] **25 tests** over the fence format and the path recorder (`diagramBlock.test.js`,
+  `diagramSvg.test.js`). The DOM half has no unit tests — this repo's vitest runs in
+  the node environment with no jsdom — so it was driven by hand in the app instead:
+  insert, draw two shapes, connect them, label one, move a shape and watch the
+  connector re-route, Done, Cancel-discards, and the result surviving to disk.
+
 ### Inline calculation suggestions in the editor (2026-08-28)
 
 Write a sum, end the line with `=`, and the result is offered as a completion.

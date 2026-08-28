@@ -1,3 +1,5 @@
+import { diagramFence, emptyDiagram } from '../../../utils/diagramBlock'
+
 // Shared inline-formatting helpers for the note editor. Used by both the dock
 // buttons (EditorDock.jsx) and the keyboard shortcuts (formattingKeymap below),
 // so the two stay in lockstep — a button and its shortcut wrap identically.
@@ -90,6 +92,23 @@ export function insertTable(view) {
     changes: { from: line.to, insert },
     // Caret on the line after the table (past its blank-line separator). The table is
     // atomic + click-to-edit, so we don't (and can't) drop the caret into a cell.
+    selection: { anchor: line.to + insert.length },
+  })
+  view.focus()
+}
+
+// Insert an empty diagram block. The widget renders it as "Empty diagram — click
+// to edit", so creating one and filling it in stay two deliberate steps rather
+// than a modal opening on top of you the moment you pick the menu item.
+export function insertDiagram(view) {
+  const { from } = view.state.selection.main
+  const line = view.state.doc.lineAt(from)
+  const lead = line.text.length ? '\n' : ''
+  // Trailing blank line for the same reason insertTable has one: it gives text
+  // written after the block somewhere to land that is not inside the fence.
+  const insert = lead + diagramFence(emptyDiagram()) + '\n\n'
+  view.dispatch({
+    changes: { from: line.to, insert },
     selection: { anchor: line.to + insert.length },
   })
   view.focus()

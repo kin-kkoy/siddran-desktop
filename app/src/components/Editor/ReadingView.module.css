@@ -395,3 +395,15 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Embedded diagram (utils/diagramSvg.js). The figure is a plain container — the
+   SVG carries its own sizing and caps its own height, so a tall diagram cannot
+   push the rest of the note off the page. */
+:global(.rv-diagram) {
+  margin: 1em 0;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  overflow-x: auto;
+}

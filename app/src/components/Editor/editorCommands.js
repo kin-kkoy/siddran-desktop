@@ -11,10 +11,10 @@ import {
   FaLink, FaListUl, FaListOl, FaQuoteLeft, FaTable,
 } from 'react-icons/fa'
 import { MdCheckBox, MdHorizontalRule } from 'react-icons/md'
-import { LuEyeOff, LuHighlighter, LuStickyNote, LuListTodo, LuShapes } from 'react-icons/lu'
+import { LuEyeOff, LuHighlighter, LuStickyNote, LuListTodo, LuShapes, LuWorkflow } from 'react-icons/lu'
 import {
   wrapSelection, toggleLinePrefix, cycleHeading, insertHR, insertLink,
-  insertWikilink, insertTable,
+  insertWikilink, insertTable, insertDiagram,
 } from './cm/formatting'
 
 // Formatting + insert commands, in dock order.
@@ -34,6 +34,9 @@ export const EDITOR_COMMANDS = [
   { id: 'quote', title: 'Blockquote', keywords: 'quote', icon: FaQuoteLeft, run: v => toggleLinePrefix(v, '> ') },
   { id: 'table', title: 'Insert table', keywords: 'grid rows columns', icon: FaTable, run: insertTable },
   { id: 'hr', title: 'Horizontal rule', keywords: 'divider line', icon: MdHorizontalRule, run: insertHR },
+  // LuWorkflow, not LuShapes: LuShapes is the sandbox wikilink's icon further along
+  // the same dock, and two identical glyphs in one row read as a duplicate button.
+  { id: 'diagram', title: 'Insert diagram', keywords: 'flowchart chart shapes connector diagram graph', icon: LuWorkflow, run: insertDiagram },
 ]
 
 // Wikilink commands (the dock keeps its own inline type-picker dropdown; the palette

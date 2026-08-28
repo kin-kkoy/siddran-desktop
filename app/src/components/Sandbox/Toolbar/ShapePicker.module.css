@@ -2,7 +2,11 @@
  * Two-level: quick menu (4 shapes + "More") → grid showing all ~16. */
 .panel {
     position: fixed;
-    z-index: 50;
+    /* Above a modal overlay (1200), because the picker is used from inside one:
+       the note editor's diagram overlay reuses this component, and it portals to
+       document.body, so it is a SIBLING of that overlay rather than a child of
+       it. At 50 it rendered behind the very panel that opened it. */
+    z-index: 1300;
     display: flex;
     flex-direction: column;
     min-width: 160px;

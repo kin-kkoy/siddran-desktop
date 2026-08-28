@@ -398,6 +398,38 @@ export const cinderTheme = EditorView.theme({
   // styling (ReadingView.module.css) so a rendered table looks the same in both.
   '.cm-live-table': { margin: '0.4em 0' },
 
+  /* Embedded diagram (cm/diagrams.js). A quiet frame: the drawing is the
+     content, so the container should not compete with it. */
+  '.cm-diagram-block': {
+    position: 'relative',
+    margin: '0.6em 0',
+    padding: '10px',
+    borderRadius: '8px',
+    border: '1px solid var(--border-subtle, var(--border-strong))',
+    background: 'var(--bg-surface)',
+    cursor: 'pointer',
+  },
+  '.cm-diagram-block:hover': { borderColor: 'var(--accent-blue)' },
+  '.cm-diagram-empty': {
+    padding: '18px',
+    textAlign: 'center',
+    color: 'var(--text-dim)',
+    fontSize: '13px',
+  },
+  /* Only on hover: a permanent label on every diagram would be noise in a note
+     that has several. */
+  '.cm-diagram-hint': {
+    position: 'absolute',
+    top: '6px',
+    right: '8px',
+    fontSize: '11px',
+    color: 'var(--text-dim)',
+    opacity: 0,
+    transition: 'opacity 0.15s',
+    pointerEvents: 'none',
+  },
+  '.cm-diagram-block:hover .cm-diagram-hint': { opacity: 1 },
+
   /* Inline calculation result (cm/calc.js). Decoration, not document text — it
      has to read as clearly not-yet-yours, so it is dimmer than the faintest real
      text and never bold/italic whatever the line around it is doing. */
