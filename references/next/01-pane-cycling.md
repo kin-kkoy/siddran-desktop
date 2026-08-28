@@ -1,5 +1,21 @@
 # Move focus between panes in split view
 
+**DONE 2026-08-27.** Binding is **Ctrl+1 = left, Ctrl+2 = right** — direct rather
+than cycling, because there are only ever two sides, so pressing the same key
+twice is idempotent instead of bouncing you back. Ctrl+Alt+←/→ was rejected: most
+Linux desktops grab it for workspace switching before the app ever sees it.
+
+"Focus" resolved to **the caret where there is one**. CodeMirror keeps the
+selection in the `EditorView`, so `view.focus()` alone returns you to where you
+were on that side — no caret bookkeeping was needed. A PDF / HTML / sandbox /
+picker pane has no caret, so its container is focused instead and
+`onFocusCapture` moves the ring. With one column the handler returns *without*
+`preventDefault`, leaving the combo free.
+
+**Known limit, by design:** the binding does not fire from inside a rendered
+table cell — `cm/tables.js:146` calls `stopPropagation()` so the cell editor can
+own its keys. Not worth fighting.
+
 **Area:** Notes · **Size:** small
 
 ## What was seen

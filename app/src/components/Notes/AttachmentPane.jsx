@@ -9,6 +9,7 @@ import { isTrusted, setTrusted, setDismissed, isDismissed, shouldPrompt, allowed
 import { useSettings } from '../../contexts/SettingsContext'
 import { toast } from '../../utils/toast'
 import TrustPromptModal from './TrustPromptModal'
+import PaneLockButton from './PaneLockButton'
 import styles from './AttachmentPane.module.css'
 
 // Right-column attachment viewer.
@@ -248,6 +249,9 @@ export default function AttachmentPane({ file, onClose }) {
         )}
 
         <span className={styles.spacer} />
+
+        {/* Pane lock — unrelated to the trust padlock above, hence the pin. */}
+        <PaneLockButton />
 
         <button className={styles.closeBtn} onClick={onClose} title="Close" aria-label="Close attachment">
           <LuX size={16} />

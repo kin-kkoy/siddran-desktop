@@ -1,5 +1,32 @@
 # A lock for the split / side pane
 
+**DONE 2026-08-27.** Answers to the open questions, and two things worth not
+rediscovering:
+
+- **No new storage key.** `sessionRouteCache` already kept `panes: { noteId ->
+  snapshot }`, so the lock became one extra field — `locked: true` — on the
+  existing snapshot, inheriting Bag scoping, `normalize` and eviction for free.
+  `setPaneFor` now evicts **unlocked** entries first: an unlocked pane is passive
+  memory, but a lock was set deliberately and dropping it after twenty other
+  notes would read as the lock having quietly failed.
+- **The lock could not live in either context.** It has to cover
+  `NoteSplitContext` *and* `SidePaneContext`, and `SidePaneProvider` is nested
+  inside `NoteSplitProvider`. Hence `contexts/PaneLockContext.jsx`, mounted
+  outside all three and deliberately dumb — it holds a note id and nothing else,
+  because the pane contents already live in the `panes` map.
+- **The real work was a new effect, not the restore.** `RightPaneMemory`'s
+  restore is guarded by `settledRef` and runs once per mount, and switching notes
+  in-session does *not* remount `NotePage` — so nothing reacted to a note change.
+  A second effect keyed on `noteId` does the actual locking.
+- **Decided:** unlock leaves the pane open and reverts it to following you (a
+  policy change, not a close). Two locked notes each show their own. A locked
+  pane is written to storage even when `rememberNoteState` is off — locking is an
+  explicit act, and the one thing it exists to survive is a relaunch.
+- **A pin, not a padlock.** `AttachmentPane`'s header already has a
+  `LuLock`/`LuLockOpen` button meaning something entirely different (HTML page
+  trust). Two padlocks in one header would be actively confusing, so the pane
+  lock is `LuPin`/`LuPinOff` and keeps the word "lock" in its tooltip.
+
 **Area:** Notes · **Size:** medium
 
 ## What was seen

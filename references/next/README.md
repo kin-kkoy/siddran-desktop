@@ -82,6 +82,8 @@ here and add a line to `TODO.md`.
 
 ## Done
 
+- `01-pane-cycling.md` — done 2026-08-27.
+- `02-split-lock.md` — done 2026-08-27.
 - `06-external-links.md` — done 2026-08-26.
 - `07-reveal-in-file-manager.md` — done 2026-08-26.
 

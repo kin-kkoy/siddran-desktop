@@ -165,6 +165,46 @@ to hand anything to the OS — so they were done together.
 - [x] **Fails loudly** — a note whose file moved or was deleted outside the app toasts;
   a note not yet flushed to disk (1.5 s debounce) says so rather than doing nothing.
 
+### Split-view panes: keyboard focus + a lock (2026-08-27)
+
+Both from `references/next/` (01 + 02); they touch the same three contexts and the
+same `NotePage` layout ladder, so they were done together.
+
+- [x] **Ctrl+1 / Ctrl+2 move focus between the two columns** (`01-pane-cycling.md`) —
+  direct, not cycling: there are only ever two sides, so pressing the same key twice
+  is idempotent rather than bouncing you back. Ctrl+Alt+←/→ was rejected because most
+  Linux desktops grab it for workspace switching before the app sees it.
+- [x] **The caret comes back with you** — CodeMirror keeps the selection in the
+  `EditorView`, so `view.focus()` alone returns you to where you were on that side.
+  A PDF / HTML / sandbox / picker pane has no caret, so its container is focused and
+  `onFocusCapture` moves the ring. `leftViewRef` is now passed in every layout, not
+  just the split branch. ⚠️ Does not fire from inside a rendered table cell — the
+  cell editor calls `stopPropagation()` to own its keys (`cm/tables.js`).
+- [x] **Pane lock, off by default** (`02-split-lock.md`) — unlocked is the original
+  behaviour (the right column is global and follows you); locked binds it to the note
+  it was opened from, so it appears there and nowhere else.
+- [x] **One extra field, no new storage key** — `sessionRouteCache` already kept
+  `panes: { noteId -> snapshot }`, so the lock is `locked: true` on the existing
+  snapshot and inherits Bag scoping, normalisation and eviction. `setPaneFor` now
+  evicts **unlocked** entries first: a lock was set deliberately, and losing it after
+  twenty other notes would look like it had quietly failed.
+- [x] **`PaneLockContext`, mounted outside all three panes** — the lock has to cover
+  both `NoteSplitContext` and `SidePaneContext`, and SidePane is nested inside
+  NoteSplit, so it could not live in either. Holds a note id and nothing else.
+- [x] **The lock is a new effect, not the restore** — `RightPaneMemory`'s restore is
+  guarded by `settledRef` and runs once per mount, and switching notes in-session
+  doesn't remount `NotePage`, so nothing reacted to a note change. A second effect
+  keyed on `noteId` reopens an arriving note's locked pane (via the existing
+  `sidePane.restore` bypass, no confirm modal) and clears a locked pane you leave.
+- [x] **Unlock keeps the pane open** and reverts it to following you — a change of
+  policy, not a close. Two locked notes each show their own.
+- [x] **Locks persist even with `rememberNoteState` off** — deliberate: locking is an
+  explicit act, and the one thing it exists to survive is a relaunch.
+- [x] **A pin, not a padlock** — `AttachmentPane`'s header already has a lock icon
+  meaning HTML page *trust*; two padlocks there would be confusing. `PaneLockButton`
+  uses `LuPin`/`LuPinOff` and keeps the word "lock" in its tooltip. It appears on the
+  split tab, the sandbox split, the attachment header and the half-sandbox dock.
+
 ### Reload Bag (2026-08-27)
 - [x] **Profile menu ▸ Reload Bag** — re-reads the Bag folder without restarting, so a
   note renamed/edited/added from outside (file manager, sync tool, hand-edited `.md`)

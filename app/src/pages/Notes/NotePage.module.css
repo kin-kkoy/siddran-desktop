@@ -529,3 +529,12 @@
     filter: brightness(1.15);
     background: unset; /* keep the note colour rather than the generic hover fill */
 }
+
+/* Pane lock, floating beside the right column's close button (which sits at
+   top/right 16px). Same row, one slot to its left. */
+.paneLockFloat {
+    position: absolute;
+    top: 18px;
+    right: 48px;
+    z-index: 100;
+}

@@ -101,6 +101,12 @@ export const paneFor = (session, noteId) =>
 // Set (or clear) one note's pane, evicting the oldest entry past the cap. Returns
 // the session for chaining. Keyed per note so arriving at a different note can
 // never wipe the pane you left open on this one.
+//
+// Eviction takes UNLOCKED entries first. An unlocked pane is passive memory and
+// losing it costs nothing, but a locked one was pinned deliberately — dropping
+// it because twenty other notes happened to be visited since would look like the
+// lock had quietly failed. Locks only fall off once there is nothing else left
+// to drop.
 export function setPaneFor(session, noteId, pane) {
   if (noteId == null) return session
   const key = String(noteId)
@@ -108,8 +114,14 @@ export function setPaneFor(session, noteId, pane) {
   delete session.panes[key]                 // re-insert so key order tracks recency
   if (pane) session.panes[key] = pane
   const keys = Object.keys(session.panes)
-  for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_REMEMBERED_PANES))) {
+  let over = Math.max(0, keys.length - MAX_REMEMBERED_PANES)
+  if (over === 0) return session
+  // Oldest-first within each group: unlocked, then locked as a last resort.
+  for (const stale of [...keys.filter(k => !session.panes[k]?.locked),
+                       ...keys.filter(k => session.panes[k]?.locked)]) {
+    if (over === 0) break
     delete session.panes[stale]
+    over -= 1
   }
   return session
 }

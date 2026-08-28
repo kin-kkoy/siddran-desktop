@@ -36,6 +36,7 @@ import { ApiProvider } from "./contexts/ApiContext.jsx"
 import { SandboxViewProvider } from "./contexts/SandboxViewContext.jsx"
 import { NoteSplitProvider } from "./contexts/NoteSplitContext.jsx"
 import { SidePaneProvider } from "./contexts/SidePaneContext.jsx"
+import { PaneLockProvider } from "./contexts/PaneLockContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
@@ -903,6 +904,7 @@ function App() {
 
     <SettingsProvider authFetch={authFetch} API={API} isAuthed={unlocked}>
     <ApiProvider authFetch={authFetch} API={API} isAuthed={unlocked}>
+    <PaneLockProvider>
     <SandboxViewProvider>
     <NoteSplitProvider>
     <SidePaneProvider>
@@ -1091,6 +1093,7 @@ function App() {
     </SidePaneProvider>
     </NoteSplitProvider>
     </SandboxViewProvider>
+    </PaneLockProvider>
     </ApiProvider>
     </SettingsProvider>
 

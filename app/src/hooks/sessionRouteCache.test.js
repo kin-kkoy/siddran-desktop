@@ -224,4 +224,41 @@ describe('per-note pane memory', () => {
     expect(Object.keys(s.panes)).toHaveLength(0)
     expect(paneFor(s, null)).toBeNull()
   })
+
+  // The lock rides along on the existing snapshot rather than in a key of its
+  // own, so it has to survive normalize() on the way back out.
+  it('round-trips the locked flag through storage', () => {
+    const s = emptySession()
+    setPaneFor(s, '1001', { ...pdf(1), locked: true })
+    writeSession('/bags/A', s)
+    expect(paneFor(readSession('/bags/A'), '1001').locked).toBe(true)
+  })
+
+  it('leaves an unlocked pane unlocked', () => {
+    const s = emptySession()
+    setPaneFor(s, '1001', pdf(1))
+    writeSession('/bags/A', s)
+    expect(paneFor(readSession('/bags/A'), '1001').locked).toBeFalsy()
+  })
+
+  // A lock was set deliberately; an unlocked pane is passive memory. Visiting
+  // twenty other notes must not quietly undo the lock.
+  it('evicts unlocked panes before locked ones', () => {
+    const s = emptySession()
+    setPaneFor(s, 'pinned', { ...pdf(0), locked: true })
+    for (let i = 0; i < MAX_REMEMBERED_PANES + 5; i++) setPaneFor(s, String(i), pdf(i))
+    expect(Object.keys(s.panes)).toHaveLength(MAX_REMEMBERED_PANES)
+    expect(paneFor(s, 'pinned')).not.toBeNull()
+    expect(paneFor(s, 'pinned').locked).toBe(true)
+  })
+
+  it('evicts locked panes only once nothing else is left to drop', () => {
+    const s = emptySession()
+    for (let i = 0; i < MAX_REMEMBERED_PANES + 3; i++) {
+      setPaneFor(s, String(i), { ...pdf(i), locked: true })
+    }
+    expect(Object.keys(s.panes)).toHaveLength(MAX_REMEMBERED_PANES)
+    expect(paneFor(s, '0')).toBeNull()                                   // oldest lock went
+    expect(paneFor(s, String(MAX_REMEMBERED_PANES + 2))).not.toBeNull()  // newest kept
+  })
 })

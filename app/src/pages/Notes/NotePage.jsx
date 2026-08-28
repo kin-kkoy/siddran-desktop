@@ -7,6 +7,7 @@ import NoteTabBar from '../../components/Notes/NoteTabBar'
 import SandboxDock from '../../components/Sandbox/Dock/SandboxDock'
 import EditorDock from '../../components/Editor/EditorDock'
 import AttachmentPane from '../../components/Notes/AttachmentPane'
+import PaneLockButton from '../../components/Notes/PaneLockButton'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useSidePane } from '../../contexts/SidePaneContext'
@@ -113,6 +114,45 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
     ref.current?.()
   }, [])
 
+  // Ctrl+1 / Ctrl+2 move focus between the two columns. Direct rather than
+  // cycling: there are only ever two sides, so pressing the same key twice is
+  // idempotent instead of bouncing you back and forth.
+  //
+  // A note pane gets its CARET back — CodeMirror keeps the selection in the
+  // EditorView, so focus() alone puts you where you left off on that side, with
+  // no position bookkeeping of our own. A PDF / HTML / sandbox / picker pane has
+  // no caret at all, so we focus its container instead and let onFocusCapture
+  // move the ring. The container refs are the fallback for both sides.
+  const leftPaneRef = useRef(null)
+  const rightPaneRef = useRef(null)
+  const focusSide = useCallback((side) => {
+    if (split.enabled) split.setFocusedSide(side)
+    const view = side === 'left' ? leftViewRef.current : rightViewRef.current
+    if (view) { view.focus(); return }
+    const el = side === 'left' ? leftPaneRef.current : rightPaneRef.current
+    el?.focus()
+    // Tracks the two split values it actually reads; `split` itself is a fresh
+    // object on every provider render and would rebuild this on every keystroke.
+  }, [split.enabled, split.setFocusedSide]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const twoColumn = split.enabled || sidePane.isOpen || sandboxView.isHalf
+  useEffect(() => {
+    // Bubble phase on window, matching NoteTabsContext's Ctrl+Tab. CM6 never
+    // calls stopPropagation on keydown, so this still fires with the caret in an
+    // editor — the one exception is a rendered table cell, which swallows keys of
+    // its own (Editor/cm/tables.js).
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+      if (e.key !== '1' && e.key !== '2') return
+      // One column: leave the combo free rather than preventDefault-ing it.
+      if (!twoColumn) return
+      e.preventDefault()
+      focusSide(e.key === '1' ? 'left' : 'right')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [twoColumn, focusSide])
+
   // Notes ordered to match the NotesHub list view (manual drag order), so the
   // split-view picker reads the same as the list the user is used to.
   const pickerNotes = [...notes].sort(compareByOrder)
@@ -124,8 +164,10 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
       <ResizablePanes
         left={
           <div
+            ref={leftPaneRef}
+            tabIndex={-1}
             className={`${styles.pane} ${split.focusedSide === 'left' ? styles.paneFocused : ''}`}
-            style={{ flex: 'none', width: '100%', height: '100%' }}
+            style={{ flex: 'none', width: '100%', height: '100%', outline: 'none' }}
             onMouseDownCapture={() => split.setFocusedSide('left')}
             onFocusCapture={() => split.setFocusedSide('left')}
           >
@@ -134,14 +176,17 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
         }
         right={
           <div
+            ref={rightPaneRef}
+            tabIndex={-1}
             className={`${styles.pane} ${split.focusedSide === 'right' ? styles.paneFocused : ''}`}
-            style={{ flex: 'none', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+            style={{ flex: 'none', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', outline: 'none' }}
             onMouseDownCapture={() => split.setFocusedSide('right')}
             onFocusCapture={() => split.setFocusedSide('right')}
           >
             {split.splitTarget != null ? (
               split.splitTarget.type === 'sandbox' ? (
                 <div style={{ height: '100%', position: 'relative' }}>
+                  <PaneLockButton className={styles.paneLockFloat} />
                   <button onClick={split.disable} className={styles.splitEmptyClose} style={{ zIndex: 100 }} aria-label="Close split view">
                     <LuX />
                   </button>
@@ -212,11 +257,15 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
     // PDF side-view: note column on the left, PDF viewer on the right.
     <ResizablePanes
       left={
-        <div style={{ overflow: 'auto', height: '100%' }}>
-          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+        <div ref={leftPaneRef} tabIndex={-1} style={{ overflow: 'auto', height: '100%', outline: 'none' }}>
+          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} editorViewRef={leftViewRef} {...paneProps} />
         </div>
       }
-      right={<AttachmentPane file={sidePane.file} onClose={sidePane.close} />}
+      right={
+        <div ref={rightPaneRef} tabIndex={-1} style={{ height: '100%', outline: 'none' }}>
+          <AttachmentPane file={sidePane.file} onClose={sidePane.close} />
+        </div>
+      }
     />
   ) : (
     // Single-note mode. Half-mode wraps the note column + a sandbox column in a resizable split;
@@ -224,12 +273,13 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
     sandboxView.isHalf ? (
       <ResizablePanes
         left={
-          <div style={{ overflow: 'auto', height: '100%' }}>
-            <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+          <div ref={leftPaneRef} tabIndex={-1} style={{ overflow: 'auto', height: '100%', outline: 'none' }}>
+            <NotePane noteId={id} isPrimary onEnterSplit={split.enable} editorViewRef={leftViewRef} {...paneProps} />
           </div>
         }
         right={
-          <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+          <div ref={rightPaneRef} tabIndex={-1} style={{ height: '100%', width: '100%', position: 'relative', outline: 'none' }}>
+            <PaneLockButton className={styles.paneLockFloat} />
             <SandboxDock notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} />
           </div>
         }
@@ -237,7 +287,7 @@ function NotePage({ notes, notesLoading, editTitle, editBody, updateTags, toggle
     ) : (
       <div style={{ width: '100%', height: '100%' }}>
         <div style={{ height: '100%' }}>
-          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} {...paneProps} />
+          <NotePane noteId={id} isPrimary onEnterSplit={split.enable} editorViewRef={leftViewRef} {...paneProps} />
         </div>
         {!sandboxView.isHidden && <SandboxDock notes={notes} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} />}
       </div>

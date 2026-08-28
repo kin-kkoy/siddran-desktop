@@ -2,6 +2,7 @@ import { LuX } from 'react-icons/lu'
 import { useNoteTabs } from '../../contexts/NoteTabsContext'
 import { useNoteSplit } from '../../contexts/NoteSplitContext'
 import { useDragReorder } from '../../hooks/useDragReorder'
+import PaneLockButton from './PaneLockButton'
 import ExpandSidebarButton from '../Layout/Sidebar/ExpandSidebarButton'
 import NavArrows from '../Common/NavArrows'
 import styles from './NoteTabBar.module.css'
@@ -61,6 +62,7 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
               >
                 {titleFor(rightId)}
               </button>
+              <PaneLockButton />
               <button
                 type="button"
                 className={styles.tabClose}
