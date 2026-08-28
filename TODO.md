@@ -310,6 +310,68 @@ User's idea, to design & build AFTER the table work and the current desktop back
   details (how pagination maps to a continuous markdown doc, where the editor caret
   goes across page breaks, print/PDF interplay) before building.
 
+### Sidebar: tighter rows, and drag a note into a notebook (2026-08-28)
+
+From `references/next/` (03 + 04), done together — tightening the rows makes them
+smaller drag targets, so the two could not be judged apart.
+
+- [x] **Tighter spacing** (`03-sidebar-density.md`) — the visible gap was the sum of
+  five values, not one: the list gap (8→4), the notebook group's margin (7→3) and
+  padding, the gap inside a group (6→4), the page-block gap (2→1) and padding (4→3),
+  and the row's own padding (6px→4px). About two more rows per screen.
+- [x] **Standalone notes match notes inside a notebook** — one row height everywhere.
+  The notebook's cover, border and page block already say "these are grouped"; extra
+  space to say it again was what made the list long.
+- [x] **`SidebarOpenNotes.module.css` moved with it** — the two lists appear in the
+  same slot, and tightening only one would have read as a bug.
+- [x] **Drag a note onto a notebook to file it** (`04-sidebar-drag-to-notebook.md`) —
+  pointer-based via the existing `useDragReorder`, the same gesture and the same
+  `fileNote` shape as NotesHub. Remove-then-add, so the old notebook's count is right.
+- [x] **Drag it onto the loose notes to take it out** — the standalone notes are a
+  drop zone of their own, rendered even when empty (with a dashed "Drop here to take
+  out" hint that only appears while a filed note is in the air) — otherwise the case
+  that most needs the target, every note filed, would have nothing to aim at.
+- [x] **Reorder works too, scoped to one group.** `reorderNotes` renumbers whatever
+  it is handed 0..n and the hub numbers each notebook — and the unfiled set — as its
+  own 0..n, which is exactly why the hub refuses to reorder "Everything". The sidebar
+  IS an Everything view, so only the dragged note's own group is committed. Verified
+  in the app: reordering inside one notebook left the other notebook and the loose
+  notes untouched, and the hub shows the same order.
+- [x] **`ignoreZone` on `useDragReorder`** (new) — a notebook wraps its own notes in
+  its own drop zone, so without it every hit test found the zone the note already
+  lived in and reordering inside a notebook could never happen. Where the note is
+  RELEASED is what tells the two gestures apart: own group → reorder, anywhere else
+  → re-file.
+- [x] **`scrollContainer` on `useDragReorder`** (new) — holding a drag near the top or
+  bottom edge scrolls the list, on a rAF loop so it keeps going while the pointer is
+  still. Without it the feature only worked when everything already fit. Both
+  directions verified against the 35-note test Bag.
+- [x] **Collapsed notebooks open on hover** (550 ms) and stay open after the drop —
+  you opened it to put something in it, and closing it again would hide the result.
+- [x] **NotesHub and NoteTabBar are untouched** — both new options default off.
+
+### Completed tasks hidden by default (2026-08-28)
+
+From `references/next/05-hide-completed-default.md`.
+
+- [x] **Completed tasks start hidden** — `showCompleted` in `pages/Tasks/TasksHub.jsx`
+  defaulted to `true` and lived in plain component state, so leaving the Tasks page
+  unmounted it and coming back showed completed tasks again. The reported "hiding
+  un-hides itself" bug was the same fault: the click was never forgotten, it was
+  never remembered.
+- [x] **Remembered in `localStorage` under `tasksShowCompleted`** — device-local view
+  state, alongside `tasksViewMode` / `notesDensity`, not a Settings row. Settings is
+  global `cinder_settings` and would have put one thing in two places; the toolbar
+  button stays the only control.
+- [x] **Read in the `useState` initialiser**, not an effect — `showCompleted` is a
+  dependency of `useRowMasonry`, and a default-then-correct would have reflowed the
+  grid once on entry and read as a flicker.
+- [x] **Both views follow it** — kanban derives its columns from the same
+  `filteredTasks` → `sortedTasks` chain as the card grid, so the filter is shared
+  even though sort state (`sortByView`) is per view.
+- ⚠️ Anyone who has never touched the button now sees completed tasks hidden. That is
+  the request, but it is a behaviour change for existing users.
+
 ## 🎨 Queued after Book view — icon / SVG work (raised 2026-07-28)
 
 - [ ] **Bag icon on the landing / Bag-picker page** — currently reads as loose,

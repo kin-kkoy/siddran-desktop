@@ -1,5 +1,11 @@
 # Tighten the sidebar spacing
 
+**Done 2026-08-28.** All five contributing values reduced (list gap, group margin +
+padding, in-group gap, page-block gap + padding, row padding) for about two more rows
+per screen. Standalone notes match in-notebook notes — the user chose one density
+everywhere. `SidebarOpenNotes.module.css` moved with it. Done alongside
+`04-sidebar-drag-to-notebook.md`, since rows are now drag targets too.
+
 **Area:** Notes · **Size:** small
 
 ## What was seen

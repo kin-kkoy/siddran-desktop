@@ -25,10 +25,21 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 // elementFromPoint rather than a registry of rects, so nothing has to stay in
 // sync as the strip re-renders under the drag.
 //
+// opts.ignoreZone(zoneKey, draggedId) — treat a matched zone as if it were not a
+// target, so reordering carries on over it. Needed when a zone CONTAINS the items
+// it accepts: the sidebar wraps each notebook's notes in that notebook's own drop
+// zone, so without this a note could never be reordered inside its own notebook —
+// every hit test would find the zone it already lives in and suspend the reorder.
+//
+// opts.scrollContainer — () => element (or a ref-like {current}). While a drag is
+// in flight, holding the pointer near that element's top or bottom edge scrolls
+// it, so a target below the fold is reachable. Without it a drag only works when
+// everything already fits on screen. Off unless a container is supplied.
+//
 // Pointer events, not HTML5 drag: WebKitGTK swallows `drop` when Tauri's
 // file-drop is on, which is why this hook exists at all.
 export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reorder', opts = {}) {
-  const { animate = false, axis = 'both', glue = animate, dropSelector = null, onDropZone = null } = opts
+  const { animate = false, axis = 'both', glue = animate, dropSelector = null, onDropZone = null, ignoreZone = null, scrollContainer = null } = opts
   const [order, setOrder] = useState(ids)
   const [activeId, setActiveId] = useState(null)
   const reactId = useId()
@@ -43,6 +54,11 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
   const hoverZoneRef = useRef(null)
   const onDropZoneRef = useRef(onDropZone)
   onDropZoneRef.current = onDropZone
+  const ignoreZoneRef = useRef(ignoreZone)
+  ignoreZoneRef.current = ignoreZone
+  const scrollContainerRef = useRef(scrollContainer)
+  scrollContainerRef.current = scrollContainer
+  const edgeScroll = useRef({ vy: 0, raf: 0 })
   const prevRects = useRef(new Map())          // last measured item positions, for FLIP
   onReorderRef.current = onReorder
 
@@ -136,8 +152,55 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
     if (self) self.style.pointerEvents = 'none'
     const hit = document.elementFromPoint(x, y)
     if (self) self.style.pointerEvents = prev || ''
-    return hit?.closest?.(dropSelector)?.dataset?.dropZone ?? null
+    const key = hit?.closest?.(dropSelector)?.dataset?.dropZone ?? null
+    if (key == null) return null
+    // A zone the dragged item is already inside is not somewhere to drop it.
+    return ignoreZoneRef.current?.(key, drag.current.id) ? null : key
   }, [dropSelector])
+
+  // Scroll the container while the pointer is held near its edge. A rAF loop
+  // rather than a per-move step, so it keeps scrolling when the pointer stops
+  // moving — which is exactly the case that matters (hold at the bottom, wait for
+  // the notebook you want to arrive).
+  const stopEdgeScroll = useCallback(() => {
+    if (edgeScroll.current.raf) cancelAnimationFrame(edgeScroll.current.raf)
+    edgeScroll.current = { vy: 0, raf: 0 }
+  }, [])
+
+  const resolveScroller = useCallback(() => {
+    const c = scrollContainerRef.current
+    if (!c) return null
+    return (typeof c === 'function' ? c() : c.current) || null
+  }, [])
+
+  const updateEdgeScroll = useCallback((y) => {
+    const el = resolveScroller()
+    if (!el) return
+    const EDGE = 36           // px from an edge where scrolling kicks in
+    const MAX = 14            // px per frame at the very edge
+    const r = el.getBoundingClientRect()
+    let vy = 0
+    if (y < r.top + EDGE) vy = -MAX * Math.min(1, (r.top + EDGE - y) / EDGE)
+    else if (y > r.bottom - EDGE) vy = MAX * Math.min(1, (y - (r.bottom - EDGE)) / EDGE)
+    edgeScroll.current.vy = vy
+    if (vy === 0) { stopEdgeScroll(); return }
+    if (edgeScroll.current.raf) return
+    const step = () => {
+      const target = resolveScroller()
+      const v = edgeScroll.current.vy
+      if (!target || !v || !drag.current.active) { stopEdgeScroll(); return }
+      target.scrollTop += v
+      // Re-test the zone under the (stationary) pointer: the content moved, so
+      // what is beneath the cursor has changed even though the cursor has not.
+      const { x, y: py } = pointerRef.current
+      const zone = zoneAt(x, py)
+      if (zone !== hoverZoneRef.current) { hoverZoneRef.current = zone; setHoverZone(zone) }
+      if (zone == null) reorderAtPoint(drag.current.id, x, py)
+      glueActive()
+      edgeScroll.current.raf = requestAnimationFrame(step)
+    }
+    edgeScroll.current.raf = requestAnimationFrame(step)
+  }, [resolveScroller, stopEdgeScroll, zoneAt, reorderAtPoint, glueActive])
 
   useEffect(() => {
     const move = (e) => {
@@ -163,6 +226,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
         setHoverZone(zone)
       }
       if (zone == null) reorderAtPoint(d.id, e.clientX, e.clientY)
+      updateEdgeScroll(e.clientY)
       glueActive() // follow the cursor even when the pointer moves without a reorder
     }
     const up = (e) => {
@@ -186,6 +250,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
         }
         setTimeout(() => { suppressClickRef.current = false }, 0)
       }
+      stopEdgeScroll()
       try { d.captured?.releasePointerCapture?.(d.pointerId) } catch { /* ignore */ }
       drag.current = { id: null, pointerId: null, active: false, x0: 0, y0: 0, grabDX: 0, grabDY: 0, captured: null }
       hoverZoneRef.current = null
@@ -202,7 +267,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
-  }, [reorderAtPoint, glueActive, animate, glue, zoneAt])
+  }, [reorderAtPoint, glueActive, animate, glue, zoneAt, updateEdgeScroll, stopEdgeScroll])
 
   // FLIP for the NON-dragged items: after each reorder, measure where each landed,
   // snap it back to its previous spot with no transition, then release it next frame

@@ -1,5 +1,13 @@
 # Drag a note into a notebook from the sidebar
 
+**Done 2026-08-28.** All three open questions answered yes: unfiling works (the loose
+notes are their own zone), reordering works but is **scoped to one group** — the
+sidebar is an "Everything" view and `reorderNotes` renumbers globally — and collapsed
+notebooks open on hover. Needed two new `useDragReorder` options, `ignoreZone` (a
+notebook contains the notes it accepts, so its own notes must be able to reorder
+inside it) and `scrollContainer` (the hook had no edge-scrolling, as the brief
+suspected). Where the note is released tells reorder and re-file apart.
+
 **Area:** Notes · **Size:** medium
 
 ## What was seen

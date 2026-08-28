@@ -9,7 +9,7 @@ import { readListOpen, writeListOpen } from "../../../hooks/sidebarState";
 import { readSession, sectionTarget } from "../../../hooks/sessionRouteCache";
 
 
-function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag, onReloadBag }) {
+function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, currentNoteID, setIsAuthed, recentBags = [], currentBagPath, onSwitchBag, onReloadBag, addNotesToNotebook, removeNoteFromNotebook, reorderNotes }) {
 
     const navigate = useNavigate()
     const location = useLocation()
@@ -119,6 +119,9 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
                         notes={notes}
                         notebooks={notebooks}
                         currentNoteID={currentNoteID}
+                        addNotesToNotebook={addNotesToNotebook}
+                        removeNoteFromNotebook={removeNoteFromNotebook}
+                        reorderNotes={reorderNotes}
                     />
                 )}
                 {showOpenNotes && (

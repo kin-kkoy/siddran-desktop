@@ -84,6 +84,9 @@ here and add a line to `TODO.md`.
 
 - `01-pane-cycling.md` — done 2026-08-27.
 - `02-split-lock.md` — done 2026-08-27.
+- `03-sidebar-density.md` — done 2026-08-28.
+- `04-sidebar-drag-to-notebook.md` — done 2026-08-28.
+- `05-hide-completed-default.md` — done 2026-08-28.
 - `06-external-links.md` — done 2026-08-26.
 - `07-reveal-in-file-manager.md` — done 2026-08-26.
 

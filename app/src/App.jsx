@@ -959,6 +959,9 @@ function App() {
               currentBagPath={currentBag?.path}
               onSwitchBag={switchBag}
               onReloadBag={reloadBag}
+              addNotesToNotebook={addNotesToNotebook}
+              removeNoteFromNotebook={removeNoteFromNotebook}
+              reorderNotes={reorderNotes}
             />
           )}
 
