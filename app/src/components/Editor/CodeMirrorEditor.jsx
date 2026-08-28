@@ -12,6 +12,7 @@ import { domVerticalMotion } from './cm/verticalMotion'
 import { codeCopy } from './cm/codeCopy'
 import { imageExtensions } from './cm/imagePaste'
 import { wikilinks, wikilinkMarkdownExtension, resolveNote } from './cm/wikilinks'
+import { calcGhostText } from './cm/calc'
 import { obsidianSyntax } from './cm/syntaxNodes'
 import { headingFold, foldedLineSet, applyFolds } from './cm/fold'
 import { commentsExtension, setCommentsEffect, setActiveCommentEffect, resolveAnchor, readAnchors, captureSelectionAnchor, anchorFromRange, commentState } from './cm/comments'
@@ -275,6 +276,7 @@ function CodeMirrorEditor({
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,
           }),
+          calcGhostText,
           commentsExtension({
             onClickComment: (id) => onCommentClickRef.current?.(id),
           }),

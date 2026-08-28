@@ -397,6 +397,18 @@ export const cinderTheme = EditorView.theme({
   // Live-preview table widget (cm/tables.js). Matches the reading view's table
   // styling (ReadingView.module.css) so a rendered table looks the same in both.
   '.cm-live-table': { margin: '0.4em 0' },
+
+  /* Inline calculation result (cm/calc.js). Decoration, not document text — it
+     has to read as clearly not-yet-yours, so it is dimmer than the faintest real
+     text and never bold/italic whatever the line around it is doing. */
+  '.cm-calc-ghost': {
+    color: 'var(--text-faint)',
+    opacity: 0.75,
+    fontStyle: 'normal',
+    fontWeight: 'normal',
+    pointerEvents: 'none',
+    userSelect: 'none',
+  },
   '.cm-live-table table': { borderCollapse: 'collapse', width: 'auto' },
   '.cm-live-table th, .cm-live-table td': {
     border: '1px solid var(--border-default)',

@@ -310,6 +310,44 @@ User's idea, to design & build AFTER the table work and the current desktop back
   details (how pagination maps to a continuous markdown doc, where the editor caret
   goes across page breaks, print/PDF interplay) before building.
 
+### Inline calculation suggestions in the editor (2026-08-28)
+
+Write a sum, end the line with `=`, and the result is offered as a completion.
+
+- [x] **Suggested inline as greyed ghost text**, accepted with **Tab or Right
+  arrow** and dismissed by simply typing on. Never inserted on its own: a note is
+  the user's text, and an editor that silently rewrites it while they type is a
+  worse editor. Ghost text rather than the completion popup because a calculation
+  has exactly one answer — a list to choose from is the wrong shape, and a popup
+  covers the lines you are checking the sum against.
+- [x] **No `eval`.** `cm/calc.js` is a hand-written tokenizer + shunting-yard
+  parser. Note bodies are arbitrary text and a note can arrive from a synced or
+  hand-edited file, so nothing in a note is handed to the JS engine.
+- [x] **Float error is rounded off.** `10 + 12 + 93 + 100.11` is literally
+  215.10999999999999; offering that would read as a bug. `formatResult` rounds to
+  12 significant digits and strips the trailing zeros.
+- [x] **Quiet unless it is really a sum** — declines a lone number (`42 =`),
+  prose (`const total =`), trailing operators, unbalanced parens, implicit
+  multiplication, and division by zero. It reads only the expression at the END of
+  a line, so `Lunch and coffee: 12.50 + 3.75 =` works.
+- [x] **A decoration, not a completion source.** It was briefly built as one, which
+  forced a shared assembly point: `autocompletion({ override })` REPLACES every
+  source, so a second `autocompletion()` would have silently disabled the wikilink
+  suggestions. Ghost text has no such coupling, so `cm/wikilinks.js` keeps owning
+  its own registration and that shared file was removed again.
+- [x] **Tab and Right arrow fall through when nothing is showing** — the accept
+  command returns false, so Tab still indents a list and moves between table cells,
+  and Right still moves the caret. A table row cannot produce a ghost anyway: the
+  suggestion requires the caret at end of line with `=` before it, and a row ends
+  in `|`.
+- [x] **19 tests** in `cm/calc.test.js`, and verified in the app: the ghost shows
+  greyed after the caret without touching the line, Tab accepts it, Right arrow
+  accepts it, Right still moves the caret on a line with no ghost, and Tab still
+  indents a list item.
+- Accepts `×`, `÷`, `x`, `−` as well as the ASCII operators. Deliberately NOT
+  supported: variables, units, `%` (percent in a budget, modulo in code — guessing
+  wrong is worse than declining) and thousands separators (`1,000` is ambiguous).
+
 ### Sidebar: tighter rows, and drag a note into a notebook (2026-08-28)
 
 From `references/next/` (03 + 04), done together — tightening the rows makes them
