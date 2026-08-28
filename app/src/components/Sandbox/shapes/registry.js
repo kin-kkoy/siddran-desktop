@@ -108,20 +108,33 @@ function renderSpeechBubble(ctx, w, h) {
     ctx.closePath()
 }
 
+/**
+ * A cylinder / database drum.
+ *
+ * Canvas angles run clockwise on a y-DOWN axis, so PI/2 is the point BELOW the
+ * centre and 3*PI/2 the point above it. The two halves of the top rim are
+ * therefore easy to swap, and swapping them is what makes a cylinder look
+ * chopped flat: the silhouette then follows the rim's near edge, which dips
+ * INTO the body, instead of its far edge, which arches over the top.
+ *
+ * So: the outline goes over the top of the rim (PI → 2*PI, through 3*PI/2), down
+ * the right side, under the base (0 → PI, through PI/2), and closePath brings
+ * the left side back up. The rim's near edge is then drawn as its own subpath so
+ * the top reads as an opening rather than a dome.
+ */
 function renderCylinder(ctx, w, h) {
     const ry = Math.min(h * 0.15, 24)
-    // Top ellipse
+    // Outline: over the top of the rim…
     ctx.moveTo(0, ry)
-    ctx.ellipse(w / 2, ry, w / 2, ry, 0, Math.PI, 0, true)
-    // Right side
+    ctx.ellipse(w / 2, ry, w / 2, ry, 0, Math.PI, Math.PI * 2, false)
+    // …down the right side…
     ctx.lineTo(w, h - ry)
-    // Bottom ellipse
+    // …and under the base. closePath returns up the left side.
     ctx.ellipse(w / 2, h - ry, w / 2, ry, 0, 0, Math.PI, false)
-    // Left side
     ctx.closePath()
-    // Top cap (visible ellipse)
-    ctx.moveTo(0, ry)
-    ctx.ellipse(w / 2, ry, w / 2, ry, 0, Math.PI, Math.PI * 2, true)
+    // The near edge of the rim, closing the ellipse you see at the top.
+    ctx.moveTo(w, ry)
+    ctx.ellipse(w / 2, ry, w / 2, ry, 0, 0, Math.PI, false)
 }
 
 function renderParallelogram(ctx, w, h, radius) {
