@@ -492,12 +492,15 @@ function handleTasks(method, seg, q, body) {
     if (q.get('picker')) return ok({ items: db.tasks.map((t) => ({ id: t.id, title: t.title })) })
     if (q.get('dated')) return ok({ tasks: db.tasks.filter((t) => t.due_date) })
     if (q.get('undated')) return ok({ tasks: db.tasks.filter((t) => !t.due_date && !t.is_completed) })
+    // Everything the deadline scheduler could ever need to ring for, unpaginated:
+    // a deadline three pages down still has to go off.
+    if (q.get('reminders')) return ok({ tasks: db.tasks.filter((t) => !t.is_completed && (t.due_date || t.remind_at)) })
     if (q.get('dueFrom') || q.get('dueTo')) { const f = q.get('dueFrom'), to = q.get('dueTo'); return ok({ tasks: db.tasks.filter((t) => t.due_date && (!f || t.due_date >= f) && (!to || t.due_date <= to)) }) }
     return ok(paginate(db.tasks, 'tasks', q))
   }
   if (method === 'POST' && seg.length === 1) {
     const t = nowISO()
-    const tk = { id: uuid(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, is_completed: false, order: null, created_at: t, updated_at: t }
+    const tk = { id: uuid(), title: body?.title ?? 'Untitled', description: body?.description ?? '', priority: body?.priority || 'normal', due_date: body?.due_date ?? null, due_all_day: body?.due_all_day ?? false, remind_at: body?.remind_at ?? null, is_completed: false, order: null, created_at: t, updated_at: t }
     db.tasks.push(tk); dirty.tasks = true; return created(tk)
   }
   const id = parseId(seg[1])
@@ -505,7 +508,7 @@ function handleTasks(method, seg, q, body) {
     const tk = db.tasks.find((x) => x.id === id)
     if (method === 'GET') return tk ? ok(tk) : notFound()
     if (!tk) return notFound()
-    if (method === 'PUT') { Object.assign(tk, pick(body || {}, ['title', 'description', 'is_completed', 'priority', 'due_date', 'order'])); touch(tk); dirty.tasks = true; return ok(tk) }
+    if (method === 'PUT') { Object.assign(tk, pick(body || {}, ['title', 'description', 'is_completed', 'priority', 'due_date', 'due_all_day', 'remind_at', 'order'])); touch(tk); dirty.tasks = true; return ok(tk) }
     if (method === 'DELETE') { db.tasks = db.tasks.filter((x) => x.id !== id); dirty.tasks = true; return ok({ message: 'deleted' }) }
   }
   return notFound()

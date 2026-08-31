@@ -32,6 +32,7 @@ import { SettingsProvider } from "./contexts/SettingsContext.jsx"
 import { readCachedSetting } from "./hooks/settingsCache.js"
 import { armRestore, clearRestore } from "./hooks/sessionRouteCache.js"
 import { setViewerBag, allowBagAssets, installCloseFlush } from "./desktop/htmlViewer.js"
+import { installFlushOnly } from "./desktop/tray.js"
 import { ApiProvider } from "./contexts/ApiContext.jsx"
 import { SandboxViewProvider } from "./contexts/SandboxViewContext.jsx"
 import { NoteSplitProvider } from "./contexts/NoteSplitContext.jsx"
@@ -40,6 +41,7 @@ import { PaneLockProvider } from "./contexts/PaneLockContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
+import DeadlineAlarms from "./components/Common/DeadlineAlarms.jsx"
 import ExternalLinkGate from "./components/Common/ExternalLinkGate.jsx"
 import CommandPalette from "./components/CommandPalette/CommandPalette.jsx"
 import logger from "./utils/logger.js"
@@ -259,6 +261,9 @@ function App() {
 
   // Flush the vault before the window closes — see installCloseFlush.
   useEffect(() => installCloseFlush(flushNow), [])
+  // ...and again when it merely hides into the tray: the process lives on, but a
+  // hidden app can be killed at any moment and the last edit must be on disk.
+  useEffect(() => installFlushOnly(flushNow), [])
 
   // Mouse buttons 4/5 (side back/forward buttons) drive history navigation
   // everywhere — WebKitGTK doesn't do it by default. window.history triggers
@@ -1085,6 +1090,17 @@ function App() {
 
         {/* Toast notifications (always available) */}
         <ToastContainer />
+
+        {/* Deadline alarms — no Bag, nothing to be late for */}
+        {unlocked && (
+          <DeadlineAlarms
+            authFetch={authFetch}
+            API={API}
+            enabled={unlocked}
+            toggleTaskCompletion={toggleTaskCompletion}
+            toggleDailyTaskCompletion={toggleDailyTaskCompletion}
+          />
+        )}
 
         {/* The confirm shown before any link leaves the app for the browser */}
         <ExternalLinkGate />

@@ -8,7 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use tauri::http::{Request, Response, StatusCode};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, UriSchemeContext};
+use tauri_plugin_notification::NotificationExt;
 
 // A Bag is a user-picked folder anywhere on disk, so we use std::fs directly
 // (via these commands) rather than tauri-plugin-fs, whose path scoping would
@@ -566,14 +569,138 @@ fn app_close(window: tauri::Window, state: tauri::State<Closing>) {
     let _ = window.close();
 }
 
+// Closing the window normally kills the webview, and with it the deadline
+// scheduler — so with close-to-tray on we hide instead and the process lives in
+// the tray. `tray_ok` is the interlock: if the tray icon never built (a desktop
+// with no StatusNotifier host), hiding would leave the user with no window, no
+// tray and no way back, so we fall through to the ordinary close instead.
+#[derive(Default)]
+struct TrayState {
+    close_to_tray: AtomicBool,
+    tray_ok: AtomicBool,
+}
+
+#[tauri::command]
+fn set_close_to_tray(enabled: bool, state: tauri::State<TrayState>) {
+    state.close_to_tray.store(enabled, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn tray_available(state: tauri::State<TrayState>) -> bool {
+    state.tray_ok.load(Ordering::SeqCst)
+}
+
+// The notification plugin is registered so this can call it, but no
+// `notification:*` permission is granted to the webview — same stance as
+// tauri_plugin_opener above. Titles and bodies are the user's own task text;
+// they still get truncated before being handed to the OS, which is not
+// obliged to cope with a novel in a bubble.
+fn clip(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max).collect();
+    out.push('…');
+    out
+}
+
+#[tauri::command]
+fn notify_deadline(app: tauri::AppHandle, title: String, body: String) {
+    // A missing org.freedesktop.Notifications is not an error worth surfacing:
+    // the in-app alarm modal is the real UI, this is the extra.
+    let _ = app
+        .notification()
+        .builder()
+        .title(clip(&title, 120))
+        .body(clip(&body, 300))
+        .show();
+}
+
+#[tauri::command]
+fn alarm_show_window(window: tauri::Window) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+// Quit for real, from the tray. Not app.exit(0): that drops whatever is inside
+// the store's 1.5s write debounce. Reuse the same handshake the window close
+// uses — ask the frontend to flush, and exit anyway if it never answers.
+fn quit_with_flush(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        app.exit(0);
+        return;
+    };
+    app.state::<Closing>().0.store(true, Ordering::SeqCst);
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        handle.exit(0);
+    });
+    let _ = window.emit("siddran:flush-and-close", ());
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Closing::default())
+        .manage(TrayState::default())
+        .setup(|app| {
+            let show = MenuItem::with_id(app, "show", "Show Siddran", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let icon = app.default_window_icon().cloned();
+            let mut builder = TrayIconBuilder::with_id("siddran")
+                .tooltip("Siddran")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => show_main_window(app),
+                    "quit" => quit_with_flush(app),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = icon {
+                builder = builder.icon(icon);
+            }
+            let built = builder.build(app).is_ok();
+            app.state::<TrayState>().tray_ok.store(built, Ordering::SeqCst);
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<Closing>();
                 if state.0.load(Ordering::SeqCst) {
                     return; // our own close, let it through
+                }
+                // Close-to-tray: hide rather than close, so the deadline
+                // scheduler in the webview keeps running. Only ever taken when a
+                // tray icon actually exists to get the window back from.
+                let tray = window.state::<TrayState>();
+                if tray.tray_ok.load(Ordering::SeqCst) && tray.close_to_tray.load(Ordering::SeqCst)
+                {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    // Still drain the write debounce — a hidden app can be killed
+                    // at any time and the last edit must already be on disk.
+                    let _ = window.emit("siddran:flush-only", ());
+                    return;
                 }
                 api.prevent_close();
                 // If the frontend never answers (hung renderer), close anyway rather
@@ -591,6 +718,7 @@ fn main() {
             }
         })
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(ViewerState::default())
         .register_uri_scheme_protocol(VIEWER_SCHEME, serve_viewer)
         .invoke_handler(tauri::generate_handler![
@@ -607,6 +735,10 @@ fn main() {
             open_external_url,
             reveal_in_file_manager,
             app_close,
+            set_close_to_tray,
+            tray_available,
+            notify_deadline,
+            alarm_show_window,
             bag_allow_asset,
             viewer_set_bag,
             viewer_set_fonts,

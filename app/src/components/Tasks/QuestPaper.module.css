@@ -1,0 +1,234 @@
+/* A task pinned to the board.
+   Same surfaces, borders and priority colours as TaskCard — this is the app's
+   own card wearing a pin and a slight tilt, not a different visual language.
+   No gradients: every colour is a theme token, so the board follows whatever
+   theme is active. */
+
+.paper {
+    position: absolute;
+    width: 218px;
+    cursor: grab;
+    /* WebKitGTK needs the prefixed form; without it the browser starts a text
+       selection under the cursor and fights the drag on every pointermove. */
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;          /* or the compositor eats the drag */
+    transform-origin: center center;
+    /* Deliberately NO transition and NO filter on hover. A filter promotes the
+       sheet to its own compositing layer, and re-rasterising a rotated layer is
+       what made the text go soft and the paper appear to shift under the
+       cursor. Hover is a border change only — it repaints, it never resamples. */
+}
+
+.dragging {
+    cursor: grabbing;
+}
+
+/* The pin sits above the card, held clear of the rounded corner. */
+.pin {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    z-index: 2;
+    border-radius: 50%;
+    pointer-events: none;
+    background: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.sheet {
+    font-family: var(--font-mono);
+    position: relative;
+    padding: 14px 13px 11px;
+    border-radius: 8px;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 6px 18px var(--shadow-color);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.paper:hover .sheet {
+    background-color: var(--bg-hover);
+    border-color: var(--border-strong);
+}
+
+.dragging .sheet {
+    border-color: var(--border-strong);
+    box-shadow: 0 14px 30px var(--shadow-color);
+}
+
+.done .sheet {
+    opacity: 0.6;
+}
+
+.done .title {
+    text-decoration: line-through;
+}
+
+/* Overdue reads the same here as on a task card. */
+.isOverdue .sheet {
+    border-color: var(--accent-danger);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent-danger) 40%, transparent);
+}
+
+.top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 7px;
+    flex-wrap: wrap;
+}
+
+.rank {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.rankLow    { background-color: #4caf5020; color: #4caf50; }
+.rankNormal { background-color: #2196f320; color: #2196f3; }
+.rankHigh   { background-color: #ff572220; color: #ff5722; }
+
+.kindIcon {
+    color: var(--text-dim);
+}
+
+.due {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.overdue {
+    color: var(--accent-danger);
+}
+
+.title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 9px;
+}
+
+.progressBar {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--bg-surface);
+    overflow: hidden;
+}
+
+.progressBar span {
+    display: block;
+    height: 100%;
+    background-color: var(--accent-success);
+}
+
+.progressText {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 11px;
+}
+
+.tick {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 1.5px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tick:hover {
+    border-color: var(--accent-success);
+}
+
+.ticked {
+    background-color: var(--accent-success);
+    border-color: var(--accent-success);
+    color: var(--bg-primary);
+}
+
+.openBtn {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background-color: var(--bg-surface-alt);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.openBtn:hover {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+}
+
+.binBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.binBtn:hover {
+    color: var(--accent-danger);
+    background-color: color-mix(in srgb, var(--accent-danger) 14%, transparent);
+}

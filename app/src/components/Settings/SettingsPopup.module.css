@@ -579,3 +579,47 @@
     background: var(--border-default);
 }
 .groupHead:first-child { margin-top: 0; }
+
+/* Tone picker — the segmented control with its preview button beside it. */
+.toneRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.previewBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface-alt);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.previewBtn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* A bare time field, matching the other controls in a setting row. */
+.timeInput {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface-alt);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.timeInput:focus {
+    outline: none;
+    border-color: var(--accent-warning);
+}

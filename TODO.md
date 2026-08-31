@@ -472,3 +472,77 @@ From `references/next/05-hide-completed-default.md`.
 - [ ] **Tooling question (open):** find a free SVG/animation editor, OR build a small
       standalone HTML tool in `references/` for editing these icons — user is open to
       either. Decide before starting.
+
+## ⏰ Deadline alarms + 🗺️ Mission Board (built 2026-08-31)
+
+Two features in one pass. Plan: `~/.claude/plans/i-just-realized-that-generic-moth.md`.
+
+### Part 1 — notifications and alarms
+
+- [x] **The scheduler is JS in the webview, and closing the window HIDES it.** A Rust
+  scheduler would have needed a second implementation of the recurrence grammar,
+  the completions join and the local-day boundary — the single most expensive
+  duplication available here. `main.rs` gained one branch in the *existing*
+  `CloseRequested` handler; the flush handshake and its 2.5s watchdog are untouched.
+- [x] **Tray icon (Show / Quit), with a `tray_ok` interlock.** If `TrayIconBuilder`
+  fails — no StatusNotifier host — close-to-tray is refused and the ordinary close
+  path runs. Without that, `decorations:false` plus a hidden window means no way back.
+- [x] **Zero new capability surface.** `capabilities/default.json` is unchanged: the
+  notification plugin is registered in Rust and reached through one command, the same
+  stance `main.rs` already documents for `tauri_plugin_opener`. No new npm dep either.
+- [x] **The sweep is stateless** — one 15s interval recomputing every fire time against
+  the wall clock. Suspend, clock jumps and hidden-page throttling can delay an alarm
+  by a tick, never skip or double-fire one.
+- [x] **The fired ledger is append-only** (`siddran_alarms_fired:<bag>`), pruned only by
+  age. Nothing removes an entry because a task "wasn't found", so an unloaded `[]`
+  cannot wipe it — the trap that has bitten three times, dodged structurally.
+  The fire time is baked into the key, so rescheduling re-arms for free.
+- [x] **12h grace window** — anything older is ledgered silently with one summary toast,
+  so a two-week-old deadline doesn't scream on launch.
+- [x] **Two tiers**: `remind_at` is a toast + one chime; the deadline is a modal that
+  ignores Escape and backdrop clicks, with a looping sound.
+- [x] **Sound is an `<audio>` element with `loop`, not a WebAudio synth** — the loop must
+  be the media pipeline's job, not a JS timer's. Four alarm tones + four chimes,
+  previewable in Settings. WebKitGTK's autoplay gate is dodged by priming on the
+  session's first gesture.
+- [x] **`remind_at` and `due_all_day` on tasks** — both needed adding in five places or
+  they are silently dropped (localStore create + PUT whitelist, `useTasks` add + update).
+
+### Part 2 — the Mission Board
+
+- [x] **Masonry is legacy**, behind `legacyViews` in Settings. Views cycle Board → Kanban
+  (→ Cards). A remembered `card` falls back to kanban, not the board.
+- [x] **Placement lives in `hooks/missionBoard.js`**, the sibling of `kanbanBoard.js`:
+  bag-scoped localStorage, x/y as percentages so a resize keeps the arrangement.
+  Unlocked = one scatter per *launch*, held in a module singleton so navigating away
+  and back does not reshuffle. Locked = written down, and every drag persists.
+- [x] **Scatter separates on each axis, not by radius** — papers are boxes, and a circular
+  test buried titles. A test asserts no paper is >60% covered across 40 random boards.
+- [x] **Priority cycle button (All → Low → Normal → High).** It filters *rendering only*;
+  layout is computed from every item, or hidden papers would be pruned and cycling
+  back to All would deal them new spots — the board would reshuffle on every click.
+
+### Things learned the hard way
+
+- ⚠️ **`filter` on hover blurs text on a rotated card.** It promotes the element to its own
+  compositing layer and re-rasterises it; the paper appears to shift and the type goes
+  soft. Hover is a border/background change only. Same family as the `transform: scale()`
+  blur that `OverlayLayer.jsx` already avoids by using CSS `zoom`.
+- ⚠️ **WebKitGTK needs `-webkit-user-select: none`.** The unprefixed property alone let the
+  browser start a text selection that fought the drag on every pointermove — it read as lag.
+- ⚠️ **A date-only deadline is stored at LOCAL MIDNIGHT, not 23:59.** "End of Tuesday" reads
+  better, but `useCalendar` decides all-day by checking for midnight, so 23:59 would have
+  drawn every dateless task as a late-night appointment. `due_all_day` is authoritative;
+  midnight is the legacy fallback for rows written before the flag existed.
+- ⚠️ **Persist on pointerup, never per frame.** Writing the arrangement to localStorage on
+  every rAF commit is the obvious way to make a board feel heavy.
+- 🚫 **Infinite pan/zoom canvas — considered and declined.** It fixes *fitting* many tasks,
+  not *finding* one among them, and a board you pan around stops being a bulletin board.
+  The priority filter, hide-completed and the deadline filters keep it bounded. If density
+  bites later, shrink the papers before reaching for panning.
+
+### Not verified in the running app
+
+Alarms, the OS notification and the ledger were confirmed end-to-end (including the silent
+catch-up for stale deadlines). **Not** clicked through: drag, lock persistence, the Scatter
+and priority buttons, `boardDressing: 'guild'`, tray Show/Quit, and snooze.

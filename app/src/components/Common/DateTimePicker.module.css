@@ -58,6 +58,9 @@
 .popup {
   position: fixed;
   z-index: 4000;
+  /* maxHeight is set inline from the measured viewport, so a short window
+     scrolls the popup instead of hiding its footer behind the edge. */
+  overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
@@ -199,3 +202,44 @@
   font-weight: 600;
 }
 .footDone:hover { background: var(--accent-warning); color: var(--bg-primary); filter: brightness(1.08); }
+
+/* Optional time — the row only exists once you ask for one. */
+.addTime {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.addTime:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-warning);
+}
+
+.timeDrop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  margin-left: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.timeDrop:hover {
+  background: var(--bg-hover);
+  color: var(--accent-danger);
+}

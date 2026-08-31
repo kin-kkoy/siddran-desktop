@@ -101,6 +101,34 @@ export function taskDueStamp(dayISO, time) {
     return time ? `${dayISO} ${time}:00` : `${dayISO} 00:00:00`;
 }
 
+// Parse a stored recurrence value ('every-day'|'weekdays'|'weekends' | '{"mask":[7 bools]}').
+// Lives here rather than in useCalendar so the deadline scheduler (utils/alarmSchedule.js)
+// can share it: two implementations of recurrence that must agree is the most expensive
+// kind of duplication in this app.
+export function parseRecurrence(rec) {
+    if (rec == null) return null;
+    if (typeof rec === 'object') return rec.mask ? { mask: rec.mask } : null;
+    const s = String(rec).trim();
+    if (s === 'every-day' || s === 'weekdays' || s === 'weekends') return s;
+    if (s.startsWith('{')) {
+        try {
+            const p = JSON.parse(s);
+            if (Array.isArray(p?.mask) && p.mask.length === 7) return { mask: p.mask };
+        } catch { /* fall through */ }
+    }
+    return null;
+}
+
+// Does a recurrence rule fire on local date `d`?
+export function recurrenceMatches(rule, d) {
+    if (!rule) return false;
+    if (rule === 'every-day') return true;
+    if (rule === 'weekdays') return isWeekday(d);
+    if (rule === 'weekends') return !isWeekday(d);
+    if (rule.mask) return !!rule.mask[d.getDay()];
+    return false;
+}
+
 // 'Fri Jun 13' style label for a 'YYYY-MM-DD' day.
 export function dayFullLabel(dayISO) {
     const d = parseISODate(dayISO);

@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from "react";
 import {
-    isoDate, parseISODate, addDays, localDayOf, isWeekday, toISOFromParts, timeOf, taskDueStamp,
+    isoDate, parseISODate, addDays, localDayOf, toISOFromParts, timeOf, taskDueStamp,
+    parseRecurrence, recurrenceMatches,
 } from "../components/Calendar/calendarDates";
 
 // Pure derivation layer for the Calendar. It NEVER owns state — it reads the source
@@ -19,31 +20,6 @@ import {
 //   dailyCompletions — [{ daily_task_id, date }] (P5); absent for now → recurring dailies show undone
 //   range            — { from: Date, to: Date } inclusive window to project onto
 //   updateEvent, updateTask — source mutations used by retime
-
-// Parse a stored recurrence value ('every-day'|'weekdays'|'weekends' | '{"mask":[7 bools]}').
-function parseRecurrence(rec) {
-    if (rec == null) return null;
-    if (typeof rec === 'object') return rec.mask ? { mask: rec.mask } : null;
-    const s = String(rec).trim();
-    if (s === 'every-day' || s === 'weekdays' || s === 'weekends') return s;
-    if (s.startsWith('{')) {
-        try {
-            const p = JSON.parse(s);
-            if (Array.isArray(p?.mask) && p.mask.length === 7) return { mask: p.mask };
-        } catch { /* fall through */ }
-    }
-    return null;
-}
-
-// Does a recurrence rule fire on local date `d`?
-function recurrenceMatches(rule, d) {
-    if (!rule) return false;
-    if (rule === 'every-day') return true;
-    if (rule === 'weekdays') return isWeekday(d);
-    if (rule === 'weekends') return !isWeekday(d);
-    if (rule.mask) return !!rule.mask[d.getDay()];
-    return false;
-}
 
 export function useCalendar({
     events = [],
@@ -118,8 +94,10 @@ export function useCalendar({
                 day,
                 done: !!t.is_completed,
                 color: null,
-                time: mins === 0 ? null : timeOf(t.due_date),
-                all_day: mins === 0,
+                // due_all_day is authoritative where it exists; midnight is the
+                // older signal, kept for rows written before the flag existed.
+                time: (t.due_all_day || mins === 0) ? null : timeOf(t.due_date),
+                all_day: t.due_all_day === true || mins === 0,
                 planState: t._planState || null,
                 source: t,
             });
@@ -236,7 +214,10 @@ export function useCalendar({
             const newMins = time ? (() => { const [h, m] = time.split(':').map(Number); return h * 60 + (m || 0); })() : 0;
             const oldDay = due ? localDayOf(item.source.due_date) : null;
             if (oldDay === newDayISO && existingMins === newMins) return false;
-            updateTask?.(item.source.id, { due_date: taskDueStamp(newDayISO, time) });
+            // Dropping a task onto a time slot gives it a time; dropping it in the
+            // all-day row takes it away. Without this the flag and the timestamp
+            // drift apart and the alarm rings at the wrong hour.
+            updateTask?.(item.source.id, { due_date: taskDueStamp(newDayISO, time), due_all_day: !time });
             return true;
         }
 

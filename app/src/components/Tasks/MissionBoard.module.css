@@ -1,0 +1,137 @@
+/* The board the papers are pinned to.
+   A flat surface built from the app's own tokens — the same background tier the
+   rest of a page sits on, with a normal border. No gradients, nothing hardcoded,
+   so it changes with the theme instead of fighting it. */
+
+.board {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 190px);
+    min-height: 460px;
+    overflow: hidden;
+    border-radius: 10px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+}
+
+.controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10000;
+    display: flex;
+    gap: 8px;
+}
+
+.boardBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background-color: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.boardBtn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.boardBtnOn {
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
+.empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+/* ── Optional dressing ─────────────────────────────────────────────
+   Off by default. Corner marks and slow motes, drawn in the theme's own accent
+   rather than a fixed palette. Transform/opacity only, and in 'plain' mode none
+   of it is rendered at all — no elements, nothing for the compositor to do. */
+
+.bracket {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    z-index: 3;
+    pointer-events: none;
+    border: 2px solid var(--border-strong);
+}
+
+.btl { top: 10px;    left: 10px;   border-right: none; border-bottom: none; border-top-left-radius: 6px; }
+.btr { top: 10px;    right: 10px;  border-left: none;  border-bottom: none; border-top-right-radius: 6px; }
+.bbl { bottom: 10px; left: 10px;   border-right: none; border-top: none;    border-bottom-left-radius: 6px; }
+.bbr { bottom: 10px; right: 10px;  border-left: none;  border-top: none;    border-bottom-right-radius: 6px; }
+
+.lantern {
+    position: absolute;
+    top: 14px;
+    width: 8px;
+    height: 8px;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: 50%;
+    background-color: var(--accent-warning);
+    opacity: 0.75;
+}
+
+.lanternL { left: 52px; }
+.lanternR { right: 52px; }
+
+.lantern i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: 0 0 14px var(--accent-warning);
+    animation: flicker 2.6s ease-in-out infinite;
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: 1; }
+    45%      { opacity: 0.5; }
+}
+
+.dust {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.dust span {
+    position: absolute;
+    border-radius: 50%;
+    background-color: var(--text-faint);
+    animation-name: floatUp;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+}
+
+@keyframes floatUp {
+    0%   { transform: translateY(0) translateX(0); opacity: 0; }
+    15%  { opacity: 0.7; }
+    85%  { opacity: 0.4; }
+    100% { transform: translateY(-160px) translateX(22px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lantern i,
+    .dust span { animation: none; }
+}

@@ -9,6 +9,7 @@ import ConfirmModal from "../../components/Common/ConfirmModal"
 import TaskDetailsModal from "../../components/Common/TaskDetailsModal"
 import DailyTaskModal from "../../components/Common/DailyTaskModal"
 import { HiOutlineTrash, HiOutlineViewGrid, HiOutlineTemplate, HiOutlineViewBoards } from 'react-icons/hi'
+import { LuLayoutDashboard } from 'react-icons/lu'
 import { LuCalendarDays } from 'react-icons/lu'
 import BundleCard from "../../components/Tasks/BundleCard"
 import {
@@ -18,7 +19,11 @@ import {
 import BundleDetailModal from "../../components/Common/BundleDetailModal"
 import { useRowMasonry } from '../../hooks/useRowMasonry'
 import Skeleton from "../../components/Common/Skeleton"
+import { readCachedSetting } from '../../hooks/settingsCache'
 import { useCalendarView } from '../../contexts/CalendarViewContext'
+import { useSettings } from '../../contexts/SettingsContext'
+import MissionBoard from '../../components/Tasks/MissionBoard'
+import { getBagPath } from '../../desktop/localStore'
 
 function TasksHub({
   authFetch,
@@ -55,12 +60,30 @@ function TasksHub({
 
   const calendarView = useCalendarView()
 
-  // Persist view mode in localStorage. Two views only: 'card' (masonry) | 'kanban'.
-  // ('list' is a legacy value; the old 'sectioned' card layout has been removed.)
+  // Persist view mode in localStorage. Two first-class views — 'board' (the
+  // Mission Board) and 'kanban' — plus 'card', the old masonry grid, which is now
+  // legacy and only offered when Settings says to show legacy views.
+  // ('list' is an older alias for kanban.)
+  const { settings } = useSettings()
+  const legacyViews = settings.legacyViews === true
   const [viewMode, setViewMode] = useState(() => {
     const m = localStorage.getItem('tasksViewMode')
-    return m === 'kanban' || m === 'list' ? 'kanban' : 'card'
+    if (m === 'kanban' || m === 'list') return 'kanban'
+    if (m === 'board') return 'board'
+    // A remembered masonry view survives only while legacy views are on; the
+    // fallback is kanban, not the board, so nobody is moved somewhere new
+    // without asking.
+    if (m === 'card') return readCachedSetting('legacyViews', false) === true ? 'card' : 'kanban'
+    return 'board'
   })
+
+  // Turning legacy views off while sitting on the masonry grid has to move you.
+  useEffect(() => {
+    if (!legacyViews && viewMode === 'card') {
+      setViewMode('kanban')
+      try { localStorage.setItem('tasksViewMode', 'kanban') } catch { /* ignore */ }
+    }
+  }, [legacyViews, viewMode])
   // Sort is remembered per view, because the two want different defaults: a kanban
   // board is an arrangement you make by hand, while the card grid is a list you want
   // ordered by something. Sharing one value meant switching to kanban re-sorted your
@@ -316,8 +339,18 @@ function TasksHub({
 
   useRowMasonry(packedRef, [sortedTasks.length, sortBy, sortDir, showCompleted, deadlineFilter, deadlineRange, dailyTasks.length, bundles.length, isDailyCardOpen, viewMode])
 
+  const VIEWS = useMemo(
+    () => (legacyViews ? ['board', 'kanban', 'card'] : ['board', 'kanban']),
+    [legacyViews],
+  )
+  const VIEW_META = {
+    board:  { label: 'Mission Board', icon: LuLayoutDashboard },
+    kanban: { label: 'Kanban',        icon: HiOutlineViewBoards },
+    card:   { label: 'Cards (legacy)', icon: HiOutlineViewGrid },
+  }
   const changeView = () => {
-    const newMode = viewMode === "card" ? "kanban" : "card"
+    const i = VIEWS.indexOf(viewMode)
+    const newMode = VIEWS[(i + 1) % VIEWS.length]
     setViewMode(newMode)
     localStorage.setItem('tasksViewMode', newMode)
   }
@@ -663,8 +696,10 @@ function TasksHub({
               </select>
             )}
 
-            {/* Sort options — hidden on the kanban board, which is ordered by hand. */}
-            {viewMode !== 'kanban' && (
+            {/* Sort options — only the card grid is a list. Kanban is ordered by
+                hand, and the Mission Board is a scatter, so on both a sort control
+                would sit there doing nothing visible. */}
+            {viewMode === 'card' && (
             <select
               value={sortBy}
               onChange={ e => setSortBy(e.target.value)}
@@ -674,7 +709,7 @@ function TasksHub({
               <option value="dueDate">Deadline</option>
             </select>
             )}
-            {viewMode !== 'kanban' && sortBy === 'dueDate' && (
+            {viewMode === 'card' && sortBy === 'dueDate' && (
               <select value={sortDir} onChange={ e => setSortDir(e.target.value)} className={styles.sortSelect}>
                 <option value="asc">Earliest</option>
                 <option value="dsc">Furthest</option>
@@ -707,14 +742,46 @@ function TasksHub({
               </button>
             )}
 
-            <button onClick={changeView} className={styles.toggleBtn} title={viewMode === "kanban" ? "Card View" : "Kanban View"}>
-              {viewMode === "kanban" ? <HiOutlineViewGrid size={18} /> : <HiOutlineViewBoards size={18} />}
-            </button>
+            {(() => {
+              const next = VIEWS[(VIEWS.indexOf(viewMode) + 1) % VIEWS.length]
+              const Icon = VIEW_META[next].icon
+              return (
+                <button onClick={changeView} className={styles.toggleBtn} title={`Switch to ${VIEW_META[next].label}`}>
+                  <Icon size={18} />
+                </button>
+              )
+            })()}
           </div>
         </div>
 
         
         {/* BODY ================================================================ */}
+
+        {/* Mission Board — every item is a paper pinned to a wall */}
+        {viewMode === 'board' && (
+          <>
+            <div className={styles.kanbanTop}>
+              <AddTaskCard addTask={addTask} addBundle={addBundle} viewMode="list" />
+            </div>
+            <MissionBoard
+              tasks={sortedTasks}
+              dailies={dailyTasks}
+              bundles={bundles}
+              dressing={settings.boardDressing || 'plain'}
+              bagPath={getBagPath()}
+              // The load gate: tasksPagination only exists once a real response
+              // has landed, so a locked arrangement is never pruned against an
+              // array that is empty merely because nothing has loaded.
+              ready={!!tasksPagination}
+              onOpenTask={openCardDetails}
+              onOpenDaily={openDailyCardDetails}
+              onOpenBundle={setOpenBundle}
+              onToggleTask={toggleTaskCompletion}
+              onToggleDaily={toggleDailyTaskCompletion}
+              onDeleteTask={deleteTask}
+            />
+          </>
+        )}
 
         {/* Kanban mode — priority columns; drag a task between columns to reprioritize */}
         {viewMode === 'kanban' && (

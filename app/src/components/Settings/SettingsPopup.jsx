@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useSettings, THEMES } from '../../contexts/SettingsContext'
 import { DIRECTION_ANGLES } from '../Layout/StarCanvas/StarCanvas'
-import { LuRotateCcw, LuRefreshCw } from 'react-icons/lu'
+import { LuRotateCcw, LuRefreshCw, LuPlay } from 'react-icons/lu'
 import { syncNow } from '../../desktop/sync/client'
 import { readSyncConfig, writeSyncConfig, readLastSync, writeLastSync } from '../../hooks/syncConfig'
 import styles from './SettingsPopup.module.css'
 import SegmentedControl from './SegmentedControl'
 import { trustedPaths, forgetAllTrust, setTrusted } from '../../hooks/htmlTrust'
+import { trayAvailable } from '../../desktop/tray'
+import { ALARM_TONES, REMINDER_TONES, previewAlarm, playChime } from '../../utils/alarmSound'
 
 function SettingsPopup() {
   // The active tab lives in context so the command palette can open Settings
@@ -71,6 +73,12 @@ function SettingsPopup() {
               Behaviour
             </button>
             <button
+              className={`${styles.tab} ${activeTab === 'reminders' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('reminders')}
+            >
+              Reminders
+            </button>
+            <button
               className={`${styles.tab} ${activeTab === 'pages' ? styles.tabActive : ''}`}
               onClick={() => setActiveTab('pages')}
             >
@@ -93,9 +101,10 @@ function SettingsPopup() {
             {activeTab === 'editor' && <EditorTab settings={settings} updateSetting={updateSetting} />}
             {activeTab === 'behaviour' && <BehaviourTab settings={settings} updateSetting={updateSetting} />}
             {activeTab === 'pages' && <PagesTab settings={settings} updateSetting={updateSetting} />}
+            {activeTab === 'reminders' && <RemindersTab settings={settings} updateSetting={updateSetting} />}
             {/* Appearance is the fallback, so a stale tab value (the command palette
                 still opens 'interface') lands somewhere real rather than on a blank pane. */}
-            {!['sync', 'cards', 'editor', 'behaviour', 'pages'].includes(activeTab) && (
+            {!['sync', 'cards', 'editor', 'behaviour', 'pages', 'reminders'].includes(activeTab) && (
               <AppearanceTab settings={settings} updateSetting={updateSetting} />
             )}
           </div>
@@ -679,6 +688,30 @@ function BehaviourTab({ settings, updateSetting }) {
           onChange={(v) => updateSetting('centerNowLine', v)}
         />
       </SettingRow>
+
+      <SettingRow
+        label="Board Dressing"
+        description="How much guild hall the Mission Board wears. Full adds lanterns, drifting dust and iron brackets; Plain renders none of it and leaves nothing animating."
+      >
+        <SegmentedControl
+          options={[
+            { value: 'plain', label: 'Plain' },
+            { value: 'guild', label: 'Full' },
+          ]}
+          value={settings.boardDressing || 'plain'}
+          onChange={(v) => updateSetting('boardDressing', v)}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="Show Legacy Views"
+        description="Bring back the old masonry card grid in Tasks. It is no longer maintained — the Mission Board and Kanban replaced it."
+      >
+        <ToggleSwitch
+          checked={settings.legacyViews === true}
+          onChange={(v) => updateSetting('legacyViews', v)}
+        />
+      </SettingRow>
     </div>
   )
 }
@@ -719,6 +752,160 @@ function PagesTab({ settings, updateSetting }) {
   )
 }
 
+
+// ── Reminders Tab ──────────────────────────────────────────────────
+// Its own tab rather than six more rows on Behaviour: an alarm that can raise
+// the window and keep the process alive after you close it is a subject of its
+// own, and burying the tray switch under star sliders would be unkind.
+function RemindersTab({ settings, updateSetting }) {
+  const [trayOk, setTrayOk] = useState(true)
+
+  // Asked once, on mount — never during render, and never per keystroke.
+  useEffect(() => {
+    let alive = true
+    trayAvailable().then((ok) => { if (alive) setTrayOk(ok) })
+    return () => { alive = false }
+  }, [])
+
+  const alarmsOn = settings.alarmsEnabled !== false
+
+  return (
+    <div className={styles.tabContent}>
+      <SettingRow
+        label="Deadline Alarms"
+        description="Ring when a task's deadline arrives. A deadline with no time set counts as 09:00 that morning."
+      >
+        <ToggleSwitch
+          checked={alarmsOn}
+          onChange={(v) => updateSetting('alarmsEnabled', v)}
+        />
+      </SettingRow>
+
+      {alarmsOn && (
+        <>
+          <SettingRow
+            label="Keep Ringing"
+            description="The alarm holds the screen until you dismiss or snooze it. Off makes a deadline a toast and one chime, like a reminder."
+          >
+            <ToggleSwitch
+              checked={settings.alarmPersist !== false}
+              onChange={(v) => updateSetting('alarmPersist', v)}
+            />
+          </SettingRow>
+
+          <SettingRow label="Play A Sound">
+            <ToggleSwitch
+              checked={settings.alarmSound !== false}
+              onChange={(v) => updateSetting('alarmSound', v)}
+            />
+          </SettingRow>
+
+          {settings.alarmSound !== false && (
+            <>
+              <SettingRow label="Alarm Tone" description="What a reached deadline sounds like, on a loop.">
+                <div className={styles.toneRow}>
+                  <SegmentedControl
+                    options={ALARM_TONES.map(t => ({ value: t.value, label: t.label }))}
+                    value={settings.alarmTone || 'gentle'}
+                    onChange={(v) => { updateSetting('alarmTone', v); previewAlarm(v, settings.alarmVolume ?? 0.7) }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.previewBtn}
+                    onClick={() => previewAlarm(settings.alarmTone || 'gentle', settings.alarmVolume ?? 0.7)}
+                  >
+                    <LuPlay size={13} /> Play
+                  </button>
+                </div>
+              </SettingRow>
+
+              <SettingRow label="Reminder Tone" description="The single chime for a &quot;remind me at&quot;. Heard once, never looped.">
+                <div className={styles.toneRow}>
+                  <SegmentedControl
+                    options={REMINDER_TONES.map(t => ({ value: t.value, label: t.label }))}
+                    value={settings.reminderTone || 'soft'}
+                    onChange={(v) => { updateSetting('reminderTone', v); playChime(settings.alarmVolume ?? 0.7, v) }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.previewBtn}
+                    onClick={() => playChime(settings.alarmVolume ?? 0.7, settings.reminderTone || 'soft')}
+                  >
+                    <LuPlay size={13} /> Play
+                  </button>
+                </div>
+              </SettingRow>
+            </>
+          )}
+
+          {settings.alarmSound !== false && (
+            <SettingRow label="Volume">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="range"
+                  className={styles.starSlider}
+                  min={0} max={1} step={0.05}
+                  value={settings.alarmVolume ?? 0.7}
+                  onChange={e => updateSetting('alarmVolume', parseFloat(e.target.value))}
+                />
+                <span style={{ minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  {Math.round((settings.alarmVolume ?? 0.7) * 100)}%
+                </span>
+              </div>
+            </SettingRow>
+          )}
+
+          <SettingRow label="Snooze For">
+            <SegmentedControl
+              options={[
+                { value: 5, label: '5m' },
+                { value: 10, label: '10m' },
+                { value: 15, label: '15m' },
+                { value: 30, label: '30m' },
+              ]}
+              value={settings.alarmSnoozeMinutes ?? 10}
+              onChange={(v) => updateSetting('alarmSnoozeMinutes', v)}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="All-Day Deadlines Ring At"
+            description="A deadline with a date but no time is due by the end of that day. This is when it actually goes off."
+          >
+            <input
+              type="time"
+              className={styles.timeInput}
+              value={settings.allDayAlarmTime || '09:00'}
+              onChange={(e) => updateSetting('allDayAlarmTime', e.target.value || '09:00')}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Bring Siddran To The Front"
+            description="Raise the window when a deadline goes off, even if it's hidden."
+          >
+            <ToggleSwitch
+              checked={settings.alarmRaiseWindow !== false}
+              onChange={(v) => updateSetting('alarmRaiseWindow', v)}
+            />
+          </SettingRow>
+        </>
+      )}
+
+      <SettingRow
+        label="Keep Running In The Tray"
+        description={trayOk
+          ? "Closing the window hides it instead of quitting, so alarms still go off. Quit from the tray icon."
+          : "No system tray was found on this desktop — Siddran quits normally when you close the window, and alarms stop with it."}
+      >
+        <ToggleSwitch
+          checked={trayOk && settings.closeToTray !== false}
+          onChange={(v) => { if (trayOk) updateSetting('closeToTray', v) }}
+        />
+      </SettingRow>
+    </div>
+  )
+}
 
 // ── Star tuning block ──────────────────────────────────────────────
 const STAR_SLIDERS = [

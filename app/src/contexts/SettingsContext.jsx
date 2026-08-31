@@ -51,6 +51,25 @@ const DEFAULTS = {
   notebookView: 'notebooks',      // 'tabs' | 'rail' | 'notebooks'
   notebookHoverExpand: true,      // the notebook row unfolds to every row on hover
 
+  // Deadline alarms. `alarmPersist` off turns the deadline tier back into a
+  // toast + one chime; `closeToTray` is honoured only if a tray icon actually
+  // built (see tray_available in main.rs).
+  alarmsEnabled: true,
+  alarmSound: true,
+  alarmTone: 'gentle',      // see ALARM_TONES in utils/alarmSound.js
+  reminderTone: 'soft',     // ... and REMINDER_TONES
+  alarmVolume: 0.7,
+  alarmPersist: true,
+  alarmSnoozeMinutes: 10,
+  allDayAlarmTime: '09:00',  // when a deadline with no time of its own rings
+  alarmRaiseWindow: true,
+  closeToTray: true,
+
+  // TasksHub views. The masonry grid is legacy — off unless asked for; the
+  // Mission Board and Kanban are the two first-class layouts.
+  legacyViews: false,
+  boardDressing: 'plain',   // 'plain' | 'guild' (lanterns, dust, iron brackets)
+
   centerNowLine: true,
   bgBrightness: 0, // background lightness offset, applied on every page; -20..+20
   noteLayout: 'scroll', // reading-view layout: 'scroll' (continuous) | 'book' (two pages)

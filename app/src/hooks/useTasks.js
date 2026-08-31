@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "../utils/toast";
 import logger from "../utils/logger";
+import { fromPickerValue } from "../utils/deadline";
 
 
 // mini helper function for messages lol
@@ -209,7 +210,7 @@ export const useTasks = (authFetch, API, isAuthed, reloadKey = 0) => {
 
 
     // ----------- Task Operations ===========================
-    const addTask = useCallback(async (title, description, priority, dueDate, taskType) => {
+    const addTask = useCallback(async (title, description, priority, dueDate, taskType, remindAt) => {
         // if daily tasks
         if (taskType === 'daily') {
             if (!Array.isArray(title) || title.length === 0) {
@@ -249,7 +250,8 @@ export const useTasks = (authFetch, API, isAuthed, reloadKey = 0) => {
             title,
             description: description ?? '',
             priority: priority ?? 'medium',
-            due_date: dueDate ? new Date(dueDate).toISOString() : null,
+            ...fromPickerValue(dueDate),
+            remind_at: remindAt ? new Date(remindAt).toISOString() : null,
             is_completed: false,
             created_at: new Date().toISOString(),
             _optimistic: true,
@@ -262,7 +264,8 @@ export const useTasks = (authFetch, API, isAuthed, reloadKey = 0) => {
                 method: 'POST',
                 body: JSON.stringify({
                     title, description, priority,
-                    due_date: dueDate ? new Date(dueDate).toISOString() : null
+                    ...fromPickerValue(dueDate),
+                    remind_at: remindAt ? new Date(remindAt).toISOString() : null
                 })
             })
 
@@ -278,11 +281,11 @@ export const useTasks = (authFetch, API, isAuthed, reloadKey = 0) => {
         }
     }, [authFetch, API])
 
-    const updateTask = useCallback(async (id, {title, description, is_completed, priority, due_date}) => {
+    const updateTask = useCallback(async (id, {title, description, is_completed, priority, due_date, due_all_day, remind_at}) => {
         try {
 
             // get the passed values first
-            const params = {title, description, is_completed, priority, due_date};
+            const params = {title, description, is_completed, priority, due_date, due_all_day, remind_at};
 
             //remove undefined fields (the params that weren't passed)
             const cleanParams = Object.fromEntries(

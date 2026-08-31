@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi'
 import styles from './TaskDetailsModal.module.css'
 import DateTimePicker from './DateTimePicker.jsx'
+import { fromPickerValue, toPickerValue } from '../../utils/deadline'
 import { useModalPresence } from '../../utils/modalPresence'
 
 function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub}) {
@@ -10,7 +11,8 @@ function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub})
     const [titleData, setTitleData] = useState(task.title)
     const [descriptionData, setDescriptionData] = useState(task.description)
     const [prioritySelected, setPrioritySelected] = useState(task.priority)
-    const [dueDate, setDueDate] = useState(task.due_date)
+    const [deadline, setDeadline] = useState(() => toPickerValue(task.due_date, task.due_all_day))
+    const [remindAt, setRemindAt] = useState(task.remind_at ?? null)
     const [completion, setCompletion] = useState(task.is_completed)
     const isDirtyRef = useRef(false)
 
@@ -33,7 +35,10 @@ function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub})
         if (titleData !== task.title) changes.title = titleData
         if (!isDailyTask && descriptionData !== task.description) changes.description = descriptionData
         if (prioritySelected !== task.priority) changes.priority = prioritySelected
-        if (!isDailyTask && dueDate !== task.due_date) changes.due_date = dueDate
+        if (!isDailyTask && deadline !== toPickerValue(task.due_date, task.due_all_day)) {
+            Object.assign(changes, fromPickerValue(deadline))
+        }
+        if (!isDailyTask && remindAt !== (task.remind_at ?? null)) changes.remind_at = remindAt
         if (completion !== task.is_completed) changes.is_completed = completion
 
         updateTask(task.id, changes)
@@ -46,6 +51,16 @@ function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub})
 
     const handleBackdropClick = (e) => {
         if (e.target === e.currentTarget) handleClose()
+    }
+
+    // "1 hour before" is a way of PICKING a moment, not a rule that follows the
+    // deadline around: it writes an absolute timestamp, so moving the deadline
+    // later doesn't silently drag the reminder with it.
+    const remindBefore = (minutes) => {
+        const { due_date } = fromPickerValue(deadline)
+        if (!due_date) return
+        setRemindAt(new Date(new Date(due_date).getTime() - minutes * 60000).toISOString())
+        isDirtyRef.current = true
     }
 
     // ISO timestamp → value for a <input type="datetime-local"> (local time, no seconds).
@@ -135,16 +150,38 @@ function TaskDetailsModal({onClose, task, updateTask, isDailyTask, onOpenInHub})
                             <div className={`${styles.metaItem} ${styles.deadlineItem}`}>
                                 <span className={styles.fieldLabel}>Deadline</span>
                                 <DateTimePicker
-                                    value={toLocalInput(dueDate)}
-                                    onChange={(v) => {
-                                        setDueDate(v ? new Date(v).toISOString() : null)
-                                        isDirtyRef.current = true
-                                    }}
+                                    value={deadline}
+                                    onChange={(v) => { setDeadline(v); isDirtyRef.current = true }}
                                     placeholder="No deadline"
                                 />
                             </div>
                         )}
                     </div>
+
+                    {/* A reminder is a second thought about a deadline, so it sits
+                        under one. Dailies don't have one — they ring at their own
+                        time of day. */}
+                    {!isDailyTask && (
+                        <div className={styles.fieldGroup}>
+                            <span className={styles.fieldLabel}>Remind Me At</span>
+                            <div className={styles.remindRow}>
+                                <DateTimePicker
+                                    value={toLocalInput(remindAt)}
+                                    onChange={(v) => {
+                                        setRemindAt(v ? new Date(v).toISOString() : null)
+                                        isDirtyRef.current = true
+                                    }}
+                                    placeholder="No reminder"
+                                />
+                                {deadline && (
+                                    <div className={styles.remindShortcuts}>
+                                        <button type="button" className={styles.remindChip} onClick={() => remindBefore(60)}>1 hour before</button>
+                                        <button type="button" className={styles.remindChip} onClick={() => remindBefore(1440)}>1 day before</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                 </div>
             </div>
