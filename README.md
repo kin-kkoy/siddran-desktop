@@ -1,7 +1,7 @@
 # Siddran — Desktop
 
 The desktop build of **Siddran** (a local-first notes, tasks & planning app). A
-[Tauri](https://tauri.app) shell (Rust + the OS WebKit view) wrapping the Cinder
+[Tauri](https://tauri.app) shell (Rust + the OS WebKit view) wrapping the Siddran
 React frontend. Chosen over Electron for a small binary and low RAM.
 
 > Status: **working local-first app.** Notes, tasks, calendar and sandboxes live
@@ -11,8 +11,8 @@ React frontend. Chosen over Electron for a small binary and low RAM.
 ## Layout
 
 ```
-Siddran-Desktop/
-├── app/          ← the frontend (a copy of Cinder; diverges from the web from here on)
+siddran-desktop/
+├── app/          ← the frontend (a copy of siddran-web; diverges from the web from here on)
 ├── src-tauri/    ← the Tauri (Rust) desktop shell
 │   ├── src/main.rs
 │   ├── Cargo.toml
@@ -116,7 +116,7 @@ for a tray icon, which this app does not use, so it can be skipped.
 ## Setup
 
 ```bash
-cd Siddran-Desktop
+cd siddran-desktop
 npm install          # installs @tauri-apps/cli at the root
 npm run app:install  # installs the frontend deps in app/
 ```
@@ -163,9 +163,11 @@ Known rough edge: WebKitGTK's built-in PDF viewer lays out once and never
 reflows, so the first page or two of a PDF can render mis-sized until the window
 is resized. It corrects itself; several fixes have been tried and reverted.
 
-## Relationship to the other repos
+## Related repos
 
-`Cinder` (web frontend) and `Ember` (backend) live in sibling repos and power the
-**frozen web demo** (a portfolio piece). `app/` here started as a copy of Cinder
-and now evolves independently for the desktop. There is intentionally no shared
-build coupling between them.
+- [siddran-web](https://github.com/kin-kkoy/siddran-web): the React web client (live demo at https://cinder-ebon.vercel.app)
+- [siddran-backend](https://github.com/kin-kkoy/siddran-backend): the Node/Express + PostgreSQL API behind the web client
+
+Together they power the **frozen web demo** (a portfolio piece). `app/` here started
+as a copy of siddran-web and now evolves independently for the desktop. There is
+intentionally no shared build coupling between them.
