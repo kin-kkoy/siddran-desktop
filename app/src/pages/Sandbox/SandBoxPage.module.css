@@ -1,11 +1,11 @@
 /* Full-bleed: SandBoxPage breaks out of App's padded main column and locks
- * to the right edge of the (collapsed-or-not) sidebar. --cinder-sidebar-w is
+ * to the right edge of the (collapsed-or-not) sidebar. --siddran-sidebar-w is
  * set on the App root. z-index sits above the StarCanvas layer (z:5). */
 .page {
     position: fixed;
     top: 0;
     bottom: 0;
-    left: var(--cinder-sidebar-w, 0px);
+    left: var(--siddran-sidebar-w, 0px);
     right: 0;
     display: grid;
     grid-template-rows: auto 1fr auto;

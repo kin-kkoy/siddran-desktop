@@ -31,7 +31,7 @@ the desktop codebase via Tauri 2's Android target.
 | Decision | Outcome |
 |---|---|
 | Shell | **Tauri 2** Android target (same React app, new shell) |
-| Sync transport | **Cloudflare Worker + R2** — Ember and Git-as-remote both ruled out |
+| Sync transport | **Cloudflare Worker + R2** — siddran-backend and Git-as-remote both ruled out |
 | Sync model | Local-first on both devices; **explicit** push/pull, never in the path of a tap |
 | IDs | **UUIDs** (done 2026-07-20) so two offline devices can't collide |
 | Conflict rule | **Last-write-wins** on `updated_at`, per row; discarded side is reported |

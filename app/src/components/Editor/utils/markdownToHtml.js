@@ -84,7 +84,7 @@ const handlers = {
 
 // Resolve image src through the R2 helper and lift the `#w=NNN` (+ optional
 // `#h=NNN`) fragment into width/height styles.
-function rehypeCinderImages() {
+function rehypeSiddranImages() {
   return (tree) => {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'img' || !node.properties) return
@@ -114,7 +114,7 @@ function rehypeCinderImages() {
 // Three destinations, and the order matters: a REMOTE pdf is still an attachment
 // (isAttachmentHref only excludes remote *html*), so it keeps going to the side
 // viewer rather than out to the browser.
-function rehypeCinderLinks() {
+function rehypeSiddranLinks() {
   return (tree) => {
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a' || !node.properties) return
@@ -259,8 +259,8 @@ const processor = unified()
   .use(remarkRehype, { handlers })
   .use(rehypeLineNumbers)
   .use(rehypeCallouts)
-  .use(rehypeCinderImages)
-  .use(rehypeCinderLinks)
+  .use(rehypeSiddranImages)
+  .use(rehypeSiddranLinks)
   .use(rehypeHighlight, { ignoreMissing: true })
   .use(rehypeStringify)
 

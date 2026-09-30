@@ -136,7 +136,7 @@ to hand anything to the OS — so they were done together.
 - [x] **The bug** — a `http(s)` link in a note's reading view reached the DOM as a real
   `<a href>`; clicking it replaced the whole SPA, unsaved editor state included, with
   no back affordance. `markdownToHtml` stripped `href` off *attachment* links only.
-- [x] **The fix, at the source** — `rehypeCinderLinks` (was `rehypeCinderPdfLinks`) now
+- [x] **The fix, at the source** — `rehypeSiddranLinks` (was `rehypeCinderPdfLinks`) now
   drops `href` off **every** anchor and classifies it onto `data-href`: attachment →
   side viewer, web/mail → browser, anything else → inert. Safe by construction rather
   than by remembering to bind a handler on each surface.

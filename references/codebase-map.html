@@ -197,7 +197,7 @@
 <script>
 /* ══════════════════════════════════════════════════════════════════
    SIDDRAN DESKTOP — the local-first distribution (Tauri shell + the
-   Cinder frontend, forked). Content only; renderer lives below.
+   siddran-web frontend, forked). Content only; renderer lives below.
    ══════════════════════════════════════════════════════════════════ */
 const MAP = {
   title: "Siddran Desktop Codebase Map",
@@ -216,14 +216,14 @@ const MAP = {
     title: "The Local-First Distribution",
     sub: "the same app, running on a folder of markdown files instead of a server",
     what: [
-      ["p", "Siddran Desktop is Cinder forked and re-grounded. The React app is nearly the same code — the same editor, the same calendar, the same sandbox — but everything below <code>authFetch</code> was replaced. There is <mark>no server, no account, and no login</mark>. You open a <b>Bag</b>, which is just a folder you choose, and the app runs on the files inside it."],
+      ["p", "Siddran Desktop is siddran-web forked and re-grounded. The React app is nearly the same code — the same editor, the same calendar, the same sandbox — but everything below <code>authFetch</code> was replaced. There is <mark>no server, no account, and no login</mark>. You open a <b>Bag</b>, which is just a folder you choose, and the app runs on the files inside it."],
       ["p", "A Bag on disk looks like this, and it is meant to be readable without the app:"],
       ["flow", "MyBag/<br>&nbsp;&nbsp;notes/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>.md files</b>, folders = notebooks, <b>.comments.json</b> sidecars<br>&nbsp;&nbsp;tasks.siddran&nbsp;&nbsp;&nbsp;&nbsp;tasks · dailies · completions · bundles<br>&nbsp;&nbsp;calendar.siddran&nbsp;events · schedules<br>&nbsp;&nbsp;settings.siddran<br>&nbsp;&nbsp;sandboxes/&nbsp;&nbsp;&nbsp;one JSON per board<br>&nbsp;&nbsp;attachments/&nbsp;&nbsp;pasted images, per note"],
       ["h", "The trick that made it possible"],
       ["p", "The web build already had a guest demo mode that served the whole app from an in-memory mock. That proved the app only ever talks to <i>one function</i>. The desktop build reuses the identical seam: <code>authFetch</code> checks whether a Bag is open and routes to <mark>localStore</mark> instead of the network. Every hook, page and component above it is unchanged and does not know the difference."],
       ["flow", "<b>App.jsx</b> → <b>authFetch</b> → <b>localStore</b> (REST-shaped, in memory) → debounced flush → <b>files on disk</b> → <b>Rust</b>"],
       ["h", "How to read this map"],
-      ["p", "Height means weight. Blocks marked <mark>DESKTOP ONLY</mark> do not exist in the Cinder web build — that is the whole of the fork. Blocks marked <mark>NOT DEPLOYED</mark> are written and tested but not switched on."],
+      ["p", "Height means weight. Blocks marked <mark>DESKTOP ONLY</mark> do not exist in the siddran-web build — that is the whole of the fork. Blocks marked <mark>NOT DEPLOYED</mark> are written and tested but not switched on."],
       ["p", "Hover any block for a description; the <mark>How it is built</mark> tab gives the implementation and files. Double-click a block with an inside (E, V, Q, C, B) to open it."],
       ["h", "Adding a feature — the usual path"],
       ["ul", [
@@ -437,7 +437,7 @@ const MAP = {
         ["p", "Optional multi-device sync for the parts of a vault that are rows rather than files: tasks, dailies, completions, bundles, events and schedules. Notes are excluded — they are markdown on disk and belong to whatever file sync you already use."],
         ["p", "It is <b>explicit</b>. It never runs on a timer and never sits in front of a tap. You press sync."],
         ["flow", "pull → <b>three-way merge</b> → write locally → push (If-Match)"],
-        ["p", "Written and covered by tests; the Worker has not been deployed. Ember and git-based sync were both evaluated and ruled out."],
+        ["p", "Written and covered by tests; the Worker has not been deployed. siddran-backend and git-based sync were both evaluated and ruled out."],
       ],
       add: [["p", "New syncable collection: add it to <code>exportVault</code>/<code>importVault</code> in localStore, then a <code>run()</code> line in <code>mergeVault</code>. If its identity is not <code>id</code>, pass a custom key the way completions do."]],
       how: [
@@ -486,7 +486,7 @@ const MAP = {
       what: [
         ["p", "The choke point every request passes through — and, in this build, the point where the app stops being a web app."],
         ["flow", "Bag open? → <b>localStore</b> (files) &nbsp;·&nbsp; otherwise → network (vestigial)"],
-        ["p", "The network branch survives from Cinder and is effectively dead: with no Bag open the app shows the picker instead."],
+        ["p", "The network branch survives from siddran-web and is effectively dead: with no Bag open the app shows the picker instead."],
       ],
       add: [["p", "Anything global about requests belongs here. Never call bare <code>fetch</code> from a component — it would bypass the vault entirely."]],
       how: [["p", "A <code>useCallback</code> that reads <code>isLocalOpen()</code> from a module singleton rather than from state, so the callback identity stays stable and the data hooks do not re-run when a Bag opens."]],

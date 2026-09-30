@@ -3,9 +3,9 @@ import { tags as t } from '@lezer/highlight'
 
 // Syntax-highlight style for fenced code inside the editor (paired with
 // markdown({ codeLanguages }) so the embedded language is actually parsed).
-// Colours are drawn from Cinder's CSS variables so it tracks the active theme;
+// Colours are drawn from Siddran's CSS variables so it tracks the active theme;
 // a couple of accents are literal to widen the palette for code.
-export const cinderHighlightStyle = HighlightStyle.define([
+export const siddranHighlightStyle = HighlightStyle.define([
   { tag: [t.keyword, t.controlKeyword, t.operatorKeyword, t.modifier], color: 'var(--accent-blue)' },
   { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--accent-success)' },
   { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--accent-warning)' },

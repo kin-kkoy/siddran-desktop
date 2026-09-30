@@ -1,12 +1,12 @@
 import { EditorView } from '@codemirror/view'
 
-// Cinder dark-cosmic theme for the CodeMirror live-preview editor. Built on the
+// Siddran dark-cosmic theme for the CodeMirror live-preview editor. Built on the
 // app's existing CSS variables (NOT Obsidian purple — see the sandbox-aesthetic
 // feedback). Decoration classes (.cm-strong, .cm-h1, …) are assigned literally
 // by buildDeco, so we style them here; EditorView.theme scopes every selector
 // under the editor's generated class, keeping them from leaking globally.
 
-export const cinderTheme = EditorView.theme({
+export const siddranTheme = EditorView.theme({
   '&': {
     color: 'var(--text-primary)',
     backgroundColor: 'transparent',

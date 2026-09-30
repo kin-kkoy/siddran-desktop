@@ -56,8 +56,8 @@ import { commentsExtension, setCommentsEffect } from '../components/Editor/cm/co
 import { listEditingKeymap, listIndentNormalizer, enterIndent } from '../components/Editor/cm/listEditing'
 import { formattingKeymap } from '../components/Editor/cm/formatting'
 import { searchExtension } from '../components/Editor/cm/search'
-import { cinderHighlightStyle } from '../components/Editor/cm/highlight'
-import { cinderTheme } from '../components/Editor/cm/theme'
+import { siddranHighlightStyle } from '../components/Editor/cm/highlight'
+import { siddranTheme } from '../components/Editor/cm/theme'
 
 import { generateNote, generateComments } from './bookSpikeDoc'
 import realNoteRaw from './realNote.md?raw'
@@ -388,7 +388,7 @@ export default function BookSpike() {
         extensions: [
           EditorView.lineWrapping,
           gapField,
-          cinderTheme,
+          siddranTheme,
           domVerticalMotion,
           drawSelection(),
           keymap.of(defaultKeymap),
@@ -1535,7 +1535,7 @@ function buildView(parent, doc, stack = 'full') {
         ...(deco ? [headingFold] : []),
         ...(lang ? [
           markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [wikilinkMarkdownExtension, obsidianSyntax, { remove: ['SetextHeading', 'IndentedCode'] }] }),
-          syntaxHighlighting(cinderHighlightStyle),
+          syntaxHighlighting(siddranHighlightStyle),
         ] : []),
         ...(deco ? [
         livePreview,
@@ -1562,7 +1562,7 @@ function buildView(parent, doc, stack = 'full') {
         }),
         commentsExtension({ onClickComment: () => {} }),
         ] : []),
-        cinderTheme,
+        siddranTheme,
         cmPlaceholder('spike'),
         EditorView.editable.of(true),
       ],
@@ -1611,7 +1611,7 @@ function applyMechanism(view, mechanism, pageH) {
   // if the scroller clipped, every spread past the first would be blank no
   // matter how well the fragmentation worked. Clipping is the outer .viewport's
   // job, exactly as in ReadingView. `visible` also means no scrollLeft to fight
-  // (Q6), which is why cinderTheme sets it that way in production too.
+  // (Q6), which is why siddranTheme sets it that way in production too.
   scroller.style.overflow = 'visible'
 
   if (mechanism === 1) {

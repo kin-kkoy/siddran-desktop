@@ -44,8 +44,8 @@ import { commentsExtension } from '../components/Editor/cm/comments'
 import { listEditingKeymap, listIndentNormalizer, enterIndent } from '../components/Editor/cm/listEditing'
 import { formattingKeymap } from '../components/Editor/cm/formatting'
 import { searchExtension } from '../components/Editor/cm/search'
-import { cinderHighlightStyle } from '../components/Editor/cm/highlight'
-import { cinderTheme } from '../components/Editor/cm/theme'
+import { siddranHighlightStyle } from '../components/Editor/cm/highlight'
+import { siddranTheme } from '../components/Editor/cm/theme'
 
 import { pagedLayout } from './pagedLayout'
 import styles from './BookSpike.module.css'
@@ -107,7 +107,7 @@ export default function PagedEditor() {
           EditorView.lineWrapping,
           headingFold,
           markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [wikilinkMarkdownExtension, obsidianSyntax, { remove: ['SetextHeading', 'IndentedCode'] }] }),
-          syntaxHighlighting(cinderHighlightStyle),
+          syntaxHighlighting(siddranHighlightStyle),
           livePreview,
           liveTables,
           tableTypingGuard,
@@ -125,7 +125,7 @@ export default function PagedEditor() {
             tasks: () => [], bundles: () => [], sandboxes: () => [],
           }),
           commentsExtension({ onClickComment: () => {} }),
-          cinderTheme,
+          siddranTheme,
           cmPlaceholder('Start typing…'),
           layoutRef.current.of(pagedLayout(620, 'continue')),
         ],

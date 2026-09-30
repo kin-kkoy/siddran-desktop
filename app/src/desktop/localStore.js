@@ -354,7 +354,7 @@ export async function saveAttachment(file) {
   return `${relDir}/${filename}`
 }
 
-// ── request routing (mirrors the Ember/guestApi contract) ───────────
+// ── request routing (mirrors the siddran-backend/guestApi contract) ───────────
 const res = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => data, text: async () => (typeof data === 'string' ? data : JSON.stringify(data)) })
 const ok = (d) => res(200, d)
 const created = (d) => res(201, d)

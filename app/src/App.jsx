@@ -62,7 +62,7 @@ const PLAN_EVENT_FIELDS = ['title', 'description', 'start_at', 'end_at', 'all_da
 const EMPTY_LIST = [] // stable ref: hidden tasks/dailies while in the Designer's blank canvas
 
 // Lightweight loading state shown while the lazy Sandbox chunk is fetching.
-// Kept minimal so it does not flash garishly against the dark Cinder shell.
+// Kept minimal so it does not flash garishly against the dark Siddran shell.
 function SandboxFallback() {
   return (
     <div style={{
@@ -858,7 +858,7 @@ function App() {
     />
   )
 
-  // --cinder-sidebar-w exposes the sidebar's current width so full-bleed pages
+  // --siddran-sidebar-w exposes the sidebar's current width so full-bleed pages
   // (e.g. SandBoxPage) can absolutely-position themselves flush against it
   // without re-implementing the collapse logic.
   const sidebarW = unlocked ? (isCollapsed ? '0px' : '220px') : '0px'
@@ -868,7 +868,7 @@ function App() {
     minHeight: "100vh",
     margin: 0,
     padding: 0,
-    '--cinder-sidebar-w': sidebarW,
+    '--siddran-sidebar-w': sidebarW,
   };
 
   // Launch animation (once per session). Placed after all hooks so the auth/auto-open

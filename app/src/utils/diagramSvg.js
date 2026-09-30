@@ -297,7 +297,7 @@ export function diagramToSvg(items, opts = {}) {
     const colour = stroke || '#e2ddf5'
     const existing = markerIds.get(colour)
     if (existing) return existing
-    const id = `cinder-arrow-${++markerSeq}`
+    const id = `siddran-arrow-${++markerSeq}`
     const marker = el('marker', {
       id, viewBox: '0 0 10 10', refX: 9, refY: 5,
       markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse',
