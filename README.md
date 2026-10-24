@@ -167,6 +167,7 @@ is resized. It corrects itself; several fixes have been tried and reverted.
 
 - [siddran-web](https://github.com/kin-kkoy/siddran-web): the React web client (live demo at https://cinder-ebon.vercel.app)
 - [siddran-backend](https://github.com/kin-kkoy/siddran-backend): the Node/Express + PostgreSQL API behind the web client
+- [siddran-cli](https://github.com/kin-kkoy/siddran-cli): the terminal TUI and CLI. A peer of this app on the same Bag, and the way in for AI (`siddran tools` / `siddran call` / `siddran mcp`)
 
 Together they power the **frozen web demo** (a portfolio piece). `app/` here started
 as a copy of siddran-web and now evolves independently for the desktop. There is
