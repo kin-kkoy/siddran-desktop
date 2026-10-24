@@ -82,6 +82,10 @@ function normalizeItem(raw, index) {
         stroke: typeof p.stroke === 'string' ? p.stroke : '#e2ddf5',
         strokeWidth: Math.max(1, num(p.strokeWidth, 2)),
         head: p.head === 'none' ? 'none' : 'arrow',
+        // "yes" / "no" on a branch, and dashed for "optional" or "async" links.
+        // Only written when set, so diagrams without them stay byte-identical.
+        ...(typeof p.label === 'string' && p.label.trim() ? { label: p.label.trim().slice(0, 200) } : {}),
+        ...(p.dash === true ? { dash: true } : {}),
       },
     }
   }

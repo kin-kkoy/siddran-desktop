@@ -5,7 +5,7 @@ import logger from "../utils/logger";
 // Named "schedules" — groups of blocks stamped from the Schedule Designer. Lists them and exposes
 // create / delete / rename / recolour. The events cache (useCalendarEvents) is synced separately in
 // App (this hook owns the schedules list; App reflects the block-level changes). Gated on calendarActive.
-export function useSchedules(authFetch, API, isAuthed) {
+export function useSchedules(authFetch, API, isAuthed, reloadKey = 0) {
     const [schedules, setSchedules] = useState([])
     const [loading, setLoading] = useState(true)
 
@@ -23,7 +23,7 @@ export function useSchedules(authFetch, API, isAuthed) {
             }
         })()
         return () => { cancelled = true }
-    }, [isAuthed, authFetch, API])
+    }, [isAuthed, authFetch, API, reloadKey])
 
     // Create a named schedule + its stamped blocks (one transaction). Returns { schedule, events } | null.
     const createSchedule = useCallback(async ({ name, color, events, template }) => {

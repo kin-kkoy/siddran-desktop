@@ -87,6 +87,9 @@ async function hydrate() {
     }
 }
 
+// Re-read the board list — a board was created, renamed or deleted outside the app.
+export const refresh = () => { if (api.isAuthed) return hydrate() }
+
 export const connect = (next) => {
     api = { authFetch: next.authFetch, API: next.API, isAuthed: !!next.isAuthed }
     if (api.isAuthed && !booted) {

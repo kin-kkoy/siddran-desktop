@@ -644,6 +644,7 @@ function NotePane({
           key={note.id}
           readMode={viewMode}
           initialContent={initialContent}
+          externalBody={note.body}
           onSave={handleEditorSave}
           onDocChange={handleDocChange}
           noteId={note.id}

@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react'
  * Positioned via screenFromWorld on the shape's bounding box, sized to match the
  * shape's screen dimensions. Rendered as a child of the canvas container.
  */
-function ShapeTextEditor({ item, canvas, onCommit, onClose }) {
+function ShapeTextEditor({ item, canvas, onCommit, onClose, onTab }) {
     const p = item.payload || {}
     const [draft, setDraft] = useState(p.text || '')
     const taRef = useRef(null)
@@ -105,6 +105,9 @@ function ShapeTextEditor({ item, canvas, onCommit, onClose }) {
                 onKeyDown={(e) => {
                     e.stopPropagation()
                     if (e.key === 'Escape') { e.preventDefault(); commit() }
+                    // Tab: done with this box, on to the next one (Shift+Tab: the
+                    // next branch beside it). Lets a whole flowchart be typed.
+                    if (e.key === 'Tab' && onTab) { e.preventDefault(); commit(); onTab(e.shiftKey) }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 style={{

@@ -13,6 +13,7 @@ import { SHAPE_TOOLS } from '../Sandbox/shapes/registry'
 import { useSandboxCanvas } from '../../hooks/useSandboxCanvas'
 import { useSandboxHistory } from '../../hooks/useSandboxHistory'
 import { useDiagramItems } from '../../hooks/useDiagramItems'
+import { useFlowActions } from '../../hooks/useFlowActions'
 import { LuMousePointer2, LuHand, LuShapes, LuEraser, LuUndo2, LuRedo2, LuX, LuCheck } from 'react-icons/lu'
 
 /**
@@ -73,6 +74,14 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
     () => items.reduce((m, it) => Math.max(m, it.z_index ?? 0), 0) + 1,
     [items],
   )
+  // The same pen-free flowchart moves as a Sandbox board: Tab for the next step,
+  // C to connect, ⇧T to tidy. A note diagram has no board to bump.
+  const noop = useCallback(() => {}, [])
+  const viewportCenter = useCallback(() => {
+    const el = canvasWrapRef.current
+    return canvas.worldFromScreen({ x: (el?.clientWidth || 800) / 2, y: (el?.clientHeight || 500) / 2 })
+  }, [canvas])
+  const flow = useFlowActions({ items, act, beginTransaction, endTransaction, canvas, nextZ, bump: noop, setEditingShapeId, viewportCenter })
 
   // Same buckets the Sandbox page builds. No card types here — the subset has
   // none — but connectors still need their own layer so links paint behind boxes.
@@ -279,6 +288,14 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
       if (e.key === '[') { stop(); onZOrder('back'); return }
       if (e.key === '1') { stop(); fitToContent(); return }
 
+      const only = canvas.selectedIds.size === 1 ? items.find(i => i.id === [...canvas.selectedIds][0]) : null
+      const oneShape = only?.type === 'shape' ? only : null
+      const dirs = { ArrowDown: 's', ArrowUp: 'n', ArrowRight: 'e', ArrowLeft: 'w' }
+      if (e.key === 'Tab' && oneShape) { stop(); if (e.shiftKey) flow.createSibling(oneShape.id); else flow.createNext(oneShape.id, 's'); return }
+      if (e.altKey && dirs[e.key] && oneShape) { stop(); flow.createNext(oneShape.id, dirs[e.key]); return }
+      if ((e.key === 'c' || e.key === 'C') && !e.shiftKey && canvas.selectedIds.size === 2) { stop(); flow.connectSelected(); return }
+      if (e.key === 'T' && e.shiftKey) { stop(); flow.tidySelection(); return }
+
       if (e.key.startsWith('Arrow')) {
         stop()
         const d = e.shiftKey ? 10 : 1
@@ -311,7 +328,7 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [
     editingShapeId, onCancel, undo, redo, duplicateSelection, deleteSelection,
-    selectAll, nudgeSelection, fitToContent, onZOrder, setTool, canvas, items,
+    selectAll, nudgeSelection, fitToContent, onZOrder, setTool, canvas, items, flow,
   ])
 
   const editItem = editingShapeId ? items.find(i => i.id === editingShapeId) : null
@@ -370,6 +387,7 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
             onMarqueeSelect={onMarqueeSelect}
             onErase={onErase}
             onShapeDoubleClick={onShapeDoubleClick}
+            onEmptyDoubleClick={flow.createAt}
             editingShapeId={editingShapeId}
             beginTransaction={beginTransaction}
             endTransaction={endTransaction}
@@ -398,15 +416,18 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
                 beginTransaction={beginTransaction}
                 endTransaction={endTransaction}
                 editingShapeId={editingShapeId}
+                flow={flow}
               />
             }
           />
           {editItem && editItem.type === 'shape' && (
             <ShapeTextEditor
+              key={editItem.id}   // a fresh editor per box — see SandBoxPage
               item={editItem}
               canvas={canvas}
               onCommit={(id, patch) => onUpdateShapePayload(id, patch)}
               onClose={() => setEditingShapeId(null)}
+              onTab={(shift) => { if (shift) flow.createSibling(editItem.id); else flow.createNext(editItem.id, 's') }}
             />
           )}
         </div>

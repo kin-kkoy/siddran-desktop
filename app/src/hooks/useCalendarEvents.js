@@ -9,7 +9,7 @@ import logger from "../utils/logger";
 // Reads fetch the user's whole set on auth (a personal app's event count is small and the
 // derivation layer — useCalendar — filters/expands by the visible range in memory). A
 // range-scoped refetch can be layered on later if event volume ever warrants it.
-export const useCalendarEvents = (authFetch, API, isAuthed) => {
+export const useCalendarEvents = (authFetch, API, isAuthed, reloadKey = 0) => {
 
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
@@ -32,7 +32,7 @@ export const useCalendarEvents = (authFetch, API, isAuthed) => {
         }
 
         fetchEvents()
-    }, [isAuthed, authFetch, API])
+    }, [isAuthed, authFetch, API, reloadKey])
 
 
     // Create a block. `start_at` is required; pass ref_type/ref_id only for linked blocks.

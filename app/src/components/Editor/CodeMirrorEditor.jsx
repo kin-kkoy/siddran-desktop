@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { EditorState, Compartment } from '@codemirror/state'
+import { EditorState, Compartment, Transaction } from '@codemirror/state'
 import { EditorView, keymap, drawSelection, tooltips, placeholder as cmPlaceholder } from '@codemirror/view'
 import { history, historyKeymap, defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage, deleteMarkupBackward } from '@codemirror/lang-markdown'
@@ -31,6 +31,7 @@ import { useSettings } from '../../contexts/SettingsContext'
 import { readFolds, writeFolds } from '../../hooks/noteFoldsCache'
 import { setActiveEditor, clearActiveEditor } from './activeEditor'
 import { requestOpenExternal } from '../../desktop/openExternal'
+import { merge3 } from '../../desktop/sync/text3'
 import styles from './CodeMirrorEditor.module.css'
 
 // Autosave cadence — a periodic save to the local Bag. In-session edits also live
@@ -43,6 +44,8 @@ const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000
 //
 // Props:
 //   initialContent  markdown string the editor opens with
+//   externalBody    the note's body as the store has it now; when it moves for a
+//                   reason other than our own save, it is merged into the doc
 //   onSave(md)      => Promise<boolean>, persists the note body
 //   onDirtyChange   (isDirty: boolean) => void
 //   noteId          stable id (editor is remounted per note via key); draft key
@@ -50,6 +53,7 @@ const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000
 //   interfaceMode   true = read-only
 function CodeMirrorEditor({
   initialContent = '',
+  externalBody,
   onSave,
   onDocChange,
   onDirtyChange,
@@ -149,6 +153,7 @@ function CodeMirrorEditor({
   // Save bookkeeping (refs so they survive across the view's lifetime).
   const lastSavedRef = useRef(initialContent) // last content persisted to the Bag
   const dirtyRef = useRef(false)              // differs from saved content
+  const savingRef = useRef(null)              // text of a save in flight (its echo is not news)
 
   // Build the editor once on mount.
   useEffect(() => {
@@ -168,7 +173,9 @@ function CodeMirrorEditor({
         onDirtyRef.current?.(false)
         return
       }
+      savingRef.current = md
       return Promise.resolve(onSaveRef.current?.(md)).then(ok => {
+        if (savingRef.current === md) savingRef.current = null
         if (ok !== false) {
           lastSavedRef.current = md
           dirtyRef.current = false
@@ -373,6 +380,38 @@ function CodeMirrorEditor({
     // doc never needs external syncing. Deps intentionally omitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The note changed underneath us — the CLI, an AI through `siddran mcp`, a text
+  // editor. Merge, don't replace: what is on screen may include typing that has
+  // not been saved yet, and the person typing must not watch it vanish.
+  // lastSavedRef is the common ancestor (the last text both sides agreed on).
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || externalBody == null) return
+    if (externalBody === savingRef.current) { lastSavedRef.current = externalBody; return } // our own save, echoed back
+    if (externalBody === lastSavedRef.current) return
+    const doc = view.state.doc.toString()
+    const { text } = merge3(lastSavedRef.current, doc, externalBody)
+    lastSavedRef.current = externalBody
+    if (text !== doc) {
+      // One replace over the span that actually differs, so the cursor and
+      // selection map through it instead of jumping to the top.
+      let a = 0
+      while (a < doc.length && a < text.length && doc[a] === text[a]) a++
+      let b = 0
+      while (b < doc.length - a && b < text.length - a && doc[doc.length - 1 - b] === text[text.length - 1 - b]) b++
+      view.dispatch({
+        changes: { from: a, to: doc.length - b, insert: text.slice(a, text.length - b) },
+        // Not yours to undo: Ctrl+Z steps back through your own edits only.
+        annotations: [Transaction.addToHistory.of(false), Transaction.userEvent.of('remote')],
+      })
+      if (readMode) setReadSnapshot(text)
+    }
+    // Anything of ours that survived the merge still has to reach disk.
+    const ahead = text !== externalBody
+    dirtyRef.current = ahead
+    onDirtyRef.current?.(ahead)
+  }, [externalBody, readMode])
 
   // Re-seed the comment anchors whenever the STRUCTURE changes (threads load,
   // added/deleted/resolved) — keyed on a signature so position-only remaps (which

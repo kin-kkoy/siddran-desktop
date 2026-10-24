@@ -186,17 +186,35 @@ export const siddranTheme = EditorView.theme({
     background: 'linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border-strong) calc(50% - 0.5px), var(--border-strong) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
   },
   '.cm-task': { display: 'inline' }, // inline so it shifts with the line's text-indent
-  // Completed task: grey the label text (the checkbox keeps its accent colour since
-  // that's an accentColor, not a text colour). Matches the reading view.
+  // Completed task: grey the label text (the checkbox keeps its own fill, not the
+  // text colour). Matches the reading view.
   '.cm-line.cm-task-checked': { color: 'var(--text-muted)' },
+  // Our own checkbox rather than WebKit's built-in control: `appearance: none`
+  // and a drawn box + tick, so it matches the app and does not depend on how a
+  // given WebKitGTK release paints native widgets. Same look as ReadingView.
   '.cm-task-check': {
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    boxSizing: 'border-box',
     width: '15px',
     height: '15px',
+    margin: '0 6px 0 0',
     verticalAlign: '-2px',
-    marginRight: '6px',
+    border: '1.5px solid var(--text-muted)',
+    borderRadius: '4px',
+    background: 'transparent',
     cursor: 'pointer',
-    accentColor: 'var(--accent-blue)',
+    transition: 'background-color 120ms ease, border-color 120ms ease',
   },
+  '.cm-task-check:hover': { borderColor: 'var(--accent-blue)' },
+  '.cm-task-check:checked': {
+    backgroundColor: 'var(--accent-blue)',
+    borderColor: 'var(--accent-blue)',
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\'%3E%3Cpath d=\'M3.6 8.4l2.9 2.9 5.9-6.6\' fill=\'none\' stroke=\'white\' stroke-width=\'2.2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E")',
+    backgroundSize: '100% 100%',
+    backgroundRepeat: 'no-repeat',
+  },
+  '.cm-task-check:focus-visible': { outline: '2px solid var(--accent-blue)', outlineOffset: '2px' },
   '.cm-line.cm-list-line': {
     // Hanging indent via padding-left + negative text-indent (NOT a negative margin
     // on the marker). text-indent shifts the WHOLE first visual row — leading

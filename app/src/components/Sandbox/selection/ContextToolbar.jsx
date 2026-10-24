@@ -4,6 +4,7 @@ import {
     LuAlignStartVertical, LuAlignCenterVertical, LuAlignEndVertical,
     LuAlignStartHorizontal, LuAlignCenterHorizontal, LuAlignEndHorizontal,
     LuAlignHorizontalDistributeCenter, LuAlignVerticalDistributeCenter,
+    LuCornerRightDown, LuCable, LuNetwork, LuClipboardCopy,
 } from 'react-icons/lu'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -53,6 +54,7 @@ function ContextToolbar({
     beginTransaction,
     endTransaction,
     editingShapeId,
+    flow,               // useFlowActions — next / connect / tidy / copy as text
 }) {
     const shapes = useMemo(
         () => selectedItems.filter(it => it.type === 'shape'),
@@ -96,6 +98,23 @@ function ContextToolbar({
                     onClick={() => setPayload({ routing: elbow ? 'straight' : 'elbow' })}
                     title={elbow ? 'Elbow (click for straight)' : 'Straight (click for elbow)'}
                     aria-label="Toggle routing">{elbow ? '⌐' : '╱'}</button>
+                <button className={cp.dash ? styles.btnActive : styles.btn}
+                    onClick={() => setPayload({ dash: !cp.dash })}
+                    title={cp.dash ? 'Dashed (click for solid)' : 'Solid (click for dashed)'}
+                    aria-label="Toggle dashed">┄</button>
+                <div className={styles.sep} />
+                {/* "yes" / "no" on a decision's branches. Uncontrolled + keyed on the
+                    connector so typing is not an undo step per character. */}
+                <input
+                    key={conn.id}
+                    className={styles.labelInput}
+                    defaultValue={cp.label || ''}
+                    placeholder="Label"
+                    aria-label="Arrow label"
+                    data-sb-noedit="true"
+                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                    onBlur={(e) => { const v = e.currentTarget.value.trim(); if (v !== (cp.label || '')) setPayload({ label: v }) }}
+                />
                 <div className={styles.sep} />
                 <button className={styles.btn} onClick={() => onDelete?.()} title="Delete" aria-label="Delete">✕</button>
             </div>
@@ -173,6 +192,35 @@ function ContextToolbar({
                             <span className={styles.radiusValue}>{radius}</span>
                         </div>
                     )}
+                    <div className={styles.sep} />
+                </>
+            )}
+
+            {/* Flowchart — the pen-free way to build one */}
+            {flow && hasShapes && (
+                <>
+                    {shapes.length === 1 && selectedCount === 1 && (
+                        <button className={styles.btn} onClick={() => flow.createNext(shapes[0].id, 's')}
+                            title="Next step — a connected box below (Tab)" aria-label="Next step">
+                            <LuCornerRightDown size={15} />
+                        </button>
+                    )}
+                    {selectedCount === 2 && boxItems.length === 2 && (
+                        <button className={styles.btn} onClick={() => flow.connectSelected()}
+                            title="Connect these two (C)" aria-label="Connect">
+                            <LuCable size={15} />
+                        </button>
+                    )}
+                    {shapes.length >= 2 && (
+                        <button className={styles.btn} onClick={() => flow.tidySelection()}
+                            title="Tidy — lay out along the arrows (⇧T)" aria-label="Tidy">
+                            <LuNetwork size={15} />
+                        </button>
+                    )}
+                    <button className={styles.btn} onClick={() => flow.copyAsText()}
+                        title="Copy as text — paste into a note or an AI chat" aria-label="Copy as text">
+                        <LuClipboardCopy size={14} />
+                    </button>
                     <div className={styles.sep} />
                 </>
             )}

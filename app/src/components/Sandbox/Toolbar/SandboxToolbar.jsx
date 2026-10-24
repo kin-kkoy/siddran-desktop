@@ -1,7 +1,7 @@
 import {
     LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
     LuType, LuEraser, LuImagePlus, LuPaintBucket,
-    LuUndo2, LuRedo2, LuMagnet, LuDownload,
+    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
 } from 'react-icons/lu'
 import { useRef } from 'react'
 import styles from './SandboxToolbar.module.css'
@@ -43,6 +43,7 @@ function SandboxToolbar({
     onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf,
     onUndo, onRedo, canUndo, canRedo,
     snapEnabled, onToggleSnap, onExport,
+    onOpenFlowText,
 }) {
     const swatchRef = useRef(null)
     const shapeRef = useRef(null)
@@ -83,6 +84,11 @@ function SandboxToolbar({
             <ToolBtn active={tool === 'text'} title="Text (T)" onClick={() => onToolChange('text')}>
                 <LuType size={16} />
             </ToolBtn>
+            {onOpenFlowText && (
+                <ToolBtn title="Diagram from text (D)" onClick={onOpenFlowText}>
+                    <LuWorkflow size={16} />
+                </ToolBtn>
+            )}
             <span ref={insertRef}>
                 <ToolBtn active={insertMenuOpen} title="Media" onClick={onToggleInsertMenu}>
                     <LuImagePlus size={16} />

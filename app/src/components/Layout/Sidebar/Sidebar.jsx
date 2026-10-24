@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from './Sidebar.module.css'
 import SidebarList from "./SidebarList";
@@ -34,6 +34,22 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
     const session = readSession(currentBagPath)
     const target = (section) => sectionTarget(session, section, location.pathname)
 
+    // Expanding is two steps: App reserves the 220px column at once (the content
+    // reflows and repaints, which takes a few slow frames on a busy page), and
+    // only after that do we let the panel slide in. Started together, the slow
+    // frames ate the fast first part of the ease-out, so the panel appeared to
+    // jump most of the way in. Collapsing needs no such wait: the content row
+    // stacks above the sidebar and covers the slide-out.
+    const [revealed, setRevealed] = useState(!isCollapsed)
+    useEffect(() => {
+        if (isCollapsed) { setRevealed(false); return }
+        let second = 0
+        const first = requestAnimationFrame(() => {
+            second = requestAnimationFrame(() => setRevealed(true))
+        })
+        return () => { cancelAnimationFrame(first); cancelAnimationFrame(second) }
+    }, [isCollapsed])
+
     const [listOpen, setListOpen] = useState(readListOpen)
     const toggleList = () => setListOpen(prev => { const next = !prev; writeListOpen(next); return next })
 
@@ -47,7 +63,7 @@ function Sidebar({ username, isCollapsed, toggleSidebar, notes, notebooks, curre
 
 
     return (
-        <div className={`${styles.sidebar} ${isCollapsed ? styles.hidden : ''}`} aria-hidden={isCollapsed}>
+        <div className={`${styles.sidebar} ${isCollapsed || !revealed ? styles.hidden : ''}`} aria-hidden={isCollapsed}>
 
             {/* TOP SECTION: brand + navigation links */}
             <div className={styles.topSection}>

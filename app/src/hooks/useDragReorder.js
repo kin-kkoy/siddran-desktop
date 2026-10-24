@@ -60,6 +60,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
   scrollContainerRef.current = scrollContainer
   const edgeScroll = useRef({ vy: 0, raf: 0 })
   const prevRects = useRef(new Map())          // last measured item positions, for FLIP
+  const prevOrderSig = useRef(null)            // order at the last FLIP pass
   onReorderRef.current = onReorder
 
   // Resync the display order with incoming ids whenever we're not mid-drag
@@ -78,6 +79,39 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
     setOrder((prev) => {
       const activeKey = String(draggedId)
       if (!prev.some((id) => String(id) === activeKey)) return prev
+
+      // A single row (the tab strip): swap with a neighbour once the dragged
+      // item's leading edge passes that neighbour's centre. The pointer-vs-midpoint
+      // rule below is lopsided here: swapping back needed the pointer strictly LEFT
+      // of where it started, so dropping a tab back on its own spot left it one
+      // slot over and it slid away on release. Positions are layout positions —
+      // with in-flight FLIP transforms taken out — so a sibling still sliding
+      // doesn't move the boundaries.
+      if (axis === 'x') {
+        const dragEl = itemRefs.current.get(activeKey)
+        if (!dragEl) return prev
+        const slots = prev.map((id) => {
+          const el = itemRefs.current.get(String(id))
+          if (!el) return null
+          const r = el.getBoundingClientRect()
+          const t = getComputedStyle(el).transform
+          const tx = t && t !== 'none' ? new DOMMatrix(t).m41 : 0
+          return { left: r.left - tx, width: r.width }
+        })
+        if (slots.some((s) => !s)) return prev
+        const from = prev.findIndex((id) => String(id) === activeKey)
+        const left = clientX - drag.current.grabDX // where glue draws it
+        const right = left + dragEl.offsetWidth
+        let to = from
+        while (to + 1 < prev.length && right > slots[to + 1].left + slots[to + 1].width / 2) to++
+        if (to === from) while (to - 1 >= 0 && left < slots[to - 1].left + slots[to - 1].width / 2) to--
+        if (to === from) return prev
+        const next = prev.slice()
+        next.splice(from, 1)
+        next.splice(to, 0, draggedId)
+        orderRef.current = next
+        return next
+      }
 
       const rest = prev.filter((id) => String(id) !== activeKey)
       const rects = rest
@@ -117,7 +151,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       orderRef.current = next
       return next
     })
-  }, [])
+  }, [axis])
 
   // Glue the actively-dragged item to the cursor. We clear its transform, read its
   // TRUE laid-out slot (which shifts as siblings reorder around it), then translate it
@@ -282,6 +316,14 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       return
     }
     const activeKey = drag.current.active ? String(drag.current.id) : null
+    // Slide only when the ORDER changed. Every other render (switching tabs, a
+    // note title saving) can land after the strip's layout shifted for reasons of
+    // its own — the content pane's scrollbar coming or going, the sidebar
+    // toggling — and FLIP'ing that difference made the tabs visibly stretch and
+    // settle back on every tab click.
+    const orderSig = order.join('\u0000')
+    const reordered = orderSig !== prevOrderSig.current
+    prevOrderSig.current = orderSig
     const next = new Map()
     for (const [key, el] of itemRefs.current) {
       if (!el) continue
@@ -289,7 +331,7 @@ export function useDragReorder(ids, onReorder, enabled = true, groupName = 'reor
       const rect = el.getBoundingClientRect()
       next.set(key, { left: rect.left, top: rect.top })
       const prev = prevRects.current.get(key)
-      if (prev && (prev.left !== rect.left || prev.top !== rect.top)) {
+      if (reordered && prev && (prev.left !== rect.left || prev.top !== rect.top)) {
         el.style.transition = 'none'
         el.style.transform = `translate(${prev.left - rect.left}px, ${prev.top - rect.top}px)`
         requestAnimationFrame(() => {

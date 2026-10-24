@@ -61,7 +61,23 @@
   margin-left: -1.35em;
   margin-right: 6px;
   vertical-align: middle;
-  accent-color: var(--accent-blue);
+  /* Our own checkbox, not WebKit's built-in one — same box and tick as the
+     editor's .cm-task-check (cm/theme.js); keep the two in step. */
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 4px;
+  background: transparent;
+}
+.reading input[type='checkbox']:checked {
+  background-color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.6 8.4l2.9 2.9 5.9-6.6' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 /* Completed task: grey the label text. Reset nested lists back to the default
    colour so an unchecked child under a checked parent keeps its normal weight

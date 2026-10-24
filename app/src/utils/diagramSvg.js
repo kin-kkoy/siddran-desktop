@@ -22,7 +22,7 @@
 // subtly wrong.
 
 import { renderShape, isLineKind } from '../components/Sandbox/shapes/registry'
-import { connectorPoints } from '../components/Sandbox/connectors/geometry'
+import { connectorPoints, labelBox, LABEL_FONT } from '../components/Sandbox/connectors/geometry'
 import { diagramBounds } from './diagramBlock'
 
 const SEGMENTS_PER_QUARTER = 4   // flattening resolution for arcs
@@ -240,15 +240,28 @@ function connectorElement(item, byId, markerFor) {
   const p = item.payload
   const points = []
   for (let i = 0; i < pts.length; i += 2) points.push(`${fmt(pts[i])},${fmt(pts[i + 1])}`)
-  return el('polyline', {
+  const line = el('polyline', {
     points: points.join(' '),
     fill: 'none',
     stroke: p.stroke,
     'stroke-width': p.strokeWidth,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
+    'stroke-dasharray': p.dash ? '8 6' : null,
     'marker-end': p.head === 'none' ? null : `url(#${markerFor(p.stroke)})`,
   })
+  const box = labelBox(pts, p.label)
+  if (!box) return line
+  // Same pill as the canvas: page-coloured, so the line reads as passing behind the word.
+  const g = el('g')
+  g.appendChild(line)
+  const pill = el('rect', { x: fmt(box.x), y: fmt(box.y), width: box.w, height: box.h, rx: box.h / 2, stroke: p.stroke, 'stroke-width': 1 })
+  pill.style.fill = 'var(--bg-primary, #09090f)'
+  g.appendChild(pill)
+  const t = el('text', { x: fmt(box.x + box.w / 2), y: fmt(box.y + box.h / 2), fill: p.stroke, 'font-size': LABEL_FONT, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'var(--font-body, sans-serif)' })
+  t.textContent = p.label          // never innerHTML — this is note prose
+  g.appendChild(t)
+  return g
 }
 
 let markerSeq = 0

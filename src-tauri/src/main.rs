@@ -13,6 +13,9 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, UriSchemeContext};
 use tauri_plugin_notification::NotificationExt;
 
+mod bagsync;
+mod presence;
+
 // A Bag is a user-picked folder anywhere on disk, so we use std::fs directly
 // (via these commands) rather than tauri-plugin-fs, whose path scoping would
 // block an arbitrary location. The frontend's tauriFs adapter calls these.
@@ -49,10 +52,7 @@ fn bag_read_text(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn bag_write_text(path: String, contents: String) -> Result<(), String> {
-    if let Some(parent) = Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::write(&path, contents).map_err(|e| e.to_string())
+    bagsync::write_atomic(Path::new(&path), contents.as_bytes())
 }
 
 #[tauri::command]
@@ -88,10 +88,7 @@ fn bag_write_bytes(path: String, contents: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(contents.as_bytes())
         .map_err(|e| e.to_string())?;
-    if let Some(parent) = Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::write(&path, bytes).map_err(|e| e.to_string())
+    bagsync::write_atomic(Path::new(&path), &bytes)
 }
 
 // Read binary content (e.g. an image dragged in from outside the Bag) as base64.
@@ -649,6 +646,16 @@ fn show_main_window(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    // WebKitGTK 2.54 (Arch, 2026-10-13) made the window flicker — navbar and note
+    // animations — on Hyprland/Wayland. Turning off its DMA-BUF renderer fixed it
+    // (tested by hand: WEBKIT_DISABLE_DMABUF_RENDERER=1 removed the flicker).
+    // Set before WebKit starts, so its web process inherits it; an explicit value
+    // in the environment still wins, which is also how to undo this for a test.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .manage(Closing::default())
         .manage(TrayState::default())
@@ -720,6 +727,8 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(ViewerState::default())
+        .manage(bagsync::WatchState::default())
+        .manage(presence::RequestWatch::default())
         .register_uri_scheme_protocol(VIEWER_SCHEME, serve_viewer)
         .invoke_handler(tauri::generate_handler![
             bag_exists,
@@ -732,6 +741,14 @@ fn main() {
             bag_write_bytes,
             bag_read_bytes,
             bag_copy_dir,
+            bagsync::bag_lock,
+            bagsync::bag_unlock,
+            bagsync::bag_watch,
+            bagsync::bag_unwatch,
+            presence::presence_write,
+            presence::presence_clear,
+            presence::presence_listen,
+            presence::presence_unlisten,
             open_external_url,
             reveal_in_file_manager,
             app_close,

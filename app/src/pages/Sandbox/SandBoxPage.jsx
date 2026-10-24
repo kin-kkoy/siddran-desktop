@@ -25,6 +25,8 @@ import { alignPatches } from '../../components/Sandbox/selection/align'
 import { unionAABB } from '../../components/Sandbox/selection/snapping'
 import { exportStagePNG } from '../../components/Sandbox/Canvas/exportImage'
 import ShortcutsModal from '../../components/Sandbox/Toolbar/ShortcutsModal'
+import FlowTextModal from '../../components/Sandbox/flow/FlowTextModal'
+import { useFlowActions } from '../../hooks/useFlowActions'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useApi } from '../../contexts/ApiContext'
 import { uploadImageFile } from '../../utils/imageUpload'
@@ -41,6 +43,15 @@ const isEditable = (el) => {
 // Per-shape keys were dropped — `S` opens the shape picker and the shape is
 // chosen with the mouse/pen instead.
 const TOOL_KEYS = { v: 'pointer', g: 'lasso', p: 'pen', e: 'eraser', t: 'text', h: 'hand' }
+
+// The tool a board opens with is the one you last used — a pen user lands on the
+// pen, everyone else on Select. Defaulting to the pen made a mouse user's first
+// click a scribble.
+const TOOL_KEY = 'siddran_sandbox_tool'
+const ARROW_DIRS = { ArrowDown: 's', ArrowUp: 'n', ArrowRight: 'e', ArrowLeft: 'w' }
+function rememberedTool() {
+    try { return localStorage.getItem(TOOL_KEY) || 'pointer' } catch { return 'pointer' }
+}
 
 // Load an image File into an <img> so we can read its natural size.
 function loadImageFile(file) {
@@ -86,7 +97,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const { items } = base
     const history = useSandboxHistory(base)
     const { do: act, undo, redo, canUndo, canRedo, beginTransaction, endTransaction } = history
-    const canvas = useSandboxCanvas(mode === 'half' ? 'pointer' : 'pen')
+    const canvas = useSandboxCanvas(mode === 'half' ? 'pointer' : rememberedTool())
+    useEffect(() => {
+        if (mode === 'half') return
+        try { localStorage.setItem(TOOL_KEY, canvas.tool) } catch { /* private window — just not remembered */ }
+    }, [canvas.tool, mode])
 
     const [notePickerOpen, setNotePickerOpen] = useState(false)
     const [taskPickerOpen, setTaskPickerOpen] = useState(false)
@@ -99,6 +114,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const [shapePickerOpen, setShapePickerOpen] = useState(false)
     const [insertMenuOpen, setInsertMenuOpen] = useState(false)
     const [editingShapeId, setEditingShapeId] = useState(null)
+    const [flowTextOpen, setFlowTextOpen] = useState(false)
     const fileRef = useRef(null)
     const stageRef = useRef(null)
 
@@ -213,6 +229,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // ---- placement ----
     const centerWorld = useCallback(() => canvas.worldFromScreen({ x: window.innerWidth / 2, y: window.innerHeight / 2 }), [canvas])
+
+    // Declared after centerWorld, which it closes over (a hook reading a later
+    // const lints clean and throws on every render).
+    const flow = useFlowActions({ items, act, beginTransaction, endTransaction, canvas, nextZ, bump, setEditingShapeId, viewportCenter: centerWorld })
 
     const onPickNote = (note) => {
         const w = centerWorld()
@@ -407,6 +427,17 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (meta && e.key === '0') { e.preventDefault(); resetZoom(); return }
             if (meta) return // leave other ⌘ combos alone
 
+            // ── flowchart keys ──
+            const sel = [...canvas.selectedIds]
+            const one = sel.length === 1 ? items.find(i => i.id === sel[0]) : null
+            const oneShape = one?.type === 'shape' ? one : null
+            if (e.key === 'Tab' && oneShape) { e.preventDefault(); if (e.shiftKey) flow.createSibling(oneShape.id); else flow.createNext(oneShape.id, 's'); return }
+            if (e.key === 'Enter' && oneShape) { e.preventDefault(); setEditingShapeId(oneShape.id); return }
+            if (e.altKey && ARROW_DIRS[e.key] && oneShape) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
+            if ((e.key === 'c' || e.key === 'C') && !e.shiftKey && sel.length === 2) { e.preventDefault(); flow.connectSelected(); return }
+            if (e.key === 'T' && e.shiftKey) { e.preventDefault(); flow.tidySelection(); return }
+            if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setFlowTextOpen(true); return }
+
             if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return }
             if (e.key === 'Escape') { setShortcutsOpen(false); canvas.clearSelection(); return }
             if (e.key === ']') { e.preventDefault(); onZOrder('front'); return }
@@ -432,7 +463,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-    }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection])
+    }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -524,6 +555,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     snapEnabled={canvas.snapEnabled}
                     onToggleSnap={() => canvas.setSnapEnabled(v => !v)}
                     onExport={onExport}
+                    onOpenFlowText={() => setFlowTextOpen(true)}
                 />
 
                 {canvas.tool === 'pen' && (
@@ -579,9 +611,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             beginTransaction={beginTransaction}
                             endTransaction={endTransaction}
                             editingShapeId={editingShapeId}
+                            flow={flow}
                         />
                     }
                     onShapeDoubleClick={onShapeDoubleClick}
+                    onEmptyDoubleClick={flow.createAt}
                     editingShapeId={editingShapeId}
                 />
 
@@ -590,10 +624,15 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     if (!editItem || editItem.type !== 'shape') return null
                     return (
                         <ShapeTextEditor
+                            // Keyed per box: Tab hands editing straight to the next box,
+                            // and a reused editor would carry over the last box's draft
+                            // and its "already committed" guard — dropping what you type.
+                            key={editItem.id}
                             item={editItem}
                             canvas={canvas}
                             onCommit={(id, patch) => { onUpdateShapePayload(id, patch) }}
                             onClose={() => setEditingShapeId(null)}
+                            onTab={(shift) => { if (shift) flow.createSibling(editItem.id); else flow.createNext(editItem.id, 's') }}
                         />
                     )
                 })()}
@@ -622,6 +661,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             <NoteAttachPicker isOpen={notePickerOpen} notes={notes} onPick={onPickNote} onClose={() => setNotePickerOpen(false)} />
             <TaskAttachPicker isOpen={taskPickerOpen} tasks={tasks} onPick={onPickTask} onClose={() => setTaskPickerOpen(false)} />
             <ShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+            <FlowTextModal isOpen={flowTextOpen} onClose={() => setFlowTextOpen(false)} onInsert={flow.insertFlow} />
         </div>
     )
 }

@@ -152,3 +152,17 @@
     min-width: 18px;
     text-align: right;
 }
+
+/* Arrow label — a small inline field in the connector bar. */
+.labelInput {
+    width: 96px;
+    height: 26px;
+    padding: 0 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    outline: none;
+}
+.labelInput:focus { border-color: var(--accent-warning); }

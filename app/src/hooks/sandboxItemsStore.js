@@ -144,6 +144,14 @@ export const loadFromServer = async (id) => {
     return rec.loadPromise
 }
 
+// A board's file changed outside the app (the CLI, an AI). Only boards already
+// loaded need it — the rest read fresh when they are opened. loadFromServer keeps
+// any local edit not yet flushed, so this never drops what you just drew.
+export const reloadBoard = (id) => {
+    const rec = boards.get(id)
+    if (rec && rec.loaded && !rec.loadPromise) return loadFromServer(id)
+}
+
 // ---- mutations (optimistic, synchronous) ----
 export const addItem = (id, item) => {
     const rec = ensure(id)

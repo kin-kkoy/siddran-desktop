@@ -9,7 +9,7 @@ import logger from "../utils/logger";
 // Gated on `isAuthed && calendarActive` (same as useCalendarEvents/useCalendarTasks) so non-calendar
 // pages fire NO extra requests. Completions are tiny rows; we fetch the user's whole set once and
 // derive in memory (zero refetch on month/view navigation), matching the other calendar hooks.
-export function useCalendarDailies(authFetch, API, isAuthed) {
+export function useCalendarDailies(authFetch, API, isAuthed, reloadKey = 0) {
 
     const [recurringDailies, setRecurringDailies] = useState([])
     const [completions, setCompletions] = useState([]) // [{ daily_task_id, date:'YYYY-MM-DD' }]
@@ -36,7 +36,7 @@ export function useCalendarDailies(authFetch, API, isAuthed) {
 
         load()
         return () => { cancelled = true }
-    }, [isAuthed, authFetch, API])
+    }, [isAuthed, authFetch, API, reloadKey])
 
     // NOTE: ephemeral ("today's") dailies are NOT fetched here — the calendar derives them from the
     // shared useTasks.dailyTasks store (single source) so TasksHub add/delete/edit reflect live, and

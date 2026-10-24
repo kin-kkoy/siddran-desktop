@@ -55,6 +55,7 @@ function SandboxCanvas({
     onPlaceText,           // (worldPoint)
     onImageDrop,           // (file, worldPoint)
     onShapeDoubleClick,    // (itemId) — double-click a shape to edit text
+    onEmptyDoubleClick,    // (world) — double-click empty canvas to make a box there
     editingShapeId,        // shape currently text-editing → hide its committed text
     beginTransaction,
     endTransaction,
@@ -81,7 +82,7 @@ function SandboxCanvas({
     const latestRef = useRef(null)
     latestRef.current = {
         canvas, items, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
-        onErase, onPlaceText, onImageDrop, onShapeDoubleClick, beginTransaction, endTransaction,
+        onErase, onPlaceText, onImageDrop, onShapeDoubleClick, onEmptyDoubleClick, beginTransaction, endTransaction,
     }
 
     useLayoutEffect(() => {
@@ -596,6 +597,9 @@ function SandboxCanvas({
             const world = cv.worldFromScreen({ x: e.clientX - rect.left, y: e.clientY - rect.top })
             const hit = topHitAt(world)
             if (hit && hit.type === 'shape') cb(hit.id)
+            // Nothing there (cards and handles returned above): make a box on the spot.
+            // Pointer only: with the text or a shape tool a click already makes something.
+            else if (!hit && cv.tool === 'pointer') latestRef.current.onEmptyDoubleClick?.(world)
         }
 
         // Clear the connection-dot hover when the pointer leaves the canvas.

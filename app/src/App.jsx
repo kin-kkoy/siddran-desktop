@@ -5,6 +5,7 @@ import { SidebarContext } from "./contexts/SidebarContext.jsx"
 import { GlobalExpandButton } from "./components/Layout/Sidebar/ExpandSidebarButton.jsx"
 import StarCanvas from "./components/Layout/StarCanvas/StarCanvas.jsx"
 import RouteMemory from "./components/Session/RouteMemory.jsx"
+import LiveChannel from "./components/Session/LiveChannel.jsx"
 
 import NotePage from "./pages/Notes/NotePage.jsx"
 import NotesHub from "./pages/Notes/NotesHub.jsx"
@@ -51,11 +52,11 @@ import SplashScreen from "./components/Splash/SplashScreen.jsx"
 import { pickExistingBag, createBag, getRecentBags, addRecentBag, removeRecentBag, getLastBag, isTauri } from "./desktop/bag.js"
 // Desktop data layer: the file-backed LocalProvider. authFetch routes to
 // localFetch while a Bag is open; data reads/writes the Bag folder on disk.
-import { openBagStore, closeBagStore, reloadBagStore, localFetch, isOpen as isLocalOpen, setActiveNote, flushNow } from "./desktop/localStore.js"
+import { openBagStore, closeBagStore, reloadBagStore, localFetch, isOpen as isLocalOpen, setActiveNote, flushNow, onExternalChange } from "./desktop/localStore.js"
 import { createTauriFs } from "./desktop/fs/tauriFs.js"
 import { createMemFs } from "./desktop/fs/memFs.js"
-import { resetForGuest as resetSandboxStore } from "./hooks/sandboxStore.js"
-import { resetForGuest as resetSandboxItems } from "./hooks/sandboxItemsStore.js"
+import { resetForGuest as resetSandboxStore, refresh as refreshSandboxList } from "./hooks/sandboxStore.js"
+import { resetForGuest as resetSandboxItems, reloadBoard as reloadSandboxBoard } from "./hooks/sandboxItemsStore.js"
 
 // Block fields compared when diffing a plan-mode session (snapshot vs working copy).
 const PLAN_EVENT_FIELDS = ['title', 'description', 'start_at', 'end_at', 'all_day', 'color', 'ref_type', 'ref_id']
@@ -102,6 +103,11 @@ function App() {
   const [currentBag, setCurrentBag] = useState(null)
   // Bumped by reloadBag so the data hooks re-fetch — see reloadBag below.
   const [dataEpoch, setDataEpoch] = useState(0)
+  // Bumped per area when something outside the app (the CLI, an AI, an editor)
+  // changes the Bag — so a task ticked off in the terminal refetches tasks, not
+  // every note. Summed with dataEpoch below: both only ever go up, so a change in
+  // either changes the sum.
+  const [extEpoch, setExtEpoch] = useState({ notes: 0, tasks: 0, calendar: 0 })
   const [recentBags, setRecentBags] = useState(() => getRecentBags())
   // True while flushing one Bag and loading another (profile bag-switcher). Holds a
   // blank frame instead of flashing the picker during the swap.
@@ -391,6 +397,25 @@ function App() {
     }
   }, [currentBag])
 
+  // Outside changes, as the store's watcher absorbs them: refetch only what moved.
+  useEffect(() => {
+    if (!currentBag) return
+    return onExternalChange((c) => {
+      if (c.notes || c.tasks || c.calendar) {
+        setExtEpoch((e) => ({ notes: e.notes + (c.notes ? 1 : 0), tasks: e.tasks + (c.tasks ? 1 : 0), calendar: e.calendar + (c.calendar ? 1 : 0) }))
+      }
+      if (c.sandboxes?.length) {
+        refreshSandboxList()
+        for (const id of c.sandboxes) reloadSandboxBoard(id)
+      }
+      // Both sides edited the same lines of a note, or the same task. The merge
+      // kept one; say which, rather than let the other vanish without a word.
+      const notes = (c.conflicts || []).filter((x) => x.collection === 'notes')
+      if (notes.length) toast.warning(`"${notes[0].title}" was edited here and elsewhere at the same spot — kept your version of those lines.`)
+      else if (c.conflicts?.length) toast.warning('An item was changed here and elsewhere at once — kept the newer change.')
+    })
+  }, [currentBag])
+
   // Auto-reopen the last Bag on launch. Verifies the folder still exists first, so
   // a moved/deleted Bag falls through to the picker instead of resurrecting an
   // empty one. Runs once on mount.
@@ -467,12 +492,12 @@ function App() {
   // ------------- DATA LOGIC (Adding, deleting, etc. of Notes and Notebooks) ===================================
   const {
     notes, notebooks, loading: notesLoading, notebookNotesById, notesPagination, notebooksPagination, loadMoreNotes, loadMoreNotebooks, loadingMore, addNote, deleteNote, editTitle, editBody, toggleFavorite, updateColor, updateTags, createNotebook, deleteNotebook, toggleFavoriteNotebook, updateNotebookColor, updateNotebookTags, renameNotebook, removeNoteFromNotebook, addNotesToNotebook, importMarkdownFiles, exportNote, reorderNotes, reorderNotebooks
-  } = useNotes(authFetch, API, unlocked, dataEpoch)
+  } = useNotes(authFetch, API, unlocked, dataEpoch + extEpoch.notes)
 
   // ------------- TASKS DATA LOGIC ===================================
   const {
     tasks, dailyTasks, bundles, tasksPagination, dailyTasksPagination, bundlesPagination, loadMoreTasks, loadMoreDailyTasks, loadMoreBundles, loadingMore: tasksLoadingMore, loading: tasksLoading, addTask, updateTask, patchTaskInCache, setDailyTime, deleteTask, setTaskOrders, toggleTaskCompletion, addDailyTask, updateDailyTask, deleteDailyTask, toggleDailyTaskCompletion, batchToggleDailyTasks, batchDeleteDailyTasks, addBundle, updateBundle, deleteBundle, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion, batchDeleteBundleTasks
-  } = useTasks(authFetch, API, unlocked, dataEpoch)
+  } = useTasks(authFetch, API, unlocked, dataEpoch + extEpoch.tasks)
 
   // ------------- CALENDAR DATA LOGIC ===================================
   const calView = useCalendarView()
@@ -485,15 +510,15 @@ function App() {
   // Lifted to App level so the root-mounted peek and the /calendar route share one source.
   const {
     events: calendarEvents, addEvent, updateEvent, deleteEvent, addEvents, removeEventsBySchedule, recolorEventsBySchedule
-  } = useCalendarEvents(authFetch, API, unlocked && calendarActive)
-  const { schedules, createSchedule, restampSchedule, deleteSchedule, updateSchedule } = useSchedules(authFetch, API, unlocked && calendarActive)
+  } = useCalendarEvents(authFetch, API, unlocked && calendarActive, dataEpoch + extEpoch.calendar)
+  const { schedules, createSchedule, restampSchedule, deleteSchedule, updateSchedule } = useSchedules(authFetch, API, unlocked && calendarActive, dataEpoch + extEpoch.calendar)
   // Derived from the shared useTasks store (single source of truth) — new/edited
   // tasks reflect on the calendar live, and there's no second copy to duplicate.
   const { tasks: calendarTasks, undated: calendarUndated } = useCalendarTasks(tasks)
   // Recurring dailies + per-day completions (gated the same way so non-calendar pages stay quiet).
   const {
     recurringDailies, completions: dailyCompletions, toggleCompletion, addRecurring, removeRecurring
-  } = useCalendarDailies(authFetch, API, unlocked && calendarActive)
+  } = useCalendarDailies(authFetch, API, unlocked && calendarActive, dataEpoch + extEpoch.tasks)
   // Ephemeral ("today's") dailies come from the SHARED useTasks store (single source) so TasksHub
   // add/delete/edit reflect on the calendar live, with no refetch.
   const ephemeralDailies = useMemo(() => dailyTasks.filter(d => d.recurrence == null), [dailyTasks])
@@ -933,6 +958,8 @@ function App() {
         <SidebarContext.Provider value={{ collapsed: isCollapsed, setCollapsed: setIsCollapsed }}>
         {/* Remembers the route per section + restores it once on launch (needs the Router). */}
         <RouteMemory bagPath={currentBag?.path} notes={notes} notesReady={notesPagination != null} />
+        {/* What an AI (siddran mcp) can see of this window, and "open this" from it. */}
+        {unlocked && <LiveChannel bagPath={currentBag?.path} notes={notes} />}
         {/* Background effects — inside Router so StarCanvas can use useLocation() */}
         <StarCanvas />
         {/* "Show sidebar" button for pages without their own toolbar (Hubs/Calendar) */}
@@ -999,7 +1026,12 @@ function App() {
             <div ref={leftPaneRef} style={{
               flex: (unlocked && calView.isHalf) ? `0 0 ${100 - halfPct}%` : 1,
               padding: unlocked ? '0 40px' : '0',
-              overflowY: 'auto',
+              /* 'scroll', not 'auto': reserve the (3px) scrollbar whether or not
+                 this page overflows, so the note tab bar — sticky inside this
+                 scroller — keeps one width when you switch between a short note
+                 and a long one. `scrollbar-gutter: stable` would say this more
+                 politely but WebKitGTK ignores it here (measured). */
+              overflowY: 'scroll',
               minWidth: 0,
             }}>
 

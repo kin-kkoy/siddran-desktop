@@ -4,7 +4,8 @@
 // scoping would block it, whereas the Rust commands use std::fs directly.
 //
 // Same async interface as memFs: exists, mkdirp, readDir, readText, writeText,
-// remove, rename.
+// remove, rename — plus lock/unlock/watch, which memFs leaves out (the store
+// treats them as optional).
 
 function invoker() {
   const inv = (typeof window !== 'undefined')
@@ -28,5 +29,18 @@ export function createTauriFs() {
     readBytes: (path) => inv('bag_read_bytes', { path }),
     remove: (path) => inv('bag_remove', { path }),
     rename: (from, to) => inv('bag_rename', { from, to }),
+    // The Bag lock shared with Siddran-CLI (.siddran-lock). Resolves false if it
+    // could not be had within waitMs — the caller decides what that means.
+    lock: (root, waitMs) => inv('bag_lock', { root, waitMs }),
+    unlock: (root) => inv('bag_unlock', { root }),
+    // Report paths changed under `root` by anything — including us; the store
+    // tells its own writes apart. Resolves to an unsubscribe.
+    watch: async (root, onPaths) => {
+      const listen = window.__TAURI__?.event?.listen
+      if (!listen) throw new Error('Tauri events unavailable')
+      const un = await listen('bag-changed', (e) => onPaths(e.payload?.paths || []))
+      await inv('bag_watch', { root })
+      return () => { un(); inv('bag_unwatch').catch(() => {}) }
+    },
   }
 }
