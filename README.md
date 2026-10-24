@@ -55,8 +55,11 @@ its own GTK) and what you want if you already have WebKitGTK, which any Arch
 desktop does:
 
 ```bash
-install -Dm755 src-tauri/target/release/siddran ~/.local/bin/siddran
+install -Dm755 src-tauri/target/release/siddran ~/.local/bin/siddran-desktop
 ```
+
+It installs as `siddran-desktop` because plain `siddran` is the name of the
+terminal app, [siddran-cli](https://github.com/kin-kkoy/siddran-cli).
 
 Then a launcher entry so it shows up in your app menu — this works for any
 desktop that reads the freedesktop spec, which is all of them (GNOME, KDE,
@@ -69,7 +72,7 @@ Type=Application
 Name=Siddran
 GenericName=Notes & Sandbox
 Comment=Local-first notes, tasks, calendar & sandbox
-Exec=%h/.local/bin/siddran
+Exec=%h/.local/bin/siddran-desktop
 Icon=siddran
 Terminal=false
 Categories=Office;
@@ -158,10 +161,34 @@ npm run tauri:build -- --no-bundle
 5. **Sync** — opt-in and always manual, against a Cloudflare Worker
    (`sync-worker/`). Never automatic: it must not sit in the path of a keystroke.
    Working, not battle-tested.
+6. **Shared Bag** — the app watches the Bag folder and merges outside changes
+   (from [siddran-cli](https://github.com/kin-kkoy/siddran-cli), an AI, a text
+   editor) instead of overwriting them: rows merge by id, notes by three-way text
+   merge, and a note open in the editor takes the change without losing your
+   unsaved typing. Writes are atomic and share `.siddran-lock` with the CLI, held
+   only for the length of one save. ✅
+7. **AI access** — through the CLI (`siddran tools` / `siddran call` for any AI
+   with a shell, `siddran mcp` for apps without one). The desktop adds a live
+   channel: what is on screen, including selected note text, and "open this"
+   requests, via two small files in `$XDG_RUNTIME_DIR/siddran/` (outside the
+   Bag, nothing listening on a port). ✅
+8. **Sandbox without a pen** — Tab / Shift+Tab / Alt+Arrow for the next box,
+   already placed and connected; double-click for a box; C to connect two; ⇧T
+   to tidy; D for a diagram from Mermaid-style text. Connectors attach by side,
+   route around boxes in the way and carry labels. ✅
 
-Known rough edge: WebKitGTK's built-in PDF viewer lays out once and never
-reflows, so the first page or two of a PDF can render mis-sized until the window
-is resized. It corrects itself; several fixes have been tried and reverted.
+Known rough edges:
+
+- **WebKitGTK 2.54 flickers on Wayland** (seen on Hyprland, AMD). The app sets
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` at startup, which stops the flicker but
+  paints on the CPU, so animations and drags are heavier than they should be.
+  `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` and running under XWayland were tried and
+  both still flicker. Set `WEBKIT_DISABLE_DMABUF_RENDERER=0` to undo it once a
+  WebKitGTK release fixes the bug. Tauri's Chromium runtime (CEF) would sidestep
+  it, but is Tauri 3 alpha only as of 2026-10.
+- WebKitGTK's built-in PDF viewer lays out once and never reflows, so the first
+  page or two of a PDF can render mis-sized until the window is resized. It
+  corrects itself; several fixes have been tried and reverted.
 
 ## Related repos
 
