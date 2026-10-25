@@ -22,6 +22,11 @@ serde_json = "1"
 notify = "8"                # watch the Bag for writes from the CLI, an AI, a sync tool
 base64 = "0.22"             # decode attachment bytes sent from the frontend
 
+# Read the installed WebKitGTK's version at startup (see main.rs) — already in
+# the tree through Tauri, so this adds no new code, only a direct name for it.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk-sys = "2"
+
 [profile.release]
 codegen-units = 1
 lto = true

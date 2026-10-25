@@ -179,13 +179,11 @@ npm run tauri:build -- --no-bundle
 
 Known rough edges:
 
-- **WebKitGTK 2.54 flickers on Wayland** (seen on Hyprland, AMD). The app sets
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1` at startup, which stops the flicker but
-  paints on the CPU, so animations and drags are heavier than they should be.
-  `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` and running under XWayland were tried and
-  both still flicker. Set `WEBKIT_DISABLE_DMABUF_RENDERER=0` to undo it once a
-  WebKitGTK release fixes the bug. Tauri's Chromium runtime (CEF) would sidestep
-  it, but is Tauri 3 alpha only as of 2026-10.
+- **WebKitGTK 2.54.0 and 2.54.1 flicker on Wayland** (seen on Hyprland, AMD).
+  On exactly those two releases the app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  at startup, which stops the flicker but paints on the CPU, so animations and
+  drags are heavier. 2.54.2 fixed it, and from there the app keeps GPU drawing.
+  An explicit `WEBKIT_DISABLE_DMABUF_RENDERER` in the environment always wins.
 - WebKitGTK's built-in PDF viewer lays out once and never reflows, so the first
   page or two of a PDF can render mis-sized until the window is resized. It
   corrects itself; several fixes have been tried and reverted.

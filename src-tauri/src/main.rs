@@ -620,6 +620,21 @@ fn alarm_show_window(window: tauri::Window) {
     let _ = window.set_focus();
 }
 
+// The installed WebKitGTK, read from the library itself (these return constants
+// baked into the .so; they do not start WebKit). Only the releases known to
+// flicker get the CPU-painting workaround.
+#[cfg(target_os = "linux")]
+fn webkit_flickers() -> bool {
+    let (major, minor, micro) = unsafe {
+        (
+            webkit2gtk_sys::webkit_get_major_version(),
+            webkit2gtk_sys::webkit_get_minor_version(),
+            webkit2gtk_sys::webkit_get_micro_version(),
+        )
+    };
+    (major, minor) == (2, 54) && micro < 2
+}
+
 // Quit for real, from the tray. Not app.exit(0): that drops whatever is inside
 // the store's 1.5s write debounce. Reuse the same handshake the window close
 // uses — ask the frontend to flush, and exit anyway if it never answers.
@@ -646,13 +661,17 @@ fn show_main_window(app: &tauri::AppHandle) {
 }
 
 fn main() {
-    // WebKitGTK 2.54 (Arch, 2026-10-13) made the window flicker — navbar and note
-    // animations — on Hyprland/Wayland. Turning off its DMA-BUF renderer fixed it
-    // (tested by hand: WEBKIT_DISABLE_DMABUF_RENDERER=1 removed the flicker).
-    // Set before WebKit starts, so its web process inherits it; an explicit value
-    // in the environment still wins, which is also how to undo this for a test.
+    // WebKitGTK 2.54.0 and 2.54.1 flicker on Hyprland/Wayland — the navbar, hover
+    // states and animations flash between frames. Turning off the DMA-BUF renderer
+    // stops it, but that also turns off GPU compositing, so every slide and drag is
+    // painted on the CPU (the sidebar dropped to ~30-50 ms frames). 2.54.2 fixed
+    // the flicker (tested by hand, 2026-10-25: no flicker, smooth, with the
+    // renderer on), so the workaround applies to exactly those two releases.
+    //
+    // Set before WebKit starts, so its web process inherits it. An explicit value
+    // in the environment always wins — that is how to test either way.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() && webkit_flickers() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
