@@ -5,6 +5,7 @@ import RowContextMenu from './RowContextMenu'
 import { canReveal, revealNote } from '../../../desktop/reveal'
 import { useNoteTabs } from '../../../contexts/NoteTabsContext'
 import { useNoteSplit } from '../../../contexts/NoteSplitContext'
+import { useStagedNotes } from '../../../contexts/stagedNotes'
 import styles from './SidebarOpenNotes.module.css'
 
 // The notes currently open as tabs, shown in the sidebar when you are NOT on a
@@ -23,14 +24,17 @@ function SidebarOpenNotes({ isCollapsed, notes = [] }) {
   // collapsed early-return below, which is why this sits up here.
   const [ctxMenu, setCtxMenu] = useState(null)
 
-  const noteFor = (id) => notes.find((x) => String(x.id) === String(id))
+  // Files opened from the file manager have tabs too, but aren't in `notes`.
+  const { withStaged } = useStagedNotes() || {}
+  const tabNotes = withStaged ? withStaged(notes) : notes
+  const noteFor = (id) => tabNotes.find((x) => String(x.id) === String(id))
 
   if (isCollapsed) return null
 
   const titleFor = (id) => (noteFor(id)?.title || '').trim() || 'Untitled'
 
   const onContextMenu = (id) => (e) => {
-    if (!canReveal()) return
+    if (!canReveal() || noteFor(id)?.staged) return // reveal is for Bag files only
     e.preventDefault()
     e.stopPropagation()
     const note = noteFor(id)

@@ -569,7 +569,7 @@ export const useNotes = (authFetch, API, isAuthed, reloadKey = 0) => {
     }, [authFetch, API])
 
 
-    const importMarkdownFiles = useCallback(async (files, notebookName) => {
+    const importMarkdownFiles = useCallback(async (files, notebookName, { tagImported = true } = {}) => {
         const fileList = Array.from(files || [])
         if (fileList.length === 0) return { noteIds: [], notebookId: null, warnings: [] }
 
@@ -595,7 +595,7 @@ export const useNotes = (authFetch, API, isAuthed, reloadKey = 0) => {
         for (const file of valid) {
             try {
                 const text = await readFileAsText(file)
-                const parsed = parseMarkdownFile(text, file.name)
+                const parsed = parseMarkdownFile(text, file.name, { tagImported })
                 parsed.warnings.forEach(w => allWarnings.add(w))
 
                 const created = await addNote(parsed.title || 'Untitled')

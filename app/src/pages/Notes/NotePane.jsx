@@ -7,6 +7,8 @@ import { MdChromeReaderMode } from "react-icons/md";
 import { HiPencilSquare } from "react-icons/hi2";
 import { HiOutlineDownload, HiOutlineCog, HiOutlineDocumentText } from "react-icons/hi";
 import { LuColumns2, LuTag, LuMessageSquare, LuListTree, LuSearch } from "react-icons/lu";
+import AddToBagButton from '../../components/Notes/AddToBagButton'
+import { useStagedNotes } from '../../contexts/stagedNotes'
 import CodeMirrorEditor from '../../components/Editor/CodeMirrorEditor'
 import NoteOutline from '../../components/Notes/NoteOutline'
 import NoteSearch from '../../components/Notes/NoteSearch'
@@ -70,10 +72,21 @@ function NotePane({
     ? notes.find(n => n.id === noteId || n.id === Number(noteId))
     : null
   const isOptimistic = note?._optimistic === true
+  // Opened from the file manager, not in the Bag yet (StagedNotesContext). Saves go
+  // to the file; comments, tags, pin and colour are Bag features, so they're hidden.
+  const isStaged = note?.staged === true
+  const stagedNotes = useStagedNotes()
+  const [addingToBag, setAddingToBag] = useState(false)
+  const handleAddToBag = async () => {
+    if (addingToBag) return
+    setAddingToBag(true)
+    try { await stagedNotes?.addToBag(note.id, docCache?.get(String(note.id))) }
+    finally { setAddingToBag(false) }
+  }
 
   // Comments (Google-Docs style). React owns thread content; the editor owns live
   // anchor positions and feeds remaps back through `applyRemap`.
-  const comments = useComments(note?.id)
+  const comments = useComments(isStaged ? null : note?.id)
   const commentApiRef = useRef(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [activeThreadId, setActiveThreadId] = useState(null)
@@ -524,7 +537,11 @@ function NotePane({
           </button>
         )}
 
-        <button
+        {isStaged && (
+          <AddToBagButton onClick={handleAddToBag} disabled={addingToBag} path={note.path} />
+        )}
+
+        {!isStaged && <button
           onClick={handleCommentButton}
           className={styles.backBtn}
           aria-pressed={commentsOpen}
@@ -532,7 +549,7 @@ function NotePane({
           aria-label="Comments"
         >
           <LuMessageSquare />
-        </button>
+        </button>}
 
         <button
           onClick={toggleOutline}
@@ -554,7 +571,7 @@ function NotePane({
           <LuSearch />
         </button>
 
-        <div className={styles.menuContainer} ref={menuRef}>
+        {!isStaged && <div className={styles.menuContainer} ref={menuRef}>
           <button ref={buttonRef} onClick={toggleMenu} className={styles.menuBtn}>
             <FaEllipsisV />
           </button>
@@ -617,7 +634,7 @@ function NotePane({
               </div>
             </div>
           )}
-        </div>
+        </div>}
           </div>
         )
         // The focused pane owns the shared control cluster in the tab bar. Fall
@@ -634,7 +651,8 @@ function NotePane({
           onChange={ e => setNewTitle(e.target.value)}
           onBlur={saveTitle}
           onKeyDown={handleKeyDown}
-          readOnly={viewMode}
+          // A staged file's title comes from the file; it's set for real on import.
+          readOnly={viewMode || isStaged}
         />
 
         {/* CodeMirror editor stays mounted across the read/edit toggle (readMode prop)

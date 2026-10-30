@@ -22,7 +22,8 @@ export function NoteTabsProvider({ children }) {
   const [openTabs, setOpenTabs] = useState(() => {
     try {
       const a = JSON.parse(localStorage.getItem(storageKey()) || '[]')
-      return Array.isArray(a) ? a.map(String) : []
+      // A staged file (StagedNotesContext) only lives as long as this run.
+      return Array.isArray(a) ? a.map(String).filter(id => !id.startsWith('staged-')) : []
     } catch { return [] }
   })
 
@@ -49,6 +50,19 @@ export function NoteTabsProvider({ children }) {
       navigate(fallback ? `/notes/${fallback}` : '/notes')
     }
   }, [openTabs, activeId, navigate])
+
+  // Swap one tab for another in the same slot and land on it — a staged file
+  // that was just added to the Bag becomes its new note without the tab moving.
+  const replaceTab = useCallback((oldId, newId) => {
+    oldId = String(oldId); newId = String(newId)
+    setOpenTabs(prev => {
+      const without = prev.filter(t => t !== newId)
+      const i = without.indexOf(oldId)
+      if (i === -1) return [...without, newId]
+      return [...without.slice(0, i), newId, ...without.slice(i + 1)]
+    })
+    navigate(`/notes/${newId}`, { replace: true })
+  }, [navigate])
 
   // Commit a drag-reordered tab order. Accepts only a permutation of the current
   // tabs (guards against a stale order arriving mid open/close). Persists via the
@@ -84,8 +98,8 @@ export function NoteTabsProvider({ children }) {
   }, [cycleTab, closeTab, activeId])
 
   const value = useMemo(
-    () => ({ openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs }),
-    [openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs],
+    () => ({ openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs, replaceTab }),
+    [openTabs, activeId, activateTab, closeTab, cycleTab, reorderTabs, replaceTab],
   )
   return <NoteTabsContext.Provider value={value}>{children}</NoteTabsContext.Provider>
 }

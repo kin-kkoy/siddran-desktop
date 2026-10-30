@@ -72,16 +72,29 @@ Type=Application
 Name=Siddran
 GenericName=Notes & Sandbox
 Comment=Local-first notes, tasks, calendar & sandbox
-Exec=%h/.local/bin/siddran-desktop
+Exec=%h/.local/bin/siddran-desktop %F
 Icon=siddran
 Terminal=false
 Categories=Office;
 Keywords=notes;tasks;markdown;sandbox;calendar;siddran;
 StartupNotify=true
 StartupWMClass=siddran
+MimeType=text/markdown;text/x-markdown;
 EOF
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 ```
+
+`%F` and `MimeType=` let a file manager hand Siddran a `.md` file. To make it the
+app that opens them on double-click:
+
+```bash
+xdg-mime default siddran.desktop text/markdown
+```
+
+A `.md` opened that way is **not** added to your Bag. It opens in a tab (shown in
+italics) and edits save back to the file where it lives. **Add to Bag** (top
+right) copies it in as a note; closing the tab instead just forgets it. Opening
+another file while Siddran is running uses the same window.
 
 `Exec=` needs an absolute path — `~` is not expanded in a desktop entry. Some
 launchers accept `%h`; if yours does not, write the full path.

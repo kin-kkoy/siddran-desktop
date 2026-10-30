@@ -18,6 +18,9 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
     const n = notes.find(x => String(x.id) === String(id))
     return (n?.title || '').trim() || 'Untitled'
   }
+  // Staged = opened from the file manager, not in the Bag yet. Its tooltip says where it lives.
+  const stagedPath = (id) => notes.find(x => String(x.id) === String(id))?.path
+  const tooltipFor = (id) => (stagedPath(id) ? `${titleFor(id)} — not in your Bag (${stagedPath(id)})` : titleFor(id))
 
   // Two notes side by side render as ONE Edge-style split tab: `left | right`,
   // with the focused half lit. `left` is the route note (activeId); `right` is
@@ -80,11 +83,11 @@ export default function NoteTabBar({ notes = [], controlsRef }) {
             role="tab"
             aria-selected={id === activeId}
             tabIndex={0}
-            className={`${styles.tab} ${id === activeId ? styles.active : ''} ${String(tabDrag.activeId) === String(id) ? styles.dragging : ''}`}
+            className={`${styles.tab} ${id === activeId ? styles.active : ''} ${String(tabDrag.activeId) === String(id) ? styles.dragging : ''} ${stagedPath(id) ? styles.staged : ''}`}
             onClick={() => activateTab(id)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateTab(id) } }}
             onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(id) } }}
-            title={titleFor(id)}
+            title={tooltipFor(id)}
             {...tabDrag.dragProps(id)}
           >
             <span className={styles.tabTitle}>{titleFor(id)}</span>

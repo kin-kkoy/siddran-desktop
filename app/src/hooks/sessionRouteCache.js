@@ -52,6 +52,9 @@ export function sectionOf(pathname) {
 export function detailOf(pathname) {
   const p = String(pathname || '')
   const m = /^\/(notes|sandboxes)\/([^/]+)/.exec(p)
+  // A file opened from the file manager (staged-…) lasts only as long as this run,
+  // so it is never a place to come back to. Also drops one already stored.
+  if (m && m[1] === 'notes' && m[2].startsWith('staged-')) return null
   return m ? `/${m[1]}/${m[2]}` : null
 }
 

@@ -35,17 +35,19 @@ const parseFrontmatter = (text) => {
     return { fields, body }
 }
 
-const mergeTags = (existing) => {
+const mergeTags = (existing, tagImported) => {
     const parts = (existing || '')
         .split(',')
         .map(t => t.trim())
         .filter(Boolean)
     const lower = new Set(parts.map(t => t.toLowerCase()))
-    if (!lower.has(IMPORTED_TAG.toLowerCase())) parts.push(IMPORTED_TAG)
+    if (tagImported && !lower.has(IMPORTED_TAG.toLowerCase())) parts.push(IMPORTED_TAG)
     return parts.join(', ')
 }
 
-export const parseMarkdownFile = (text, filename) => {
+// `tagImported: false` keeps only the file's own tags — "Add to Bag" on a file
+// opened from the file manager, which the user brought in on purpose.
+export const parseMarkdownFile = (text, filename, { tagImported = true } = {}) => {
     const warnings = []
     const { fields, body: afterFrontmatter } = parseFrontmatter(text)
 
@@ -62,7 +64,7 @@ export const parseMarkdownFile = (text, filename) => {
         }
     }
 
-    const tags = mergeTags(fields.tags)
+    const tags = mergeTags(fields.tags, tagImported)
     const color = fields.color || null
     const isFavorite = fields.is_favorite === 'true' || fields.is_favorite === true
 

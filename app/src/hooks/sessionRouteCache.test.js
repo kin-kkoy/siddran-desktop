@@ -44,6 +44,8 @@ describe('detailOf', () => {
     expect(detailOf('/sandboxes')).toBeNull()
     expect(detailOf('/tasks')).toBeNull()
     expect(detailOf('/calendar')).toBeNull()
+    // Files opened from the file manager don't survive a restart.
+    expect(detailOf('/notes/staged-k3x9-1')).toBeNull()
   })
 
   it('strips anything past the id so nested routes still resolve', () => {

@@ -14,6 +14,7 @@ use tauri::{Emitter, Manager, UriSchemeContext};
 use tauri_plugin_notification::NotificationExt;
 
 mod bagsync;
+mod opened;
 mod presence;
 
 // A Bag is a user-picked folder anywhere on disk, so we use std::fs directly
@@ -675,7 +676,15 @@ fn main() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
+    // Opening a .md while Siddran is already running must reach THIS window, not
+    // start a second app on the same Bag. Registered first, as the plugin asks.
+    let cwd = std::env::current_dir().unwrap_or_default();
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            opened::on_second_launch(app, argv, cwd);
+            show_main_window(app);
+        }))
+        .manage(opened::OpenedFiles::from_args(std::env::args().skip(1), &cwd))
         .manage(Closing::default())
         .manage(TrayState::default())
         .setup(|app| {
@@ -780,6 +789,9 @@ fn main() {
             viewer_set_fonts,
             viewer_save_storage,
             viewer_set_allowed_hosts,
+            opened::opened_files_take,
+            opened::opened_read,
+            opened::opened_write,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Siddran desktop app");

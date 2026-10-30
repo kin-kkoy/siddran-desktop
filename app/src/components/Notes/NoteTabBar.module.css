@@ -172,3 +172,8 @@
 .tab:hover .tabClose,
 .active .tabClose { opacity: 1; }
 .tabClose:hover { background: var(--bg-hover); color: var(--accent-danger); }
+
+/* A file opened from the file manager, not yet in the Bag. */
+.staged .tabTitle {
+  font-style: italic;
+}

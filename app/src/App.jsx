@@ -40,6 +40,8 @@ import { NoteSplitProvider } from "./contexts/NoteSplitContext.jsx"
 import { SidePaneProvider } from "./contexts/SidePaneContext.jsx"
 import { PaneLockProvider } from "./contexts/PaneLockContext.jsx"
 import { NoteTabsProvider } from "./contexts/NoteTabsContext.jsx"
+import { StagedNotesProvider } from "./contexts/StagedNotesContext.jsx"
+import { useStagedNotes, isStagedId } from "./contexts/stagedNotes.js"
 import SettingsPopup from "./components/Settings/SettingsPopup.jsx"
 import ToastContainer from "./components/Common/ToastContainer.jsx"
 import DeadlineAlarms from "./components/Common/DeadlineAlarms.jsx"
@@ -92,7 +94,20 @@ function NotePageWrapper({ notes, notesLoading, editTitle, editBody, updateTags,
     onNoteChange(id)
   }, [id, onNoteChange])
 
-  return <NotePage notes={notes} notesLoading={notesLoading} editTitle={editTitle} editBody={editBody} updateTags={updateTags} toggleFavorite={toggleFavorite} updateColor={updateColor} exportNote={exportNote} setSidebarCollapsed={setSidebarCollapsed} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} addNote={addNote} updateTask={updateTask} bundles={bundles} />
+  // A file opened from the file manager shows here like a note but isn't in the
+  // Bag: its saves go back to the file, and the note-only actions don't apply.
+  const { withStaged, editBody: editStagedBody } = useStagedNotes()
+  const allNotes = useMemo(() => withStaged(notes), [withStaged, notes])
+  const h = useMemo(() => {
+    const route = (fn, stagedFn) => (noteId, ...rest) =>
+      (isStagedId(noteId) ? stagedFn?.(noteId, ...rest) : fn(noteId, ...rest))
+    return {
+      editTitle: route(editTitle), editBody: route(editBody, editStagedBody), updateTags: route(updateTags),
+      toggleFavorite: route(toggleFavorite), updateColor: route(updateColor), exportNote: route(exportNote),
+    }
+  }, [editTitle, editBody, editStagedBody, updateTags, toggleFavorite, updateColor, exportNote])
+
+  return <NotePage notes={allNotes} notesLoading={notesLoading} editTitle={h.editTitle} editBody={h.editBody} updateTags={h.updateTags} toggleFavorite={h.toggleFavorite} updateColor={h.updateColor} exportNote={h.exportNote} setSidebarCollapsed={setSidebarCollapsed} tasks={tasks} toggleTaskCompletion={toggleTaskCompletion} addNote={addNote} updateTask={updateTask} bundles={bundles} />
 }
 
 function App() {
@@ -955,6 +970,7 @@ function App() {
 
       <BrowserRouter>
         <NoteTabsProvider>
+        <StagedNotesProvider ready={unlocked && notesPagination != null} importMarkdownFiles={importMarkdownFiles}>
         <SidebarContext.Provider value={{ collapsed: isCollapsed, setCollapsed: setIsCollapsed }}>
         {/* Remembers the route per section + restores it once on launch (needs the Router). */}
         <RouteMemory bagPath={currentBag?.path} notes={notes} notesReady={notesPagination != null} />
@@ -1138,6 +1154,7 @@ function App() {
         <ExternalLinkGate />
 
         </SidebarContext.Provider>
+        </StagedNotesProvider>
         </NoteTabsProvider>
       </BrowserRouter>
     </div>
