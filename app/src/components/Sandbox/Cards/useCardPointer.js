@@ -19,6 +19,7 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         if (tool === 'eraser') { e.stopPropagation(); onRemove?.(item.id); return }
         e.stopPropagation()
         onSelect?.(item.id, e.shiftKey)
+        if (item.payload?.locked) return   // locked: selectable, not movable
         beginTransaction?.()
         dragRef.current = {
             startX: e.clientX, startY: e.clientY,

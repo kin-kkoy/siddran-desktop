@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Stage } from 'react-konva'
 import GraphicsLayer from './GraphicsLayer'
 import ConnectorLayer from './ConnectorLayer'
+import FrameLayer from './FrameLayer'
 import ActiveLayer from './ActiveLayer'
 import OverlayLayer from './OverlayLayer'
 import { strokeOutline } from './strokeOutline'
@@ -9,6 +10,8 @@ import { SHAPE_TOOLS } from '../../../hooks/useSandboxCanvas'
 import { isLineKind } from '../shapes/registry'
 import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon } from '../selection/hitTest'
 import { connectorPoints, connectorHitTest } from '../connectors/geometry'
+import { isFrame, frameHit, marqueeTakesFrame } from '../frames/frames'
+import { nextHoverId } from '../selection/hover'
 
 const GRID_MINOR = 24
 const GRID_MAJOR = 120
@@ -46,6 +49,8 @@ function SandboxCanvas({
     items,                 // ALL items — for pointer/eraser/marquee hit-testing
     graphicItems,          // strokes + shapes + images, z-sorted (one Konva layer)
     connectorItems,        // connector items, z-sorted (own layer below shapes)
+    frameItems = [],       // frames, z-sorted (own layer below connectors)
+    editingFrameId,        // frame whose title is being edited → hide its painted title
     stageRef,              // forwarded to <Stage> so the page can export a PNG
     onStrokeCommit,
     onShapeCommit,
@@ -153,7 +158,8 @@ function SandboxCanvas({
 
         const topHitAt = (world) => {
             const all = latestRef.current.items
-            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+            const zoom = latestRef.current.canvas.viewport.zoom || 1
+            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type) && !isFrame(i)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
             for (const it of sorted) if (itemHitTest(it, world.x, world.y, 2)) return it
             // Connectors sit below shapes — test them only when no shape was hit.
             const connectors = all.filter(i => i.type === 'connector')
@@ -166,6 +172,10 @@ function SandboxCanvas({
                     if (pts && connectorHitTest(pts, world.x, world.y, tol)) return c
                 }
             }
+            // Frames paint beneath everything, so they are hit last — and only by
+            // their title or border, leaving the interior free for a marquee.
+            const frames = all.filter(isFrame).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+            for (const f of frames) if (frameHit(f, world.x, world.y, zoom)) return f
             return null
         }
 
@@ -336,9 +346,18 @@ function SandboxCanvas({
                 && !marqueeRef.current && !drawingRef.current && !shapingRef.current
                 && !eraseRef.current && !lassoRef.current && !lastPanRef.current
                 && !canvas.spacePanning && !canvas.activeConnectorRef?.current) {
+                // Over a dot, a handle or the context bar: keep whatever is hovered.
+                // The dots sit OUTSIDE the shape, so re-testing here would clear the
+                // hover and unmount the very dot the pointer is reaching for.
+                const t = e.target
+                const onOverlay = !!(t && t !== el && t.closest?.('[data-sb-handle="true"]') && !t.closest?.('[data-sb-move="true"]'))
                 const { world } = screenPointerWorld(e)
-                const h = topHitAt(world)
-                const hid = (h && h.type === 'shape') ? h.id : null
+                const h = onOverlay ? null : topHitAt(world)
+                const current = canvas.hoverId != null ? latestRef.current.items.find(i => i.id === canvas.hoverId) : null
+                const hid = nextHoverId({
+                    hitId: (h && h.type === 'shape' && !isFrame(h)) ? h.id : null,
+                    current, world, zoom: canvas.viewport.zoom, onOverlay,
+                })
                 if (hid !== canvas.hoverId) canvas.setHoverId(hid)
             }
 
@@ -505,7 +524,12 @@ function SandboxCanvas({
                     const w = Math.abs(s.x1 - s.x0), h = Math.abs(s.y1 - s.y0)
                     const isLine = isLineKind(s.kind)
                     const big = isLine ? (w > 4 || h > 4) : (w > 3 && h > 3)
-                    if (big) {
+                    // A plain click with the sticky / frame tool places a default-sized one.
+                    if (!big && (s.kind === 'sticky' || s.kind === 'frame')) {
+                        const [dw, dh] = s.kind === 'sticky' ? [192, 192] : [640, 400]
+                        const at = s.kind === 'sticky' ? { x: s.x0 - dw / 2, y: s.y0 - dh / 2 } : { x: s.x0, y: s.y0 }
+                        onShapeCommit?.({ type: 'shape', x: Math.round(at.x), y: Math.round(at.y), w: dw, h: dh, rotation: 0, payload: { kind: s.kind } })
+                    } else if (big) {
                         let payload
                         if (isLine) {
                             let pts
@@ -551,7 +575,8 @@ function SandboxCanvas({
                 canvas.setMarquee(null)
                 if (m.moved && m.rect) {
                     // Connectors have no box — selected by direct click, not marquee.
-                    const ids = latestRef.current.items.filter(it => it.type !== 'connector' && marqueeIntersects(it, m.rect)).map(it => it.id)
+                    const ids = latestRef.current.items.filter(it => it.type !== 'connector'
+                        && (isFrame(it) ? marqueeTakesFrame(it, m.rect) : marqueeIntersects(it, m.rect))).map(it => it.id)
                     onMarqueeSelect?.(ids, m.additive)
                 }
                 return
@@ -568,6 +593,7 @@ function SandboxCanvas({
                     for (const p of points) { flat.push(p[0], p[1]) }
                     const ids = latestRef.current.items.filter(it => {
                         if (it.type === 'connector') return false   // no box — click-select only
+                        if (isFrame(it)) return false                // lasso takes contents, not the frame
                         const b = itemAABB(it)
                         return pointInPolygon(flat, b.x + b.w / 2, b.y + b.h / 2)
                     }).map(it => it.id)
@@ -708,6 +734,7 @@ function SandboxCanvas({
                 scaleY={canvas.viewport.zoom}
                 pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
             >
+                <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
                 <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} />
                 <ActiveLayer

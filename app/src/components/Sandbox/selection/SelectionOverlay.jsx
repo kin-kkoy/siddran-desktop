@@ -7,6 +7,8 @@ import {
 import { computeSnap, unionAABB } from './snapping'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, SIDES } from '../connectors/geometry'
+import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
+import { isLineKind } from '../shapes/registry'
 
 /**
  * The single transform overlay — one DOM/SVG surface drawn above BOTH the Konva
@@ -29,6 +31,14 @@ const HANDLE = 9          // screen px
 const ROTATE_GAP = 26     // screen px above the top edge
 const SNAP_PX = 6         // screen-px magnet radius for snapping
 const SNAP_GRID = 24      // world units between grid snap lines (matches GRID_MINOR)
+// Connection dots: drawn DOT_OUT screen px outside each edge midpoint, with a
+// generous invisible hit circle so they are easy to grab. SandboxCanvas keeps the
+// hover alive across this whole reach (DOT_REACH_PX) — the old bug was the hover
+// test ending at the shape's edge, which unmounted the dot as you reached it.
+const DOT_OUT = 14
+const DOT_R = 5
+const DOT_HIT = 12
+const DROP_PAD_PX = 16    // screen px around a target shape that still counts as "on" it
 
 // Opposite anchor for each resize handle, and which axes it scales.
 const HANDLES = {
@@ -44,7 +54,7 @@ const HANDLES = {
 
 const clampScale = (s) => (Math.abs(s) < 0.05 ? (s < 0 ? -0.05 : 0.05) : s)
 
-function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector }) {
+function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt }) {
     const rootRef = useRef(null)
     const dragRef = useRef(null)
     const connectorRef = useRef(null)   // active connector drag, separate from transform
@@ -52,28 +62,38 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // A transparent shield covers the viewport during a transform gesture so pointer
     // events over an embedded card (e.g. a PDF iframe) don't break the drag.
     const [gesturing, setGesturing] = useState(false)
+    // While dragging a new/edited connector end: the shape it would attach to, so
+    // its ports light up. Changes only when the target changes (not every move).
+    const [dropTarget, setDropTarget] = useState(null)   // { id, side } | null
+    const [hotDot, setHotDot] = useState(null)           // side under the pointer
     const rafRef = useRef(0)
     const lastMoveRef = useRef(null)
 
     const { viewport } = canvas
     // Connectors have no transform box — exclude them so a selected connector
     // shows no resize/rotate handles (it's highlighted in ConnectorLayer instead).
+    // Locked items keep their selection outline but get no handles.
     const boxItems = selectedItems.filter(it => it.type !== 'connector')
+    const locked = boxItems.some(it => it.payload?.locked)
     const hasSel = boxItems.length > 0
     const box = hasSel ? getSelectionBounds(boxItems) : null
     // The filled move-region is only interactive when a Konva graphic is selected
     // (those have no DOM node to drag). For card-only selections it stays
     // non-interactive so the card's own ×/links/checkbox and drag keep working.
-    const moveInteractive = boxItems.some(it => it.type === 'stroke' || it.type === 'shape' || it.type === 'image')
+    const moveInteractive = !locked && boxItems.some(it => it.type === 'stroke' || it.type === 'shape' || it.type === 'image')
+    // A lone frame is grabbed by its border/title only, so clicks inside it
+    // still reach the things placed on it.
+    const frameOnly = boxItems.length > 0 && boxItems.every(isFrame)
 
     // Shape that should show the 4 connection dots: the hovered shape, else a
     // single selected shape.
+    const connectable = (it) => it && it.type === 'shape' && !isFrame(it) && !isLineKind(it.payload?.kind)
     const dotItem = (() => {
         if (canvas.hoverId != null) {
             const h = items.find(it => it.id === canvas.hoverId)
-            if (h && h.type === 'shape') return h
+            if (connectable(h)) return h
         }
-        if (boxItems.length === 1 && boxItems[0].type === 'shape') return boxItems[0]
+        if (boxItems.length === 1 && connectable(boxItems[0]) && !locked) return boxItems[0]
         return null
     })()
 
@@ -185,7 +205,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         e.preventDefault()
         e.stopPropagation()
         beginTransaction()
-        dragRef.current = { ...init, snap: snapshot(), startWorld: worldFromClient(e) }
+        const riders = (init.riders || []).map(it => ({ id: it.id, box: getItemBounds(it) }))
+        dragRef.current = { ...init, snap: [...snapshot(), ...riders], startWorld: worldFromClient(e) }
         setGesturing(true)
         window.addEventListener('pointermove', onWindowMove)
         window.addEventListener('pointerup', onWindowUp)
@@ -193,10 +214,19 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
 
     const onMoveDown = (e) => {
         const selIds = new Set(boxItems.map(it => it.id))
+        // A frame carries what sits on it. Decided now, at grab time, from where
+        // things are — not stored — so there is no membership to keep in sync.
+        const riders = []
+        for (const f of boxItems.filter(isFrame)) {
+            for (const c of frameChildren(f, items || [])) {
+                if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) }
+            }
+        }
         startGesture(e, {
             mode: 'move',
             baseAABB: unionAABB(boxItems),
             others: (items || []).filter(it => !selIds.has(it.id)),
+            riders,
         })
     }
 
@@ -205,15 +235,24 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // MOVES with the cursor; on drop the moving end links to the facing side of
     // the shape under the cursor, or becomes a free point on empty canvas. Not a
     // transaction — create is one addItem, edit is one history-wrapped update. ----
-    const onConnectorUp = () => {
+    const onConnectorUp = (e) => {
         const d = connectorRef.current
         if (!d) return
         window.removeEventListener('pointermove', onConnectorMove)
         window.removeEventListener('pointerup', onConnectorUp)
         connectorRef.current = null
+        setDropTarget(null)
         if (canvas.activeConnectorRef) canvas.activeConnectorRef.current = null  // stop the preview loop
         const dist = Math.hypot(d.movingPoint.x - d.fixedPoint.x, d.movingPoint.y - d.fixedPoint.y)
-        if (d.targetId || dist > 6 / viewport.zoom) {   // ignore an accidental click
+        const clicked = !d.targetId && dist <= 6 / viewport.zoom
+        if (d.mode === 'create' && clicked) {
+            // A plain click on a dot: the next box that way, already connected (spec §9.7).
+            onQuickAdd?.(d.fromId, d.fromSide)
+        } else if (d.mode === 'create' && !d.targetId && !e?.altKey && onQuickAddAt) {
+            // Released on empty canvas: a new box right there, joined to this one.
+            // (Alt+release leaves a free-ended arrow instead.)
+            onQuickAddAt(d.fromId, d.fromSide, { x: d.movingPoint.x, y: d.movingPoint.y })
+        } else if (!clicked) {
             const movingEnd = d.targetId
                 ? { itemId: d.targetId, side: d.targetSide }
                 : { point: { x: d.movingPoint.x, y: d.movingPoint.y } }
@@ -233,18 +272,25 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         const world = worldFromClient(e)
         // Topmost shape under the cursor (exclude the source on create).
         const targets = (items || [])
-            .filter(it => it.type === 'shape' && it.id !== d.excludeId)
+            .filter(it => connectable(it) && it.id !== d.excludeId)
             .sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+        // Generous: near the target's edge counts, so you needn't land inside it.
+        const pad = DROP_PAD_PX / viewport.zoom
         let hit = null
-        for (const it of targets) { if (itemHitTest(it, world.x, world.y, 2)) { hit = it; break } }
+        for (const it of targets) { if (itemHitTest(it, world.x, world.y, pad)) { hit = it; break } }
         if (hit) {
-            const side = facingSide(hit, d.fixedPoint)   // face the fixed end → looks correct
+            // Over one of the target's ports → that side; else the side facing the fixed end.
+            const anchors = getOrientedAnchors(getItemBounds(hit))
+            const near = SIDES.find(sd => Math.hypot(anchors[sd].x - world.x, anchors[sd].y - world.y) <= (DOT_HIT + 4) / viewport.zoom)
+            const side = near || facingSide(hit, d.fixedPoint)
             d.targetId = hit.id; d.targetSide = side
-            d.movingPoint = getOrientedAnchors(getItemBounds(hit))[side]
+            d.movingPoint = anchors[side]
         } else {
             d.targetId = null; d.targetSide = null
             d.movingPoint = world
         }
+        const key = d.targetId ? `${d.targetId}:${d.targetSide}` : null
+        if (key !== d.dropKey) { d.dropKey = key; setDropTarget(d.targetId ? { id: d.targetId, side: d.targetSide } : null) }
         if (canvas.activeConnectorRef) {
             const fromPoint = d.headIsMoving ? d.fixedPoint : d.movingPoint
             const toPoint = d.headIsMoving ? d.movingPoint : d.fixedPoint
@@ -343,7 +389,10 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                     return <polygon key={it.id} points={pts} fill="none" stroke="var(--accent-warning)" strokeWidth={1} opacity={0.4} />
                 })}
 
-                {box && (
+                {box && locked && (
+                    <polygon points={outlinePts} fill="none" stroke="var(--text-muted)" strokeWidth={1.5} strokeDasharray="4 3" />
+                )}
+                {box && !locked && (
                     <>
                         {/* move region — interior of the selection box.
                             data-sb-move marks it as the shape body (not a true
@@ -351,12 +400,23 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                         <polygon
                             data-sb-move="true"
                             points={outlinePts}
-                            fill={moveInteractive ? 'rgba(240,184,64,0.04)' : 'none'}
+                            fill={moveInteractive && !frameOnly ? 'rgba(240,184,64,0.04)' : 'none'}
                             stroke="var(--accent-warning)"
                             strokeWidth={1.5}
-                            style={{ pointerEvents: moveInteractive ? 'auto' : 'none', cursor: 'move' }}
-                            onPointerDown={moveInteractive ? onMoveDown : undefined}
+                            style={{ pointerEvents: moveInteractive && !frameOnly ? 'auto' : 'none', cursor: 'move' }}
+                            onPointerDown={moveInteractive && !frameOnly ? onMoveDown : undefined}
                         />
+                        {/* a frame: grab its border band or its title */}
+                        {frameOnly && (
+                            <polygon data-sb-move="true" points={outlinePts} fill="none" stroke="transparent" strokeWidth={14}
+                                style={{ pointerEvents: 'stroke', cursor: 'move' }} onPointerDown={onMoveDown} />
+                        )}
+                        {frameOnly && boxItems.map(f => {
+                            const t = frameTitleRect(f, viewport.zoom)
+                            const a = screenOf({ x: t.x, y: t.y })
+                            return <rect key={`ft-${f.id}`} data-sb-move="true" x={a.x} y={a.y} width={t.w * viewport.zoom} height={t.h * viewport.zoom}
+                                fill="transparent" style={{ pointerEvents: 'auto', cursor: 'move' }} onPointerDown={onMoveDown} />
+                        })}
                         {/* rotate stalk + knob */}
                         <line x1={anchorsScreen.n.x} y1={anchorsScreen.n.y} x2={rotateScreen.x} y2={rotateScreen.y}
                             stroke="var(--accent-warning)" strokeWidth={1} />
@@ -382,23 +442,49 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                 {/* connection dots — 4 side anchors of the hovered/selected shape,
                     nudged just outside the edge so they don't clash with the
                     side resize handles. Drag a dot to link to another shape. */}
-                {dotItem && (() => {
+                {dotItem && !dropTarget && (() => {
                     const b = getItemBounds(dotItem)
                     const a = getOrientedAnchors(b)
                     const c = screenOf(boxCenter(b))
-                    const OUT = 14
                     return SIDES.map(side => {
                         const base = screenOf(a[side])
                         const dx = base.x - c.x, dy = base.y - c.y
                         const len = Math.hypot(dx, dy) || 1
+                        const cx = base.x + (dx / len) * DOT_OUT, cy = base.y + (dy / len) * DOT_OUT
+                        const hot = hotDot === side
                         return (
-                            <circle key={`dot-${side}`}
-                                cx={base.x + (dx / len) * OUT} cy={base.y + (dy / len) * OUT} r={5}
-                                fill="var(--accent-warning)" stroke="var(--bg-surface)" strokeWidth={1.5}
+                            <g key={`dot-${side}`} data-sb-handle="true"
                                 style={{ pointerEvents: 'auto', cursor: 'crosshair' }}
-                                onPointerDown={onConnectorDotDown(side)} />
+                                onPointerEnter={() => setHotDot(side)}
+                                onPointerLeave={() => setHotDot(h => (h === side ? null : h))}
+                                onPointerDown={onConnectorDotDown(side)}>
+                                <title>Drag to connect · click for a connected box</title>
+                                {/* invisible, larger hit target */}
+                                <circle cx={cx} cy={cy} r={DOT_HIT} fill="transparent" />
+                                <circle cx={cx} cy={cy} r={hot ? DOT_R + 2 : DOT_R}
+                                    fill="var(--accent-warning)" stroke="var(--bg-surface)" strokeWidth={1.5} />
+                            </g>
                         )
                     })
+                })()}
+
+                {/* while dragging a connector end: the target's ports, the chosen one lit */}
+                {dropTarget && (() => {
+                    const t = (items || []).find(it => it.id === dropTarget.id)
+                    if (!t) return null
+                    const a = getOrientedAnchors(getItemBounds(t))
+                    const o = ['nw', 'ne', 'se', 'sw'].map(k => { const p = screenOf(a[k]); return `${p.x},${p.y}` }).join(' ')
+                    return (
+                        <g>
+                            <polygon points={o} fill="none" stroke="#5a9cf0" strokeWidth={1.5} />
+                            {SIDES.map(side => {
+                                const p = screenOf(a[side])
+                                const on = side === dropTarget.side
+                                return <circle key={`port-${side}`} cx={p.x} cy={p.y} r={on ? 7 : 4}
+                                    fill={on ? '#5a9cf0' : 'var(--bg-surface)'} stroke="#5a9cf0" strokeWidth={1.5} />
+                            })}
+                        </g>
+                    )
                 })()}
 
                 {/* connector endpoint handles — drag to re-route or detach an end */}

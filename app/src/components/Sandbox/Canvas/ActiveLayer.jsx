@@ -1,7 +1,7 @@
 import { Layer, Shape, Rect, Ellipse, Line, Arrow } from 'react-konva'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { strokeOutline, drawStrokePath } from './strokeOutline'
-import { renderShape, isLineKind } from '../shapes/registry'
+import { renderShape, isLineKind, SHAPES } from '../shapes/registry'
 import { routeConnector } from '../connectors/geometry'
 
 /**
@@ -36,8 +36,8 @@ function ActiveShapePreview({ shape }) {
         return <Arrow points={pts} fill={style.stroke} pointerLength={10} pointerWidth={10} {...common} />
     }
 
-    // ── rect / roundedRect ──
-    if (kind === 'rect' || kind === 'roundedRect') {
+    // ── rect / roundedRect, and kinds with no outline path (frame, sticky) ──
+    if (kind === 'rect' || kind === 'roundedRect' || !SHAPES[kind]?.render || kind === 'sticky') {
         return <Rect x={minX} y={minY} width={w} height={h}
             cornerRadius={style.radius || (kind === 'roundedRect' ? 12 : 0)}
             fill={style.fill !== 'transparent' ? style.fill : undefined} {...common} />

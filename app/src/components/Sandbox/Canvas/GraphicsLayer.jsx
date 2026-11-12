@@ -4,6 +4,8 @@ import { drawStrokePath } from './strokeOutline'
 import { useKonvaImage } from '../../../hooks/useKonvaImage'
 import { resolveImageUrl } from '../../../utils/imageUpload'
 import { renderShape, isLineKind } from '../shapes/registry'
+import { dashFor } from '../connectors/lineStyle'
+import { konvaTextProps, fitFontSize, contrastText, STICKY_DEFAULT } from '../text/textStyle'
 
 /**
  * ONE Konva layer for ALL committed graphics (strokes + shapes + images),
@@ -74,20 +76,37 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
     // Text label — shared by all filled (non-line) shapes. Hidden while this
     // shape is being edited so the live DOM editor doesn't double up with the
     // committed Konva text (which looked like a shadow/glitch).
+    const isSticky = kind === 'sticky'
+    const pad = isSticky ? Math.max(12, Math.min(aw, ah) * 0.12) : 8
+    const fontSize = p.fontSize || (isSticky ? fitFontSize(p.text, aw - pad * 2, ah - pad * 2, p, 28, 10) : 16)
     const textNode = (p.text && !hideText && !isLineKind(kind)) ? (
         <Text
             x={0} y={0} width={aw} height={ah}
             text={p.text}
-            align={p.textAlign || 'center'}
-            verticalAlign="middle"
-            fontSize={p.fontSize || 16}
-            fontFamily="Inter, system-ui, sans-serif"
-            fontStyle={p.bold ? 'bold' : 'normal'}
-            fill={p.textColor || '#ffffff'}
-            padding={8}
+            {...konvaTextProps(p)}
+            fontSize={fontSize}
+            fill={p.textColor || (isSticky ? contrastText(p.fill || STICKY_DEFAULT) : '#ffffff')}
+            padding={pad}
+            wrap="word"
+            ellipsis={isSticky}
             listening={false} perfectDrawEnabled={false}
         />
     ) : null
+
+    // ── sticky note: flat colour, soft shadow, no border (spec §7.3) ──────
+    if (isSticky) {
+        return (
+            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
+                <Rect
+                    x={0} y={0} width={aw} height={ah} cornerRadius={2}
+                    fill={p.fill && p.fill !== 'transparent' ? p.fill : STICKY_DEFAULT}
+                    shadowColor="#000" shadowOpacity={0.28} shadowBlur={10} shadowOffsetY={3}
+                    listening={false} perfectDrawEnabled={false}
+                />
+                {textNode}
+            </Group>
+        )
+    }
 
     // ── fast-path: ellipse ───────────────────────────────────────────────
     if (kind === 'ellipse') {
@@ -96,7 +115,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                 <Ellipse
                     x={aw / 2} y={ah / 2} radiusX={aw / 2} radiusY={ah / 2}
                     fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                    stroke={p.stroke} strokeWidth={p.strokeWidth}
+                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
                     listening={false} perfectDrawEnabled={false}
                 />
                 {textNode}
@@ -118,7 +137,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                 scaleY={baseH ? h / baseH : 1}
                 rotation={rotation}
                 points={p.points}
-                stroke={p.stroke} strokeWidth={p.strokeWidth}
+                stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)}
                 fill={isArrow ? p.stroke : undefined}
                 pointerLength={isArrow ? 10 : undefined}
                 pointerWidth={isArrow ? 10 : undefined}
@@ -136,7 +155,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                     x={0} y={0} width={aw} height={ah}
                     cornerRadius={p.radius || (kind === 'roundedRect' ? 12 : 0)}
                     fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                    stroke={p.stroke} strokeWidth={p.strokeWidth}
+                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
                     listening={false} perfectDrawEnabled={false}
                 />
                 {textNode}
@@ -155,7 +174,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                     ctx.fillStrokeShape(shape)
                 }}
                 fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                stroke={p.stroke} strokeWidth={p.strokeWidth}
+                stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round" lineJoin="round"
                 listening={false} perfectDrawEnabled={false}
             />
             {textNode}

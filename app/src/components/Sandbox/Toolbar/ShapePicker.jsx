@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './ShapePicker.module.css'
-import { SHAPES, QUICK_SHAPES, ALL_SHAPES } from '../shapes/registry'
+import { SHAPES, QUICK_SHAPES, SHAPE_GROUPS, shapesInGroup } from '../shapes/registry'
 
 /**
  * Shape picker flyout — anchored beside the single shape button in the dock.
@@ -9,8 +9,8 @@ import { SHAPES, QUICK_SHAPES, ALL_SHAPES } from '../shapes/registry'
  * Two-level:
  *   1. Quick menu: the 4 most-used shapes (rect/ellipse/line/arrow) with key
  *      hints, plus a "More shapes" row.
- *   2. Grid: a 4-column grid showing all ~16 shapes as small canvas-drawn
- *      thumbnails, with a back-arrow to return to the quick menu.
+ *   2. Grid: every shape as a small canvas-drawn thumbnail, in sections
+ *      (Basic / Flowchart / Callouts / Lines), with a back-arrow.
  *
  * Portal + fixed positioning + click-outside + Escape mirrors ColorPalette.
  */
@@ -128,7 +128,7 @@ function ShapePicker({ open, tool, anchorRef, onPick, onClose }) {
         if (!open || !anchorRef.current) return
         const r = anchorRef.current.getBoundingClientRect()
         const GAP = 12
-        const PANEL_W = 172
+        const PANEL_W = showGrid ? 256 : 172
         setPos({ top: r.top - 6, left: Math.max(8, r.left - GAP - PANEL_W) })
     }, [open, anchorRef, showGrid])
 
@@ -165,22 +165,29 @@ function ShapePicker({ open, tool, anchorRef, onPick, onClose }) {
                     <span className={styles.gridTitle}>All shapes</span>
                 </div>
                 <div className={styles.divider} />
-                <div className={styles.grid}>
-                    {ALL_SHAPES.map(kind => {
-                        const s = SHAPES[kind]
-                        const isActive = tool === kind
-                        return (
-                            <button
-                                key={kind}
-                                className={isActive ? styles.gridCellActive : styles.gridCell}
-                                onClick={() => pick(kind)}
-                                title={s.label}
-                                aria-label={s.label}
-                            >
-                                <ShapeThumb kind={kind} size={20} />
-                            </button>
-                        )
-                    })}
+                <div className={styles.sections}>
+                    {SHAPE_GROUPS.map(g => (
+                        <div key={g.id}>
+                            <div className={styles.sectionLabel}>{g.label}</div>
+                            <div className={styles.grid}>
+                                {shapesInGroup(g.id).map(kind => {
+                                    const s = SHAPES[kind]
+                                    const isActive = tool === kind
+                                    return (
+                                        <button
+                                            key={kind}
+                                            className={isActive ? styles.gridCellActive : styles.gridCell}
+                                            onClick={() => pick(kind)}
+                                            title={s.label}
+                                            aria-label={s.label}
+                                        >
+                                            <ShapeThumb kind={kind} size={20} />
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>,
             document.body,

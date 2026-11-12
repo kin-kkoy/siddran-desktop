@@ -2,6 +2,7 @@ import {
     LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
     LuType, LuEraser, LuImagePlus, LuPaintBucket,
     LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
+    LuStickyNote, LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
 import styles from './SandboxToolbar.module.css'
@@ -44,11 +45,12 @@ function SandboxToolbar({
     onUndo, onRedo, canUndo, canRedo,
     snapEnabled, onToggleSnap, onExport,
     onOpenFlowText,
+    onOpenTemplates,
 }) {
     const swatchRef = useRef(null)
     const shapeRef = useRef(null)
     const insertRef = useRef(null)
-    const isShapeTool = SHAPE_TOOLS.includes(tool)
+    const isShapeTool = SHAPE_TOOLS.includes(tool) && tool !== 'sticky' && tool !== 'frame'
     return (
         <div className={styles.toolbar}>
             <ToolBtn active={tool === 'pointer'} title="Select (V)" onClick={() => onToolChange('pointer')}>
@@ -84,6 +86,17 @@ function SandboxToolbar({
             <ToolBtn active={tool === 'text'} title="Text (T)" onClick={() => onToolChange('text')}>
                 <LuType size={16} />
             </ToolBtn>
+            <ToolBtn active={tool === 'sticky'} title="Sticky note (N) — click to place" onClick={() => onToolChange('sticky')}>
+                <LuStickyNote size={16} />
+            </ToolBtn>
+            <ToolBtn active={tool === 'frame'} title="Frame (F) — drag to draw" onClick={() => onToolChange('frame')}>
+                <LuFrame size={16} />
+            </ToolBtn>
+            {onOpenTemplates && (
+                <ToolBtn title="Templates" onClick={onOpenTemplates}>
+                    <LuLayoutTemplate size={16} />
+                </ToolBtn>
+            )}
             {onOpenFlowText && (
                 <ToolBtn title="Diagram from text (D)" onClick={onOpenFlowText}>
                     <LuWorkflow size={16} />

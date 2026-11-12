@@ -156,26 +156,292 @@ function renderBlockArrow(ctx, w, h, radius) {
     ], radius)
 }
 
+
+// ── packs added for the whiteboard upgrade ─────────────────────────────────
+// Every one uses only moveTo / lineTo / arcTo / ellipse / bezierCurveTo /
+// quadraticCurveTo / closePath — the surface diagramSvg's PathRecorder replays
+// into an SVG path, so these shapes show up in note diagrams too.
+
+function rrect(ctx, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2))
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w - r, y)
+    ctx.arcTo(x + w, y, x + w, y + r, r)
+    ctx.lineTo(x + w, y + h - r)
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
+    ctx.lineTo(x + r, y + h)
+    ctx.arcTo(x, y + h, x, y + h - r, r)
+    ctx.lineTo(x, y + r)
+    ctx.arcTo(x, y, x + r, y, r)
+    ctx.closePath()
+}
+
+function renderCircle(ctx, w, h) {
+    const r = Math.min(w, h) / 2
+    ctx.moveTo(w / 2 + r, h / 2)
+    ctx.ellipse(w / 2, h / 2, r, r, 0, 0, Math.PI * 2, false)
+    ctx.closePath()
+}
+
+function renderTrapezoid(ctx, w, h, radius) {
+    const inset = w * 0.2
+    polyPath(ctx, [inset, 0, w - inset, 0, w, h, 0, h], radius)
+}
+
+function renderOctagon(ctx, w, h, radius) {
+    const ix = w * 0.29, iy = h * 0.29
+    polyPath(ctx, [ix, 0, w - ix, 0, w, iy, w, h - iy, w - ix, h, ix, h, 0, h - iy, 0, iy], radius)
+}
+
+function renderDoubleArrow(ctx, w, h, radius) {
+    const head = Math.min(w * 0.3, h * 0.5)
+    const sy = h * 0.25
+    polyPath(ctx, [
+        0, h / 2, head, 0, head, sy, w - head, sy, w - head, 0, w, h / 2,
+        w - head, h, w - head, h - sy, head, h - sy, head, h,
+    ], radius)
+}
+
+function renderCross(ctx, w, h, radius) {
+    const ax = w / 3, ay = h / 3
+    polyPath(ctx, [ax, 0, w - ax, 0, w - ax, ay, w, ay, w, h - ay, w - ax, h - ay, w - ax, h, ax, h, ax, h - ay, 0, h - ay, 0, ay, ax, ay], radius)
+}
+
+function renderCloud(ctx, w, h) {
+    // Five lobes round a flat-ish base, as cubic curves in a 100×60 design box.
+    const X = (v) => (v / 100) * w, Y = (v) => (v / 60) * h
+    ctx.moveTo(X(22), Y(54))
+    ctx.bezierCurveTo(X(4), Y(54), X(2), Y(34), X(16), Y(30))
+    ctx.bezierCurveTo(X(12), Y(14), X(32), Y(6), X(42), Y(16))
+    ctx.bezierCurveTo(X(48), Y(2), X(72), Y(2), X(74), Y(18))
+    ctx.bezierCurveTo(X(92), Y(14), X(102), Y(34), X(88), Y(42))
+    ctx.bezierCurveTo(X(96), Y(54), X(82), Y(60), X(74), Y(54))
+    ctx.closePath()
+}
+
+/** A page with a wavy bottom edge (flowchart "document"). */
+function renderDocument(ctx, w, h) {
+    const wave = h * 0.12
+    ctx.moveTo(0, 0)
+    ctx.lineTo(w, 0)
+    ctx.lineTo(w, h - wave)
+    ctx.bezierCurveTo(w * 0.75, h - wave * 2.6, w * 0.5, h + wave * 0.6, w * 0.25, h - wave * 0.4)
+    ctx.quadraticCurveTo(w * 0.1, h - wave * 1.2, 0, h - wave)
+    ctx.closePath()
+}
+
+function renderMultiDocument(ctx, w, h) {
+    const o = Math.min(w, h) * 0.08
+    // The two sheets behind are L-shaped strips (only their visible top/right
+    // edges), so neither fill nor stroke crosses the front page.
+    const strip = (k) => {
+        const x0 = o * k, y0 = o * (2 - k), fw = w - o * 2
+        ctx.moveTo(x0, y0 + o)
+        ctx.lineTo(x0, y0)
+        ctx.lineTo(x0 + fw, y0)
+        ctx.lineTo(x0 + fw, h - o * (2 + k))
+        ctx.lineTo(x0 + fw - o, h - o * (2 + k))
+        ctx.lineTo(x0 + fw - o, y0 + o)
+        ctx.closePath()
+    }
+    strip(2)
+    strip(1)
+    renderDocumentAt(ctx, 0, o * 2, w - o * 2, h - o * 2)
+}
+function renderDocumentAt(ctx, x, y, w, h) {
+    const wave = h * 0.12
+    ctx.moveTo(x, y)
+    ctx.lineTo(x + w, y)
+    ctx.lineTo(x + w, y + h - wave)
+    ctx.bezierCurveTo(x + w * 0.75, y + h - wave * 2.6, x + w * 0.5, y + h + wave * 0.6, x + w * 0.25, y + h - wave * 0.4)
+    ctx.quadraticCurveTo(x + w * 0.1, y + h - wave * 1.2, x, y + h - wave)
+    ctx.closePath()
+}
+
+/** Stadium / pill — flowchart start & end. */
+function renderTerminator(ctx, w, h) {
+    rrect(ctx, 0, 0, w, h, Math.min(w, h) / 2)
+}
+
+function renderManualInput(ctx, w, h, radius) {
+    polyPath(ctx, [0, h * 0.3, w, 0, w, h, 0, h], radius)
+}
+
+function renderPreparation(ctx, w, h, radius) {
+    const i = Math.min(w * 0.18, h * 0.5)
+    polyPath(ctx, [i, 0, w - i, 0, w, h / 2, w - i, h, i, h, 0, h / 2], radius)
+}
+
+/** D-shape: flat left, half-round right. */
+function renderDelay(ctx, w, h) {
+    const r = Math.min(h / 2, w / 2)
+    ctx.moveTo(0, 0)
+    ctx.lineTo(w - r, 0)
+    ctx.arcTo(w, 0, w, h / 2, r)
+    ctx.arcTo(w, h, w - r, h, r)
+    ctx.lineTo(0, h)
+    ctx.closePath()
+}
+
+function renderDisplay(ctx, w, h) {
+    const i = w * 0.16
+    ctx.moveTo(0, h / 2)
+    ctx.lineTo(i, 0)
+    ctx.lineTo(w - i, 0)
+    ctx.quadraticCurveTo(w + i * 0.4, h / 2, w - i, h)
+    ctx.lineTo(i, h)
+    ctx.closePath()
+}
+
+function renderOffPage(ctx, w, h, radius) {
+    polyPath(ctx, [0, 0, w, 0, w, h * 0.65, w / 2, h, 0, h * 0.65], radius)
+}
+
+/** Process box with double side bars (subroutine). */
+function renderPredefined(ctx, w, h) {
+    const i = Math.min(w * 0.1, 18)
+    ctx.moveTo(0, 0); ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath()
+    ctx.moveTo(i, 0); ctx.lineTo(i, h)
+    ctx.moveTo(w - i, 0); ctx.lineTo(w - i, h)
+}
+
+/** Stored data: curved left and right edges. */
+function renderStoredData(ctx, w, h) {
+    const c = w * 0.14
+    ctx.moveTo(c, 0)
+    ctx.lineTo(w, 0)
+    ctx.quadraticCurveTo(w - c * 2, h / 2, w, h)
+    ctx.lineTo(c, h)
+    ctx.quadraticCurveTo(-c, h / 2, c, 0)
+    ctx.closePath()
+}
+
+function renderManualOperation(ctx, w, h, radius) {
+    const i = w * 0.18
+    polyPath(ctx, [0, 0, w, 0, w - i, h, i, h], radius)
+}
+
+function renderMerge(ctx, w, h, radius) {
+    polyPath(ctx, [0, 0, w, 0, w / 2, h], radius)
+}
+
+/** Punched card: a rectangle with the top-left corner cut. */
+function renderCard(ctx, w, h, radius) {
+    const c = Math.min(w, h) * 0.25
+    polyPath(ctx, [c, 0, w, 0, w, h, 0, h, 0, c], radius)
+}
+
+function renderThoughtBubble(ctx, w, h) {
+    const bh = h * 0.78
+    ctx.moveTo(w / 2 + w / 2, bh / 2)
+    ctx.ellipse(w / 2, bh / 2, w / 2, bh / 2, 0, 0, Math.PI * 2, false)
+    ctx.closePath()
+    const r1 = Math.min(w, h) * 0.07, r2 = r1 * 0.6
+    ctx.moveTo(w * 0.28 + r1, bh + r1 * 0.6)
+    ctx.ellipse(w * 0.28, bh + r1 * 0.6, r1, r1, 0, 0, Math.PI * 2, false)
+    ctx.closePath()
+    ctx.moveTo(w * 0.18 + r2, h - r2)
+    ctx.ellipse(w * 0.18, h - r2, r2, r2, 0, 0, Math.PI * 2, false)
+    ctx.closePath()
+}
+
+/** Rounded callout with a tail at the bottom-left. */
+function renderRoundedCallout(ctx, w, h) {
+    const tail = Math.min(h * 0.22, 26)
+    const bh = h - tail
+    const r = Math.min(bh / 2.2, w / 5, 22)
+    ctx.moveTo(r, 0)
+    ctx.lineTo(w - r, 0)
+    ctx.arcTo(w, 0, w, r, r)
+    ctx.lineTo(w, bh - r)
+    ctx.arcTo(w, bh, w - r, bh, r)
+    ctx.lineTo(w * 0.32, bh)
+    ctx.lineTo(w * 0.12, h)
+    ctx.lineTo(w * 0.18, bh)
+    ctx.lineTo(r, bh)
+    ctx.arcTo(0, bh, 0, bh - r, r)
+    ctx.lineTo(0, r)
+    ctx.arcTo(0, 0, r, 0, r)
+    ctx.closePath()
+}
+
+/** Ribbon banner with notched ends. */
+function renderBanner(ctx, w, h, radius) {
+    const n = Math.min(w * 0.08, h * 0.4)
+    polyPath(ctx, [0, 0, w, 0, w - n, h / 2, w, h, 0, h, n, h / 2], radius)
+}
+
+/** Luggage tag / label pointing left. */
+function renderTag(ctx, w, h, radius) {
+    const p = Math.min(w * 0.2, h * 0.5)
+    polyPath(ctx, [p, 0, w, 0, w, h, p, h, 0, h / 2], radius)
+}
+
+/** Sticky note: a near-square with a 2 px corner (spec §7.3). */
+function renderSticky(ctx, w, h) {
+    rrect(ctx, 0, 0, w, h, 2)
+}
+
 // ── shape registry ───────────────────────────────────────────────────────────
 
 export const SHAPES = {
+    // basic
     rect:          { label: 'Rectangle',     key: 'r',  group: 'basic', ratio: null, isLine: false, render: null },
     roundedRect:   { label: 'Rounded rect',  key: null, group: 'basic', ratio: null, isLine: false, render: null },
     ellipse:       { label: 'Ellipse',       key: 'o',  group: 'basic', ratio: null, isLine: false, render: null },
+    circle:        { label: 'Circle',        key: null, group: 'basic', ratio: 1,    isLine: false, render: renderCircle },
     triangle:      { label: 'Triangle',      key: null, group: 'basic', ratio: null, isLine: false, render: renderTriangle },
     rhombus:       { label: 'Diamond',       key: null, group: 'basic', ratio: null, isLine: false, render: renderRhombus },
-    pentagon:      { label: 'Pentagon',       key: null, group: 'basic', ratio: null, isLine: false, render: renderPentagon },
-    hexagon:       { label: 'Hexagon',       key: null, group: 'basic', ratio: null, isLine: false, render: renderHexagon },
-    star:          { label: 'Star',          key: null, group: 'basic', ratio: 1,    isLine: false, render: renderStar },
-    speechBubble:  { label: 'Speech bubble', key: null, group: 'basic', ratio: null, isLine: false, render: renderSpeechBubble },
-    cylinder:      { label: 'Cylinder',      key: null, group: 'basic', ratio: 0.6,  isLine: false, render: renderCylinder },
     parallelogram: { label: 'Parallelogram', key: null, group: 'basic', ratio: null, isLine: false, render: renderParallelogram },
+    trapezoid:     { label: 'Trapezoid',     key: null, group: 'basic', ratio: null, isLine: false, render: renderTrapezoid },
+    pentagon:      { label: 'Pentagon',      key: null, group: 'basic', ratio: null, isLine: false, render: renderPentagon },
+    hexagon:       { label: 'Hexagon',       key: null, group: 'basic', ratio: null, isLine: false, render: renderHexagon },
+    octagon:       { label: 'Octagon',       key: null, group: 'basic', ratio: 1,    isLine: false, render: renderOctagon },
+    star:          { label: 'Star',          key: null, group: 'basic', ratio: 1,    isLine: false, render: renderStar },
+    blockArrow:    { label: 'Block arrow',   key: null, group: 'basic', ratio: null, isLine: false, render: renderBlockArrow },
+    doubleArrow:   { label: 'Double arrow',  key: null, group: 'basic', ratio: null, isLine: false, render: renderDoubleArrow },
+    cross:         { label: 'Cross',         key: null, group: 'basic', ratio: 1,    isLine: false, render: renderCross },
+    cloud:         { label: 'Cloud',         key: null, group: 'basic', ratio: null, isLine: false, render: renderCloud },
+    cylinder:      { label: 'Cylinder',      key: null, group: 'basic', ratio: 0.6,  isLine: false, render: renderCylinder },
+    document:      { label: 'Document',      key: null, group: 'basic', ratio: null, isLine: false, render: renderDocument },
+    // flowchart (process / decision / data are rect / rhombus / parallelogram)
+    terminator:        { label: 'Start / end',       key: null, group: 'flowchart', ratio: null, isLine: false, render: renderTerminator },
+    predefinedProcess: { label: 'Subroutine',        key: null, group: 'flowchart', ratio: null, isLine: false, render: renderPredefined },
+    manualInput:       { label: 'Manual input',      key: null, group: 'flowchart', ratio: null, isLine: false, render: renderManualInput },
+    manualOperation:   { label: 'Manual operation',  key: null, group: 'flowchart', ratio: null, isLine: false, render: renderManualOperation },
+    preparation:       { label: 'Preparation',       key: null, group: 'flowchart', ratio: null, isLine: false, render: renderPreparation },
+    delay:             { label: 'Delay',             key: null, group: 'flowchart', ratio: null, isLine: false, render: renderDelay },
+    display:           { label: 'Display',           key: null, group: 'flowchart', ratio: null, isLine: false, render: renderDisplay },
+    storedData:        { label: 'Stored data',       key: null, group: 'flowchart', ratio: null, isLine: false, render: renderStoredData },
+    multiDocument:     { label: 'Documents',         key: null, group: 'flowchart', ratio: null, isLine: false, render: renderMultiDocument },
+    offPageConnector:  { label: 'Off-page link',     key: null, group: 'flowchart', ratio: 1,    isLine: false, render: renderOffPage },
+    merge:             { label: 'Merge',             key: null, group: 'flowchart', ratio: null, isLine: false, render: renderMerge },
+    card:              { label: 'Card',              key: null, group: 'flowchart', ratio: null, isLine: false, render: renderCard },
+    // callouts
+    speechBubble:   { label: 'Speech bubble',   key: null, group: 'callout', ratio: null, isLine: false, render: renderSpeechBubble },
+    roundedCallout: { label: 'Rounded callout', key: null, group: 'callout', ratio: null, isLine: false, render: renderRoundedCallout },
+    thoughtBubble:  { label: 'Thought bubble',  key: null, group: 'callout', ratio: null, isLine: false, render: renderThoughtBubble },
+    banner:         { label: 'Banner',          key: null, group: 'callout', ratio: null, isLine: false, render: renderBanner },
+    tag:            { label: 'Tag',             key: null, group: 'callout', ratio: null, isLine: false, render: renderTag },
+    // sticky note — a shape so it gets text editing, connectors and undo for free
+    sticky:         { label: 'Sticky note',     key: 'n',  group: 'sticky',  ratio: 1,    isLine: false, render: renderSticky },
+    // frame — drawn by FrameLayer, beneath everything; no outline path of its own
+    frame:          { label: 'Frame',           key: 'f',  group: 'frame',   ratio: null, isLine: false, render: null },
+    // lines
     line:          { label: 'Line',          key: 'l',  group: 'line',  ratio: null, isLine: true,  render: null },
     arrow:         { label: 'Arrow',         key: 'a',  group: 'line',  ratio: null, isLine: true,  render: null },
     elbowArrow:    { label: 'Elbow arrow',   key: null, group: 'line',  ratio: null, isLine: true,  render: null },
-    blockArrow:    { label: 'Block arrow',   key: null, group: 'basic', ratio: null, isLine: false, render: renderBlockArrow },
     divider:       { label: 'Divider',       key: null, group: 'line',  ratio: null, isLine: true,  render: null },
 }
+
+/** Picker sections, in display order. */
+export const SHAPE_GROUPS = [
+    { id: 'basic', label: 'Basic' },
+    { id: 'flowchart', label: 'Flowchart' },
+    { id: 'callout', label: 'Callouts' },
+    { id: 'line', label: 'Lines' },
+]
+export const shapesInGroup = (group) => Object.keys(SHAPES).filter(k => SHAPES[k].group === group)
 
 // ── derived exports ──────────────────────────────────────────────────────────
 
@@ -217,4 +483,4 @@ export const QUICK_SHAPES = ['rect', 'ellipse', 'line', 'arrow']
 /**
  * All shapes shown in the "More shapes" grid, in display order.
  */
-export const ALL_SHAPES = Object.keys(SHAPES)
+export const ALL_SHAPES = Object.keys(SHAPES).filter(k => SHAPES[k].group !== 'sticky' && SHAPES[k].group !== 'frame')

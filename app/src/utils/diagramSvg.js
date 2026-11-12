@@ -24,6 +24,9 @@
 import { renderShape, isLineKind } from '../components/Sandbox/shapes/registry'
 import { connectorPoints, labelBox, LABEL_FONT } from '../components/Sandbox/connectors/geometry'
 import { diagramBounds } from './diagramBlock'
+import { headGeometry, headInset, pathEnds, trimPath } from '../components/Sandbox/connectors/heads'
+import { svgDashFor } from '../components/Sandbox/connectors/lineStyle'
+import { fontCss, contrastText, STICKY_DEFAULT } from '../components/Sandbox/text/textStyle'
 
 const SEGMENTS_PER_QUARTER = 4   // flattening resolution for arcs
 
@@ -53,6 +56,19 @@ class PathRecorder {
   lineTo(x, y) {
     if (!this.started) return this.moveTo(x, y)
     this.parts.push(`L${fmt(x)} ${fmt(y)}`)
+    this.cx = x; this.cy = y
+  }
+
+  // Béziers map one-to-one onto SVG's C / Q, so they are emitted exactly.
+  bezierCurveTo(c1x, c1y, c2x, c2y, x, y) {
+    if (!this.started) this.moveTo(c1x, c1y)
+    this.parts.push(`C${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(x)} ${fmt(y)}`)
+    this.cx = x; this.cy = y
+  }
+
+  quadraticCurveTo(qx, qy, x, y) {
+    if (!this.started) this.moveTo(qx, qy)
+    this.parts.push(`Q${fmt(qx)} ${fmt(qy)} ${fmt(x)} ${fmt(y)}`)
     this.cx = x; this.cy = y
   }
 
@@ -181,9 +197,11 @@ const el = (name, attrs = {}) => {
 function shapeElement(item) {
   const p = item.payload
   const { w, h } = item
+  const sticky = p.kind === 'sticky'
   const common = {
-    fill: p.fill || 'none',
-    stroke: p.stroke,
+    fill: (p.fill && p.fill !== 'transparent') ? p.fill : (sticky ? STICKY_DEFAULT : 'none'),
+    'stroke-dasharray': svgDashFor(p),
+    stroke: sticky ? 'none' : p.stroke,
     'stroke-width': p.strokeWidth,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
@@ -213,18 +231,25 @@ function textElement(item) {
   if (!p.text) return null
   const lines = String(p.text).split('\n')
   const size = p.fontSize || 14
-  const lineH = size * 1.25
+  const lineH = size * (p.lineHeight || 1.25)
   const anchor = p.textAlign === 'left' ? 'start' : p.textAlign === 'right' ? 'end' : 'middle'
   const x = p.textAlign === 'left' ? 6 : p.textAlign === 'right' ? item.w - 6 : item.w / 2
-  const startY = item.h / 2 - ((lines.length - 1) * lineH) / 2
+  const block = (lines.length - 1) * lineH
+  const startY = p.verticalAlign === 'top' ? 6 + size / 2
+    : p.verticalAlign === 'bottom' ? item.h - 6 - size / 2 - block
+      : item.h / 2 - block / 2
+  const deco = [p.underline && 'underline', p.strike && 'line-through'].filter(Boolean).join(' ')
 
   const text = el('text', {
     x, y: startY,
-    fill: p.textColor,
+    fill: p.textColor || (p.kind === 'sticky' ? contrastText(p.fill || STICKY_DEFAULT) : null),
     'font-size': size,
+    'font-weight': p.bold ? 700 : null,
+    'font-style': p.italic ? 'italic' : null,
+    'text-decoration': deco || null,
     'text-anchor': anchor,
     'dominant-baseline': 'central',
-    'font-family': 'var(--font-body, sans-serif)',
+    'font-family': p.fontFamily ? fontCss(p) : 'var(--font-body, sans-serif)',
   })
   lines.forEach((line, i) => {
     const tspan = el('tspan', { x, y: startY + i * lineH })
@@ -234,27 +259,54 @@ function textElement(item) {
   return text
 }
 
-function connectorElement(item, byId, markerFor) {
+function headElement(g, stroke, strokeWidth) {
+  if (!g) return null
+  // Hollow heads take the page colour so the line doesn't show through.
+  if (g.shape === 'circle') {
+    const c = el('circle', { cx: fmt(g.cx), cy: fmt(g.cy), r: fmt(g.r), stroke, 'stroke-width': strokeWidth })
+    if (g.filled) c.setAttribute('fill', stroke); else c.style.fill = 'var(--bg-primary, #09090f)'
+    return c
+  }
+  const pts = []
+  for (let i = 0; i < g.pts.length; i += 2) pts.push(`${fmt(g.pts[i])},${fmt(g.pts[i + 1])}`)
+  const node = el(g.closed ? 'polygon' : 'polyline', {
+    points: pts.join(' '), stroke, 'stroke-width': strokeWidth, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+  })
+  if (!g.closed) node.setAttribute('fill', 'none')
+  else if (g.filled) node.setAttribute('fill', stroke)
+  else node.style.fill = 'var(--bg-primary, #09090f)'
+  return node
+}
+
+function connectorElement(item, byId) {
   const pts = connectorPoints(item, byId)
   if (!pts) return null
   const p = item.payload
+  const stroke = p.stroke || '#e2ddf5'
+  const sw = p.strokeWidth || 2
+  const head = p.head || 'arrow'
+  const headStart = p.headStart || 'none'
+  const ends = pathEnds(pts)
+  const gEnd = ends && headGeometry(head, ends.end.tip, ends.end.prev, sw)
+  const gStart = ends && headGeometry(headStart, ends.start.tip, ends.start.prev, sw)
+  const body = trimPath(pts, gStart ? headInset(headStart, sw) : 0, gEnd ? headInset(head, sw) : 0)
   const points = []
-  for (let i = 0; i < pts.length; i += 2) points.push(`${fmt(pts[i])},${fmt(pts[i + 1])}`)
-  const line = el('polyline', {
+  for (let i = 0; i < body.length; i += 2) points.push(`${fmt(body[i])},${fmt(body[i + 1])}`)
+  const g = el('g')
+  g.appendChild(el('polyline', {
     points: points.join(' '),
     fill: 'none',
-    stroke: p.stroke,
-    'stroke-width': p.strokeWidth,
+    stroke,
+    'stroke-width': sw,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
-    'stroke-dasharray': p.dash ? '8 6' : null,
-    'marker-end': p.head === 'none' ? null : `url(#${markerFor(p.stroke)})`,
-  })
+    'stroke-dasharray': svgDashFor(p),
+  }))
+  for (const hg of [gStart, gEnd]) { const h = headElement(hg, stroke, sw); if (h) g.appendChild(h) }
+  const line = g
   const box = labelBox(pts, p.label)
   if (!box) return line
   // Same pill as the canvas: page-coloured, so the line reads as passing behind the word.
-  const g = el('g')
-  g.appendChild(line)
   const pill = el('rect', { x: fmt(box.x), y: fmt(box.y), width: box.w, height: box.h, rx: box.h / 2, stroke: p.stroke, 'stroke-width': 1 })
   pill.style.fill = 'var(--bg-primary, #09090f)'
   g.appendChild(pill)
@@ -263,8 +315,6 @@ function connectorElement(item, byId, markerFor) {
   g.appendChild(t)
   return g
 }
-
-let markerSeq = 0
 
 /**
  * Build an <svg> element for a diagram. Returns null when there is nothing to
@@ -299,28 +349,6 @@ export function diagramToSvg(items, opts = {}) {
   svg.style.height = 'auto'
   svg.style.display = 'block'
 
-  // One marker per stroke colour, made on demand. `fill: context-stroke` would
-  // express this in one marker, but it is SVG2 and WebKit ignores it — the
-  // arrowheads come out black regardless of the line they end. The seq counter
-  // keeps ids unique across several diagrams on one page.
-  const defs = el('defs')
-  svg.appendChild(defs)
-  const markerIds = new Map()
-  const markerFor = (stroke) => {
-    const colour = stroke || '#e2ddf5'
-    const existing = markerIds.get(colour)
-    if (existing) return existing
-    const id = `siddran-arrow-${++markerSeq}`
-    const marker = el('marker', {
-      id, viewBox: '0 0 10 10', refX: 9, refY: 5,
-      markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse',
-    })
-    marker.appendChild(el('path', { d: 'M0 0 L10 5 L0 10 z', fill: colour }))
-    defs.appendChild(marker)
-    markerIds.set(colour, id)
-    return id
-  }
-
   const byId = new Map(items.map(it => [it.id, it]))
   const ordered = items.slice().sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0))
 
@@ -328,7 +356,7 @@ export function diagramToSvg(items, opts = {}) {
   // layering the Sandbox uses (ConnectorLayer below GraphicsLayer).
   for (const item of ordered) {
     if (item.type !== 'connector') continue
-    const node = connectorElement(item, byId, markerFor)
+    const node = connectorElement(item, byId)
     if (node) svg.appendChild(node)
   }
 

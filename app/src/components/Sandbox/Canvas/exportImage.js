@@ -15,20 +15,25 @@ const PAD = 24          // world px of breathing room around the content
 const TARGET_SCALE = 2  // render at 2× for crispness…
 const MAX_SIDE = 4000   // …unless that would blow past this pixel dimension
 
-export function exportStagePNG(stage, graphicItems, title = 'sandbox') {
+export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = null) {
     if (!stage) return { ok: false, reason: 'no-stage' }
-    if (!graphicItems || graphicItems.length === 0) return { ok: false, reason: 'empty' }
+    if (!clip && (!graphicItems || graphicItems.length === 0)) return { ok: false, reason: 'empty' }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const it of graphicItems) {
-        const b = itemAABB(it)
-        if (b.x < minX) minX = b.x
-        if (b.y < minY) minY = b.y
-        if (b.x + b.w > maxX) maxX = b.x + b.w
-        if (b.y + b.h > maxY) maxY = b.y + b.h
+    if (clip) {
+        // An exact world rect (a frame): no padding, nothing outside it.
+        minX = clip.x; minY = clip.y; maxX = clip.x + clip.w; maxY = clip.y + clip.h
+    } else {
+        for (const it of graphicItems) {
+            const b = itemAABB(it)
+            if (b.x < minX) minX = b.x
+            if (b.y < minY) minY = b.y
+            if (b.x + b.w > maxX) maxX = b.x + b.w
+            if (b.y + b.h > maxY) maxY = b.y + b.h
+        }
+        if (!isFinite(minX)) return { ok: false, reason: 'empty' }
+        minX -= PAD; minY -= PAD; maxX += PAD; maxY += PAD
     }
-    if (!isFinite(minX)) return { ok: false, reason: 'empty' }
-    minX -= PAD; minY -= PAD; maxX += PAD; maxY += PAD
     const w = maxX - minX, h = maxY - minY
     if (w <= 0 || h <= 0) return { ok: false, reason: 'empty' }
 

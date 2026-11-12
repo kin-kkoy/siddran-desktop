@@ -26,6 +26,11 @@ import { unionAABB } from '../../components/Sandbox/selection/snapping'
 import { exportStagePNG } from '../../components/Sandbox/Canvas/exportImage'
 import ShortcutsModal from '../../components/Sandbox/Toolbar/ShortcutsModal'
 import FlowTextModal from '../../components/Sandbox/flow/FlowTextModal'
+import TemplatesModal from '../../components/Sandbox/templates/TemplatesModal'
+import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
+import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
+import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
+import { newSandboxItemId } from '../../hooks/useSandbox'
 import { useFlowActions } from '../../hooks/useFlowActions'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useApi } from '../../contexts/ApiContext'
@@ -42,7 +47,13 @@ const isEditable = (el) => {
 
 // Per-shape keys were dropped — `S` opens the shape picker and the shape is
 // chosen with the mouse/pen instead.
-const TOOL_KEYS = { v: 'pointer', g: 'lasso', p: 'pen', e: 'eraser', t: 'text', h: 'hand' }
+const TOOL_KEYS = { v: 'pointer', g: 'lasso', p: 'pen', e: 'eraser', t: 'text', h: 'hand', n: 'sticky', f: 'frame' }
+
+// What "copy style" carries (Ctrl+Alt+C / Ctrl+Alt+V) — looks, never content.
+const STYLE_KEYS = ['fill', 'stroke', 'strokeWidth', 'lineStyle', 'dash', 'radius', 'textColor', 'color', 'fontSize',
+    'fontFamily', 'bold', 'italic', 'underline', 'strike', 'textAlign', 'verticalAlign', 'lineHeight', 'bg',
+    'head', 'headStart', 'routing']
+const CONNECTOR_STYLE = new Set(['stroke', 'strokeWidth', 'lineStyle', 'dash', 'head', 'headStart', 'routing'])
 
 // The tool a board opens with is the one you last used — a pen user lands on the
 // pen, everyone else on Select. Defaulting to the pen made a mouse user's first
@@ -115,6 +126,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const [insertMenuOpen, setInsertMenuOpen] = useState(false)
     const [editingShapeId, setEditingShapeId] = useState(null)
     const [flowTextOpen, setFlowTextOpen] = useState(false)
+    const [templatesOpen, setTemplatesOpen] = useState(false)
+    const [editingFrameId, setEditingFrameId] = useState(null)
+    const [textEditReq, setTextEditReq] = useState(null)   // { id, n } — asks a text card to enter edit mode
+    const styleClipRef = useRef(null)
     const fileRef = useRef(null)
     const stageRef = useRef(null)
 
@@ -132,7 +147,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // Item buckets, z-sorted for paint order. Strokes + shapes + images share
     // ONE Konva layer so z-order works across all graphic types.
-    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector')), [items])
+    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector' && !isFrame(i))), [items])
+    const frameItems = useMemo(() => sortByZ(items.filter(isFrame)), [items])
     const connectorItems = useMemo(() => sortByZ(items.filter(i => i.type === 'connector')), [items])
     const cardItems = useMemo(() => sortByZ(items.filter(i => CARD_TYPES.has(i.type))), [items])
     const selectedItems = useMemo(() => items.filter(i => canvas.selectedIds.has(i.id)), [items, canvas.selectedIds])
@@ -147,7 +163,27 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // ---- commits ----
     const onStrokeCommit = useCallback((partial) => { act.addItem({ ...partial, z_index: nextZ() }); bump() }, [act, nextZ, bump])
-    const onShapeCommit = useCallback((partial) => { act.addItem({ ...partial, z_index: nextZ() }); bump() }, [act, nextZ, bump])
+    const onShapeCommit = useCallback((partial) => {
+        const kind = partial.payload?.kind
+        if (kind === 'frame') {
+            // Frames go to the bottom of the stack, behind what they hold.
+            const minZ = items.reduce((m, it) => Math.min(m, it.z_index ?? 0), 0)
+            const created = act.addItem({ ...partial, z_index: minZ - 1, payload: framePayload(nextFrameTitle(items)) })
+            canvas.setTool('pointer')
+            canvas.selectOnly(created.id)
+            bump()
+            return
+        }
+        if (kind === 'sticky') {
+            const created = act.addItem({ ...partial, z_index: nextZ(), payload: { kind: 'sticky', fill: STICKY_DEFAULT, text: '', textAlign: 'center' } })
+            canvas.setTool('pointer')
+            canvas.selectOnly(created.id)
+            setEditingShapeId(created.id)
+            bump()
+            return
+        }
+        act.addItem({ ...partial, z_index: nextZ() }); bump()
+    }, [act, nextZ, bump, items, canvas])
     const onCreateConnector = useCallback((payload) => {
         act.addItem({
             type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: nextZ(),
@@ -159,10 +195,19 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // ---- selection ----
     const onSelect = useCallback((id, additive) => {
         if (id == null) { canvas.clearSelection(); setEditingShapeId(null); return }
-        if (additive) canvas.toggleSelection(id)
+        // A grouped item selects its whole group (spec §4.10).
+        const gid = items.find(i => i.id === id)?.payload?.groupId
+        const members = gid ? items.filter(i => i.payload?.groupId === gid).map(i => i.id) : [id]
+        if (additive) {
+            const next = new Set(canvas.selectedIds)
+            const on = next.has(id)
+            members.forEach(m => (on ? next.delete(m) : next.add(m)))
+            canvas.setSelection(next)
+        } else if (members.length > 1) canvas.setSelection(new Set(members))
         else canvas.selectOnly(id)
         setEditingShapeId(null)
-    }, [canvas])
+        setEditingFrameId(null)
+    }, [canvas, items])
     const onMarqueeSelect = useCallback((ids, additive) => {
         if (additive) canvas.setSelection(new Set([...canvas.selectedIds, ...ids]))
         else canvas.setSelection(ids)
@@ -189,7 +234,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }, [connectorsAttachedTo, act, beginTransaction, endTransaction, bump])
 
     const deleteSelection = useCallback(() => {
-        const ids = [...canvas.selectedIds]
+        const ids = [...canvas.selectedIds].filter(id => !items.find(i => i.id === id)?.payload?.locked)
         if (ids.length === 0) return
         const orphans = connectorsAttachedTo(new Set(ids))
         beginTransaction()
@@ -198,7 +243,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         endTransaction()
         canvas.clearSelection()
         bump()
-    }, [canvas, connectorsAttachedTo, act, beginTransaction, endTransaction, bump])
+    }, [canvas, items, connectorsAttachedTo, act, beginTransaction, endTransaction, bump])
 
     const onZOrder = useCallback((op) => {
         const patches = reorder(items, canvas.selectedIds, op)
@@ -222,10 +267,19 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
     const onExport = useCallback(() => {
-        const res = exportStagePNG(stageRef.current, graphicItems, sandbox?.title)
+        const res = exportStagePNG(stageRef.current, [...frameItems, ...graphicItems], sandbox?.title)
         if (!res.ok) toast.error(res.reason === 'empty' ? 'Nothing to export yet.' : 'Export failed.')
         else toast.success('Exported PNG (cards not included)')
-    }, [graphicItems, sandbox?.title])
+    }, [frameItems, graphicItems, sandbox?.title])
+
+    // Export one frame — exactly its rectangle (spec §11.9).
+    const onExportFrame = useCallback((id) => {
+        const f = items.find(i => i.id === id)
+        if (!f) return
+        const res = exportStagePNG(stageRef.current, [f], `${sandbox?.title || 'sandbox'} - ${f.payload?.title || 'Frame'}`, { x: f.x, y: f.y, w: f.w, h: f.h })
+        if (!res.ok) toast.error('Export failed.')
+        else toast.success('Exported the frame (cards not included)')
+    }, [items, sandbox?.title])
 
     // ---- placement ----
     const centerWorld = useCallback(() => canvas.worldFromScreen({ x: window.innerWidth / 2, y: window.innerHeight / 2 }), [canvas])
@@ -233,6 +287,141 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // Declared after centerWorld, which it closes over (a hook reading a later
     // const lints clean and throws on every render).
     const flow = useFlowActions({ items, act, beginTransaction, endTransaction, canvas, nextZ, bump, setEditingShapeId, viewportCenter: centerWorld })
+
+    // ---- templates ----
+    const insertTemplate = useCallback((tpl) => {
+        let built
+        try { built = tpl.build({ newId: newSandboxItemId, style: { stroke: canvas.shapeStyle.stroke } }) } catch (e) { toast.error(`Could not build that template: ${e.message}`); return }
+        const boxed = built.filter(i => i.type !== 'connector')
+        const b = unionAABB(boxed)
+        if (!b) return
+        const c = centerWorld()
+        const dx = Math.round(c.x - (b.x + b.w / 2)), dy = Math.round(c.y - (b.y + b.h / 2))
+        const minZ = items.reduce((m, it) => Math.min(m, it.z_index ?? 0), 0)
+        const frames = built.filter(isFrame)
+        let fz = minZ - frames.length
+        let z = nextZ()
+        beginTransaction()
+        for (const it of built) {
+            const moved = it.type === 'connector' ? it : { ...it, x: it.x + dx, y: it.y + dy }
+            act.addItem({ ...moved, z_index: isFrame(it) ? fz++ : z++ })
+        }
+        endTransaction()
+        canvas.setTool('pointer')
+        canvas.setSelection(new Set(boxed.map(i => i.id)))
+        // Bring it into view at a zoom that shows the whole thing.
+        const stage = stageRef.current
+        const vw = stage?.width() || window.innerWidth, vh = stage?.height() || window.innerHeight
+        const zoom = Math.max(0.1, Math.min((vw - 120) / b.w, (vh - 160) / b.h, 1))
+        canvas.setViewport({ x: vw / 2 - (c.x) * zoom, y: vh / 2 - (c.y) * zoom, zoom })
+        bump()
+        toast.success(`Added “${tpl.name}” — one undo removes it`)
+    }, [canvas, centerWorld, items, nextZ, act, beginTransaction, endTransaction, bump])
+
+    // ---- group / lock / frame selection ----
+    const selectedList = useCallback(() => items.filter(i => canvas.selectedIds.has(i.id) && i.type !== 'connector'), [items, canvas.selectedIds])
+    const groupSelection = useCallback(() => {
+        const sel = selectedList()
+        if (sel.length < 2) return
+        const gid = newSandboxItemId()
+        beginTransaction()
+        sel.forEach(it => act.updateItem(it.id, { payload: { ...it.payload, groupId: gid } }))
+        endTransaction()
+        bump()
+    }, [selectedList, act, beginTransaction, endTransaction, bump])
+    const ungroupSelection = useCallback(() => {
+        const sel = selectedList().filter(it => it.payload?.groupId)
+        if (!sel.length) return
+        beginTransaction()
+        sel.forEach(it => { const { groupId: _g, ...rest } = it.payload; act.updateItem(it.id, { payload: rest }) })
+        endTransaction()
+        bump()
+    }, [selectedList, act, beginTransaction, endTransaction, bump])
+    const toggleLock = useCallback(() => {
+        const sel = selectedList()
+        if (!sel.length) return
+        const lock = !sel.some(it => it.payload?.locked)
+        beginTransaction()
+        sel.forEach(it => {
+            const { locked: _l, ...rest } = it.payload || {}
+            act.updateItem(it.id, { payload: lock ? { ...rest, locked: true } : rest })
+        })
+        endTransaction()
+        bump()
+        toast.success(lock ? 'Locked — it won’t move or delete until unlocked' : 'Unlocked')
+    }, [selectedList, act, beginTransaction, endTransaction, bump])
+    const frameSelection = useCallback(() => {
+        const sel = selectedList()
+        const b = unionAABB(sel)
+        if (!b) return
+        const pad = 40
+        const minZ = items.reduce((m, it) => Math.min(m, it.z_index ?? 0), 0)
+        const created = act.addItem({
+            type: 'shape', x: Math.round(b.x - pad), y: Math.round(b.y - pad), w: Math.round(b.w + pad * 2), h: Math.round(b.h + pad * 2),
+            rotation: 0, z_index: minZ - 1, payload: framePayload(nextFrameTitle(items)),
+        })
+        canvas.selectOnly(created.id)
+        setEditingFrameId(created.id)
+        bump()
+    }, [selectedList, items, act, canvas, bump])
+
+    // ---- copy / paste style ----
+    const copyStyle = useCallback(() => {
+        const src = items.find(i => canvas.selectedIds.has(i.id))
+        if (!src) return
+        const p = src.payload || {}
+        const st = {}
+        for (const k of STYLE_KEYS) if (p[k] !== undefined) st[k] = p[k]
+        if (src.type === 'text' && p.color) st.textColor = p.color
+        styleClipRef.current = { from: src.type, style: st }
+        toast.success('Style copied — Ctrl+Alt+V to apply it')
+    }, [items, canvas.selectedIds])
+    const pasteStyle = useCallback(() => {
+        const clip = styleClipRef.current
+        if (!clip) return
+        const sel = items.filter(i => canvas.selectedIds.has(i.id) && !i.payload?.locked)
+        if (!sel.length) return
+        beginTransaction()
+        for (const it of sel) {
+            const upd = {}
+            for (const [k, v] of Object.entries(clip.style)) {
+                if ((it.type === 'connector') !== CONNECTOR_STYLE.has(k) && k !== 'stroke' && k !== 'strokeWidth') continue
+                if (it.type === 'text' && k === 'textColor') { upd.color = v; continue }
+                if (it.type === 'text' && k === 'color') continue
+                if (it.type === 'shape' && k === 'color') continue
+                upd[k] = v
+            }
+            act.updateItem(it.id, { payload: { ...it.payload, ...upd } })
+        }
+        endTransaction()
+        bump()
+    }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
+
+    // ---- text shortcuts on the selection (not while typing) ----
+    const textTargets = useCallback(() => items.filter(i => canvas.selectedIds.has(i.id) && !i.payload?.locked
+        && (i.type === 'text' || (i.type === 'shape' && !isFrame(i) && i.payload?.kind && !['line', 'arrow', 'elbowArrow', 'divider'].includes(i.payload.kind)))), [items, canvas.selectedIds])
+    const toggleTextFlag = useCallback((key) => {
+        const t = textTargets()
+        if (!t.length) return false
+        const on = !t[0].payload?.[key]
+        beginTransaction()
+        t.forEach(it => act.updateItem(it.id, { payload: { ...it.payload, [key]: on } }))
+        endTransaction()
+        bump()
+        return true
+    }, [textTargets, act, beginTransaction, endTransaction, bump])
+    const stepTextSize = useCallback((dir) => {
+        const t = textTargets()
+        if (!t.length) return false
+        beginTransaction()
+        t.forEach(it => {
+            const cur = it.payload?.fontSize || (it.type === 'text' ? 18 : 16)
+            act.updateItem(it.id, { payload: { ...it.payload, fontSize: stepFontSize(cur, dir) } })
+        })
+        endTransaction()
+        bump()
+        return true
+    }, [textTargets, act, beginTransaction, endTransaction, bump])
 
     const onPickNote = (note) => {
         const w = centerWorld()
@@ -332,9 +521,19 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // ---- shape text editing (Wave 3) ----
     const onShapeDoubleClick = useCallback((id) => {
+        const it = items.find(i => i.id === id)
+        if (it?.payload?.locked) return
         canvas.selectOnly(id)
+        if (isFrame(it)) { setEditingFrameId(id); return }
         setEditingShapeId(id)
-    }, [canvas])
+    }, [canvas, items])
+    const onEditText = useCallback((id) => {
+        const it = items.find(i => i.id === id)
+        if (!it || it.payload?.locked) return
+        if (isFrame(it)) setEditingFrameId(id)
+        else if (it.type === 'text') setTextEditReq(r => ({ id, n: (r?.n || 0) + 1 }))
+        else if (it.type === 'shape') setEditingShapeId(id)
+    }, [items])
 
     const onUpdateShapePayload = useCallback((id, patch) => {
         const item = items.find(i => i.id === id)
@@ -366,8 +565,12 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         beginTransaction()
         const base = nextZ()
         const newIds = []
+        const regroup = new Map()   // a duplicated group becomes a new group, not a member of the old one
         sel.forEach((it, i) => {
-            const created = act.addItem({ ...it, id: undefined, x: it.x + 16, y: it.y + 16, z_index: base + i })
+            const gid = it.payload?.groupId
+            if (gid && !regroup.has(gid)) regroup.set(gid, newSandboxItemId())
+            const payload = gid ? { ...it.payload, groupId: regroup.get(gid) } : it.payload
+            const created = act.addItem({ ...it, id: undefined, payload, x: it.x + 16, y: it.y + 16, z_index: base + i })
             newIds.push(created.id)
         })
         endTransaction()
@@ -379,7 +582,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const sel = items.filter(i => canvas.selectedIds.has(i.id))
         if (!sel.length) return
         beginTransaction()
-        sel.forEach(it => act.updateItem(it.id, { x: it.x + dx, y: it.y + dy }))
+        sel.filter(it => !it.payload?.locked).forEach(it => act.updateItem(it.id, { x: it.x + dx, y: it.y + dy }))
         endTransaction()
         bump()
     }, [items, canvas, act, beginTransaction, endTransaction, bump])
@@ -425,21 +628,32 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (meta && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); duplicateSelection(); return }
             if (meta && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); selectAll(); return }
             if (meta && e.key === '0') { e.preventDefault(); resetZoom(); return }
+            // Copy / paste style (spec §8.4) — before plain Ctrl+C/V, which stay the system's.
+            if (meta && e.altKey && (e.code === 'KeyC')) { e.preventDefault(); copyStyle(); return }
+            if (meta && e.altKey && (e.code === 'KeyV')) { e.preventDefault(); pasteStyle(); return }
+            if (meta && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); ungroupSelection(); return }
+            if (meta && !e.shiftKey && e.code === 'KeyG') { e.preventDefault(); groupSelection(); return }
+            if (meta && e.shiftKey && e.code === 'KeyL') { e.preventDefault(); toggleLock(); return }
+            if (meta && !e.shiftKey && !e.altKey && e.code === 'KeyB') { if (toggleTextFlag('bold')) e.preventDefault(); return }
+            if (meta && !e.shiftKey && !e.altKey && e.code === 'KeyI') { if (toggleTextFlag('italic')) e.preventDefault(); return }
+            if (meta && !e.shiftKey && !e.altKey && e.code === 'KeyU') { if (toggleTextFlag('underline')) e.preventDefault(); return }
+            if (meta && e.shiftKey && (e.key === '>' || e.code === 'Period')) { if (stepTextSize(1)) e.preventDefault(); return }
+            if (meta && e.shiftKey && (e.key === '<' || e.code === 'Comma')) { if (stepTextSize(-1)) e.preventDefault(); return }
             if (meta) return // leave other ⌘ combos alone
 
             // ── flowchart keys ──
             const sel = [...canvas.selectedIds]
             const one = sel.length === 1 ? items.find(i => i.id === sel[0]) : null
             const oneShape = one?.type === 'shape' ? one : null
-            if (e.key === 'Tab' && oneShape) { e.preventDefault(); if (e.shiftKey) flow.createSibling(oneShape.id); else flow.createNext(oneShape.id, 's'); return }
-            if (e.key === 'Enter' && oneShape) { e.preventDefault(); setEditingShapeId(oneShape.id); return }
-            if (e.altKey && ARROW_DIRS[e.key] && oneShape) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
+            if (e.key === 'Tab' && oneShape && !isFrame(oneShape)) { e.preventDefault(); if (e.shiftKey) flow.createSibling(oneShape.id); else flow.createNext(oneShape.id, 's'); return }
+            if (e.key === 'Enter' && one && (one.type === 'shape' || one.type === 'text')) { e.preventDefault(); onEditText(one.id); return }
+            if (e.altKey && ARROW_DIRS[e.key] && oneShape && !isFrame(oneShape)) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
             if ((e.key === 'c' || e.key === 'C') && !e.shiftKey && sel.length === 2) { e.preventDefault(); flow.connectSelected(); return }
             if (e.key === 'T' && e.shiftKey) { e.preventDefault(); flow.tidySelection(); return }
             if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setFlowTextOpen(true); return }
 
             if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return }
-            if (e.key === 'Escape') { setShortcutsOpen(false); canvas.clearSelection(); return }
+            if (e.key === 'Escape') { setShortcutsOpen(false); canvas.clearSelection(); if (canvas.tool !== 'pointer') canvas.setTool('pointer'); return }
             if (e.key === ']') { e.preventDefault(); onZOrder('front'); return }
             if (e.key === '[') { e.preventDefault(); onZOrder('back'); return }
             if (e.key === '?') { e.preventDefault(); setShortcutsOpen(o => !o); return }
@@ -463,7 +677,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-    }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow])
+    }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -493,7 +708,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         if (item.type === 'note') return <AttachedNoteCard key={item.id} {...shared} notes={notes} />
         if (item.type === 'task') return <AttachedTaskCard key={item.id} {...shared} tasks={tasks} onToggleTask={toggleTaskCompletion} />
         if (item.type === 'pdf') return <SandboxPdfCard key={item.id} {...shared} />
-        return <TextBoxCard key={item.id} {...shared} />
+        return <TextBoxCard key={item.id} {...shared}
+            onAutoSize={(id, h) => base.updateItem(id, { h })}
+            editRequest={textEditReq?.id === item.id ? textEditReq.n : 0} />
     })
 
     return (
@@ -556,6 +773,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onToggleSnap={() => canvas.setSnapEnabled(v => !v)}
                     onExport={onExport}
                     onOpenFlowText={() => setFlowTextOpen(true)}
+                    onOpenTemplates={() => setTemplatesOpen(true)}
                 />
 
                 {canvas.tool === 'pen' && (
@@ -575,6 +793,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     items={items}
                     graphicItems={graphicItems}
                     connectorItems={connectorItems}
+                    frameItems={frameItems}
+                    editingFrameId={editingFrameId}
                     stageRef={stageRef}
                     onStrokeCommit={onStrokeCommit}
                     onShapeCommit={onShapeCommit}
@@ -595,6 +815,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             beginTransaction={beginTransaction}
                             endTransaction={endTransaction}
                             onCreateConnector={onCreateConnector}
+                            onQuickAdd={(id, side) => flow.createNext(id, side)}
+                            onQuickAddAt={flow.createConnectedAt}
                         />
                     }
                     contextToolbar={
@@ -608,6 +830,12 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onAlign={onAlign}
                             onDuplicate={duplicateSelection}
                             onDelete={deleteSelection}
+                            onGroup={groupSelection}
+                            onUngroup={ungroupSelection}
+                            onToggleLock={toggleLock}
+                            onFrameSelection={frameSelection}
+                            onExportFrame={onExportFrame}
+                            onEditText={onEditText}
                             beginTransaction={beginTransaction}
                             endTransaction={endTransaction}
                             editingShapeId={editingShapeId}
@@ -621,7 +849,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
                 {editingShapeId && (() => {
                     const editItem = items.find(i => i.id === editingShapeId)
-                    if (!editItem || editItem.type !== 'shape') return null
+                    if (!editItem || editItem.type !== 'shape' || isFrame(editItem)) return null
                     return (
                         <ShapeTextEditor
                             // Keyed per box: Tab hands editing straight to the next box,
@@ -633,6 +861,20 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onCommit={(id, patch) => { onUpdateShapePayload(id, patch) }}
                             onClose={() => setEditingShapeId(null)}
                             onTab={(shift) => { if (shift) flow.createSibling(editItem.id); else flow.createNext(editItem.id, 's') }}
+                        />
+                    )
+                })()}
+
+                {editingFrameId && (() => {
+                    const f = items.find(i => i.id === editingFrameId)
+                    if (!f || !isFrame(f)) return null
+                    return (
+                        <FrameTitleEditor
+                            key={f.id}
+                            frame={f}
+                            canvas={canvas}
+                            onCommit={(title) => { if (title !== (f.payload?.title || '')) onUpdateShapePayload(f.id, { title }) }}
+                            onClose={() => setEditingFrameId(null)}
                         />
                     )
                 })()}
@@ -661,6 +903,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             <NoteAttachPicker isOpen={notePickerOpen} notes={notes} onPick={onPickNote} onClose={() => setNotePickerOpen(false)} />
             <TaskAttachPicker isOpen={taskPickerOpen} tasks={tasks} onPick={onPickTask} onClose={() => setTaskPickerOpen(false)} />
             <ShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+            <TemplatesModal isOpen={templatesOpen} onClose={() => setTemplatesOpen(false)} onInsert={insertTemplate} />
             <FlowTextModal isOpen={flowTextOpen} onClose={() => setFlowTextOpen(false)} onInsert={flow.insertFlow} />
         </div>
     )

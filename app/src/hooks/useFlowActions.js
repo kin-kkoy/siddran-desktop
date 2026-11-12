@@ -70,8 +70,32 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         const id = newSandboxItemId()
         const z = nextZ()
         beginTransaction()
-        act.addItem({ id, type: 'shape', ...at, w, h, rotation: 0, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '' } })
+        act.addItem({ id, type: 'shape', ...at, w, h, rotation: 0, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '', locked: undefined, groupId: undefined } })
         act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, dir, id, OPPOSITE[dir]) })
+        endTransaction()
+        canvas.selectOnly(id)
+        setEditingShapeId(id)
+        bump()
+        return id
+    }, [items, act, beginTransaction, endTransaction, canvas, nextZ, bump, setEditingShapeId, connectorPayload])
+
+    /**
+     * A connector dragged from box `fromId` and released on empty canvas: a box
+     * like the source, centred on the drop point, joined on the side facing back.
+     */
+    const createConnectedAt = useCallback((fromId, fromSide, world) => {
+        const from = items.find((i) => i.id === fromId)
+        if (!from || from.type !== 'shape') return null
+        const decision = from.payload?.kind === 'rhombus'
+        const kind = decision ? 'roundedRect' : (from.payload?.kind || 'roundedRect')
+        const w = decision ? 160 : from.w, h = decision ? 64 : from.h
+        const id = newSandboxItemId()
+        const box = { id, type: 'shape', x: Math.round(world.x - w / 2), y: Math.round(world.y - h / 2), w, h, rotation: 0 }
+        const centre = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
+        const z = nextZ()
+        beginTransaction()
+        act.addItem({ ...box, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '', locked: undefined, groupId: undefined } })
+        act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, fromSide, id, facingSide(box, centre)) })
         endTransaction()
         canvas.selectOnly(id)
         setEditingShapeId(id)
@@ -154,5 +178,5 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         catch { toast.error('Could not reach the clipboard') }
     }, [items, canvas.selectedIds])
 
-    return { createNext, createSibling, createAt, connectSelected, tidySelection, insertFlow, copyAsText }
+    return { createNext, createSibling, createAt, createConnectedAt, connectSelected, tidySelection, insertFlow, copyAsText }
 }
