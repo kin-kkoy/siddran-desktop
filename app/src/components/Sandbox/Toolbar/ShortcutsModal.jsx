@@ -43,7 +43,7 @@ const GROUPS = [
             ['New box here', ['Double-click']], ['Edit box text', ['Enter']],
             ['Next step, connected', ['Tab']], ['Next branch beside it', ['⇧', 'Tab']],
             ['Step in a direction', ['Alt', 'Arrows']], ['Connect two boxes', ['C']],
-            ['Tidy the layout', ['⇧', 'T']], ['Diagram from text', ['D']],
+            ['Tidy the layout', ['⇧', 'T']], ['Diagram — nodes or text (edits the selected one)', ['D']],
             ['Connected box from a dot', ['Click dot']], ['New box at the drop', ['Drag dot', 'release']],
             ['Free-ended arrow', ['Drag dot', 'Alt']],
         ],

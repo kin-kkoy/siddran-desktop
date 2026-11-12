@@ -5,7 +5,7 @@ import { shapePath } from '../../../utils/diagramSvg'
 import { connectorPoints } from '../connectors/geometry'
 import { STICKY_DEFAULT } from '../text/textStyle'
 
-// Pick a starter template. Styled like FlowTextModal / ShortcutsModal — same
+// Pick a starter template. Styled like DiagramModal / ShortcutsModal — same
 // backdrop, card and type scale. Each card shows a small vector preview built
 // from the template's own items, so the picture is always what you'll get.
 

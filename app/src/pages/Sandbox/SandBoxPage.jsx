@@ -25,7 +25,7 @@ import { alignPatches } from '../../components/Sandbox/selection/align'
 import { unionAABB } from '../../components/Sandbox/selection/snapping'
 import { exportStagePNG } from '../../components/Sandbox/Canvas/exportImage'
 import ShortcutsModal from '../../components/Sandbox/Toolbar/ShortcutsModal'
-import FlowTextModal from '../../components/Sandbox/flow/FlowTextModal'
+import DiagramModal from '../../components/Sandbox/flow/DiagramModal'
 import TemplatesModal from '../../components/Sandbox/templates/TemplatesModal'
 import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
@@ -133,7 +133,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // menu is up).
     const [openMenu, setOpenMenu] = useState(null)   // 'shapes' | 'insert' | 'paint' | null
     const [editingShapeId, setEditingShapeId] = useState(null)
-    const [flowTextOpen, setFlowTextOpen] = useState(false)
+    // The Diagram pop-up: null when closed, else { source } — null for a new
+    // diagram, or the selected one (flow.diagramSource) to edit in place.
+    const [diagram, setDiagram] = useState(null)
     const [templatesOpen, setTemplatesOpen] = useState(false)
     const [editingFrameId, setEditingFrameId] = useState(null)
     const [textEditReq, setTextEditReq] = useState(null)   // { id, n } — asks a text card to enter edit mode
@@ -582,6 +584,12 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }, [act, nextZ, centerWorld, bump])
 
     const toggleMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : m)), [])
+    const openDiagram = useCallback((source) => { setOpenMenu(null); setDiagram({ source }) }, [])
+    const itemsById = useMemo(() => new Map(items.map(i => [i.id, i])), [items])
+    const diagramColors = useMemo(() => ({
+        stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke,
+        fill: canvas.shapeStyle.fill || 'transparent',
+    }), [canvas.shapeStyle])
     const closeMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : cur)), [])
     const onToggleShapePicker = useCallback(() => toggleMenu('shapes'), [toggleMenu])
     const closeShapePicker = useCallback(() => closeMenu('shapes'), [closeMenu])
@@ -690,6 +698,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     useEffect(() => {
         const onKeyDown = (e) => {
             if (isEditable(document.activeElement)) return
+            if (diagram) return   // the pop-up handles its own keys
             const meta = e.metaKey || e.ctrlKey
 
             if (meta && (e.key === 'z' || e.key === 'Z')) {
@@ -723,7 +732,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (e.altKey && ARROW_DIRS[e.key] && oneShape && !isFrame(oneShape)) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
             if ((e.key === 'c' || e.key === 'C') && !e.shiftKey && sel.length === 2) { e.preventDefault(); flow.connectSelected(); return }
             if (e.key === 'T' && e.shiftKey) { e.preventDefault(); flow.tidySelection(); return }
-            if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setFlowTextOpen(true); return }
+            // D: edit the selected diagram, or start a new one.
+            if (e.key === 'd' || e.key === 'D') { e.preventDefault(); openDiagram(flow.diagramSource()); return }
 
             if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return }
             if (e.key === 'Escape') { setShortcutsOpen(false); setOpenMenu(null); canvas.clearSelection(); if (canvas.tool !== 'pointer') canvas.setTool('pointer'); return }
@@ -754,7 +764,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
-        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleMenu])
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleMenu, diagram, openDiagram])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -849,7 +859,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     snapEnabled={canvas.snapEnabled}
                     onToggleSnap={() => canvas.setSnapEnabled(v => !v)}
                     onExport={onExport}
-                    onOpenFlowText={() => setFlowTextOpen(true)}
+                    onOpenDiagram={() => openDiagram(null)}
                     onOpenTemplates={() => setTemplatesOpen(true)}
                 />
 
@@ -922,6 +932,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             endTransaction={endTransaction}
                             editingShapeId={editingShapeId}
                             flow={flow}
+                            onEditDiagram={() => openDiagram(flow.diagramSource())}
                         />
                     }
                     onShapeDoubleClick={onShapeDoubleClick}
@@ -988,7 +999,14 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             <TaskAttachPicker isOpen={taskPickerOpen} tasks={tasks} onPick={onPickTask} onClose={() => setTaskPickerOpen(false)} />
             <ShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
             <TemplatesModal isOpen={templatesOpen} onClose={() => setTemplatesOpen(false)} onInsert={insertTemplate} />
-            <FlowTextModal isOpen={flowTextOpen} onClose={() => setFlowTextOpen(false)} onInsert={flow.insertFlow} />
+            <DiagramModal
+                isOpen={!!diagram}
+                source={diagram?.source || null}
+                onClose={() => setDiagram(null)}
+                onApply={(g) => flow.applyDiagram(g, diagram?.source || null)}
+                byId={itemsById}
+                colors={diagramColors}
+            />
         </div>
     )
 }

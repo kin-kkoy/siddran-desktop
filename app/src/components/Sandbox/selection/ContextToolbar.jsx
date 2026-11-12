@@ -9,7 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuPencil,
+    LuPencil, LuWorkflow,
 } from 'react-icons/lu'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -151,6 +151,7 @@ function ContextToolbar({
     endTransaction,
     editingShapeId,
     flow,               // useFlowActions — next / connect / tidy / copy as text
+    onEditDiagram,      // open the selection in the Diagram pop-up
 }) {
     const [openMenu, setOpenMenu] = useState(null)
     // Keep the (centred) bar inside the canvas horizontally: nudge it with a
@@ -475,6 +476,12 @@ function ContextToolbar({
                             <button className={styles.btn} onClick={() => flow.tidySelection()}
                                 title="Tidy — lay out along the arrows (⇧T)" aria-label="Tidy">
                                 <LuNetwork size={18} />
+                            </button>
+                        )}
+                        {onEditDiagram && (
+                            <button className={styles.btn} onClick={onEditDiagram}
+                                title="Edit as diagram — nodes and links in the Diagram editor (D)" aria-label="Edit as diagram">
+                                <LuWorkflow size={18} />
                             </button>
                         )}
                         <button className={styles.btn} onClick={() => flow.copyAsText()}

@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { newSandboxItemId } from './useSandbox'
 import { facingSide } from '../components/Sandbox/connectors/geometry'
-import { parseFlow, flowToItems, tidy, itemsToFlow, nodeSize } from '../components/Sandbox/flow/flowText'
+import { tidy, itemsToFlow, nodeSize } from '../components/Sandbox/flow/flowText'
+import { itemsToGraph, planDiagram, isDiagramShape } from '../components/Sandbox/flow/flowGraph'
 import { unionAABB } from '../components/Sandbox/selection/snapping'
 import { toast } from '../utils/toast'
 
@@ -149,23 +150,43 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         bump()
     }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
-    /** Paste or type flowchart text → a laid-out diagram beside what is there. */
-    const insertFlow = useCallback((text) => {
-        let parsed
-        try { parsed = parseFlow(text) } catch (e) { toast.error(e.message); return false }
-        const b = unionAABB(items.filter((i) => i.type !== 'connector'))
-        const c = viewportCenter()
-        const origin = b && b.w > 0 ? { x: Math.round(b.x + b.w + 160), y: Math.round(b.y) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
+    /**
+     * The selected diagram, ready for the node editor: its graph, where it sits,
+     * and which items it is made of (so Update knows what it may change).
+     * Null when nothing diagram-like is selected. Locked boxes stay out of it.
+     */
+    const diagramSource = useCallback(() => {
+        const shapes = items.filter((i) => canvas.selectedIds.has(i.id) && isDiagramShape(i) && !i.payload?.locked)
+        if (!shapes.length) return null
+        const ids = new Set(shapes.map((i) => i.id))
+        const links = items.filter((i) => i.type === 'connector' && ids.has(i.payload?.from?.itemId) && ids.has(i.payload?.to?.itemId))
+        const { graph, origin } = itemsToGraph([...shapes, ...links])
+        return { graph, origin, scope: { shapeIds: shapes.map((i) => i.id), connectorIds: links.map((i) => i.id) } }
+    }, [items, canvas.selectedIds])
+
+    /**
+     * A graph from the Diagram pop-up onto the board, as one undo step. New
+     * (`source` null): laid out beside what is there. Opened from the board:
+     * re-laid-out where it was, changing those items in place.
+     */
+    const applyDiagram = useCallback((graph, source = null) => {
+        if (!graph?.nodes?.length) return false
+        let origin = source?.origin
+        if (!origin) {
+            const b = unionAABB(items.filter((i) => i.type !== 'connector'))
+            const c = viewportCenter()
+            origin = b && b.w > 0 ? { x: Math.round(b.x + b.w + 160), y: Math.round(b.y) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
+        }
         const style = { stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke, fill: canvas.shapeStyle.fill, font: 16 }
-        const { shapes, connectors } = flowToItems(parsed.graph, { origin, style, newId: newSandboxItemId })
+        const plan = planDiagram(graph, { items, scope: source?.scope, origin, style, newId: newSandboxItemId })
         let z = nextZ()
         beginTransaction()
-        for (const s of shapes) act.addItem({ ...s, z_index: z++ })
-        for (const k of connectors) act.addItem({ ...k, z_index: z++ })
+        for (const id of plan.remove) act.removeItem(id)
+        for (const u of plan.update) act.updateItem(u.id, u.patch)
+        for (const it of plan.add) act.addItem({ ...it, z_index: z++ })
         endTransaction()
-        canvas.setSelection(new Set(shapes.map((s) => s.id)))
+        canvas.setSelection(new Set(plan.shapeIds))
         bump()
-        if (parsed.problems.length) toast.warning(`Skipped ${parsed.problems.length} line(s) it could not read`)
         return true
     }, [items, viewportCenter, canvas, nextZ, act, beginTransaction, endTransaction, bump])
 
@@ -178,5 +199,5 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         catch { toast.error('Could not reach the clipboard') }
     }, [items, canvas.selectedIds])
 
-    return { createNext, createSibling, createAt, createConnectedAt, connectSelected, tidySelection, insertFlow, copyAsText }
+    return { createNext, createSibling, createAt, createConnectedAt, connectSelected, tidySelection, diagramSource, applyDiagram, copyAsText }
 }

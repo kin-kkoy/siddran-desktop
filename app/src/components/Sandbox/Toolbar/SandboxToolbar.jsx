@@ -1,7 +1,7 @@
 import {
     LuMousePointer2, LuHand, LuShapes,
     LuType, LuImagePlus, LuPaintBucket,
-    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWaypoints,
+    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
     LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
@@ -48,7 +48,7 @@ function SandboxToolbar({
     onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf,
     onUndo, onRedo, canUndo, canRedo,
     snapEnabled, onToggleSnap, onExport,
-    onOpenFlowText,
+    onOpenDiagram,
     onOpenTemplates,
 }) {
     const fillRef = useRef(null)
@@ -108,9 +108,9 @@ function SandboxToolbar({
                     <LuLayoutTemplate size={21} />
                 </ToolBtn>
             )}
-            {onOpenFlowText && (
-                <ToolBtn title="Diagram from text (D)" onClick={onOpenFlowText}>
-                    <LuWaypoints size={21} />
+            {onOpenDiagram && (
+                <ToolBtn title="Diagram — build from nodes or text (D)" onClick={onOpenDiagram}>
+                    <LuWorkflow size={21} />
                 </ToolBtn>
             )}
             <span ref={insertRef}>

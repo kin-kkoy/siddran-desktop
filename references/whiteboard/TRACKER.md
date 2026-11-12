@@ -118,21 +118,21 @@ Screenshot reference: clicking the pen opens a second column, top to bottom:
       undo. Rule-based recogniser first. This could be its own session if it
       runs long.
 
-## Section 3 — Diagram from nodes (node editor)
+## Section 3 — Diagram from nodes (node editor)  ✅ built (session 3) — user reviews at the end with 4
 
 The user loves "Diagram from text" (Mermaid) but wants a **human, node-based**
 way to build the same thing. Keep the text mode for AI and paste.
 
-- [ ] A node-editor panel/mode: add nodes, drag from a node's port to another
+- [x] A node-editor panel/mode: add nodes, drag from a node's port to another
       to link, label edges, pick a node's kind (box/decision/start-end/
       data/database). Live preview using `flow/flowText.js` layout, then insert.
-- [ ] Two-way: open an existing diagram selection in the node editor, and
+- [x] Two-way: open an existing diagram selection in the node editor, and
       round-trip with `itemsToFlow`.
-- [ ] Build it as a **pop-up window** (decided), with Nodes and Text tabs.
-- [ ] Give it its own dock icon. The user asked for a new look; it's now
+- [x] Build it as a **pop-up window** (decided), with Nodes and Text tabs.
+- [x] Give it its own dock icon. The user asked for a new look; it's now
       `LuWaypoints` as a stopgap. Pick one that reads as "node graph" once
       the node editor exists.
-- [ ] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
+- [x] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
       change both.
 
 ## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)
@@ -259,3 +259,35 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     with everything showing it runs ~1300 px and the half-width dock view clips
     it). Font size is − n +. Cards hide their × while selected (the bar's
     trash does it). Next: section 3.
+- 2026-11-12 · session 3 · section 3 built. "Diagram from text" is now the
+  **Diagram** pop-up (`flow/DiagramModal.jsx`), with Nodes and Text tabs.
+  FlowTextModal is gone.
+  - Nodes tab (`flow/NodeEditor.jsx`): the drawing IS the preview. Positions
+    come from `layoutGraph`, so nothing is dragged into place. + / N adds a
+    node. Dragging from a node's dot onto another links them; dropping on
+    empty space makes a new linked node. Tab adds the next step, Del removes,
+    Enter renames. The side panel has the label, 8 kinds (step, rounded,
+    start/end, decision, data, database, circle, prep), and per link: label,
+    arrowhead, dashed, reverse.
+  - Model (`flow/flowGraph.js`, tested): graph edits, `graphToText` ⇄
+    `textToGraph` (the Text tab, lossless when the text isn't edited),
+    `itemsToGraph` (numbers nodes exactly as `itemsToFlow` / the CLI's
+    `describe` do), and `planDiagram`. For a new graph, `planDiagram` gives
+    byte-for-byte what `flowToItems` gives (tested), so the CLI parity holds.
+    **flowText.js and diagram.rs are unchanged.**
+  - Two-way: D (or the floating bar's new Workflow button) on a selected
+    diagram opens it as "Edit diagram". Update re-lays it out at the same
+    top-left, in place, as ONE undo step. Boxes keep their ids and styles; an
+    untouched label keeps its size. Removed boxes take their links (even
+    those to outside boxes) with them. Old link bends are dropped. With
+    nothing selected, D or the dock button starts a new diagram.
+  - Dock icon is now `LuWorkflow`. Shape outlines in the editor come from the
+    registry render fns (`flow/svgPath.js` records the ctx calls as SVG).
+  - Keys stay in the pop-up: the page ignores keys while it's open, and the
+    pop-up stops propagation. A backdrop click only closes it when nothing
+    has been changed.
+- Checked headless on a copy of the test Bag (localStorage backed up and
+  restored): opening a selection, adding nodes with N / typing / Tab,
+  Ctrl+Enter Update, a single Ctrl+Z, Ctrl+Y. The preview routes links round
+  other boxes the way the board does. Port dragging and clicking kinds can't
+  be driven headlessly; the user checks those at the end. Next: section 4.
