@@ -9,7 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuPencil,
+    LuPencil, LuMaximize2,
 } from 'react-icons/lu'
 import { DiagramIcon, NextStepIcon } from '../flow/icons'
 import styles from './ContextToolbar.module.css'
@@ -21,6 +21,7 @@ import { LINK_PALETTE as PALETTE, ROUTINGS, LINE_GLYPH, HEAD_GLYPH } from '../co
 import { SHAPES, SHAPE_GROUPS, shapesInGroup, isLineKind } from '../shapes/registry'
 import { FONT_FAMILIES, FONT_SIZES, TEXT_PRESETS, stepFontSize, STICKY_COLORS } from '../text/textStyle'
 import { isFrame, FRAME_FILLS } from '../frames/frames'
+import { isFormat } from '../formats/formats'
 import { CustomColor } from '../Toolbar/ColorMenu'
 
 /**
@@ -143,6 +144,7 @@ function ContextToolbar({
     editingShapeId,
     flow,               // useFlowActions — next / connect / tidy / copy as text
     onEditDiagram,      // open the selection in the Diagram pop-up
+    onOpenFormat,       // (id) — a Format widget, full screen
 }) {
     const [openMenu, setOpenMenu] = useState(null)
     // Keep the (centred) bar inside the canvas horizontally: nudge it with a
@@ -164,7 +166,9 @@ function ContextToolbar({
         el.style.marginTop = el.style.getPropertyValue('--above') === '1' ? `${-hgt}px` : '0px'
     })
     const frames = useMemo(() => selectedItems.filter(isFrame), [selectedItems])
-    const shapes = useMemo(() => selectedItems.filter(it => it.type === 'shape' && !isFrame(it)), [selectedItems])
+    // Format widgets are shapes in the file, but have their own chrome (no fill, border or text).
+    const formats = useMemo(() => selectedItems.filter(isFormat), [selectedItems])
+    const shapes = useMemo(() => selectedItems.filter(it => it.type === 'shape' && !isFrame(it) && !isFormat(it)), [selectedItems])
     const texts = useMemo(() => selectedItems.filter(it => it.type === 'text'), [selectedItems])
     const connectors = useMemo(() => selectedItems.filter(it => it.type === 'connector'), [selectedItems])
     const byId = useMemo(() => new Map((items || []).map(i => [i.id, i])), [items])
@@ -454,6 +458,18 @@ function ContextToolbar({
                                     <LuImageDown size={18} />
                                 </button>
                             </>
+                        )}
+                        <div className={styles.sep} />
+                    </>
+                )}
+
+                {formats.length === 1 && selectedCount === 1 && (
+                    <>
+                        <button className={styles.btn} onClick={() => onOpenFormat?.(formats[0].id)} title="Full screen (Enter)" aria-label="Full screen">
+                            <LuMaximize2 size={18} />
+                        </button>
+                        {!locked && (
+                            <button className={styles.btn} onClick={() => onEditText?.(formats[0].id)} title="Rename (double-click the title)" aria-label="Rename">Aa</button>
                         )}
                         <div className={styles.sep} />
                     </>

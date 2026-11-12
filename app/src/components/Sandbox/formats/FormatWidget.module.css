@@ -1,0 +1,263 @@
+/* A Format widget: a small window on the board. No transforms or
+   backdrop-filter here (they blur on the user's 0.83-scaled display). */
+.widget {
+    position: absolute;
+    pointer-events: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    -webkit-user-select: none;
+    user-select: none;
+}
+.selected { border-color: var(--accent-warning); }
+
+/* ── title bar: the handle ── */
+.bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 6px 0 11px;
+    background-color: var(--bg-surface-alt);
+    border-bottom: 1px solid var(--border-default);
+    cursor: grab;
+}
+.bar:active { cursor: grabbing; }
+.barIcon { flex: none; color: var(--accent-warning); }
+.barTitle {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.renameInput {
+    min-width: 0;
+    flex: 0 1 180px;
+    font: 600 13px var(--font-display);
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-warning);
+    border-radius: 5px;
+    padding: 2px 6px;
+    outline: none;
+}
+.barSpacer { flex: 1; }
+.barBtn, .srcBtn {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.barBtn { width: 26px; justify-content: center; }
+.srcBtn {
+    max-width: 60%;
+    padding: 0 7px;
+    font: 11px var(--font-mono);
+    border-color: var(--border-default);
+}
+.srcBtn span:first-of-type { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.srcLinked { color: var(--accent-success); border-color: rgba(82, 196, 122, 0.35); }
+.srcCount {
+    flex: none;
+    padding: 0 5px;
+    border-radius: 8px;
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
+}
+.barBtn:hover, .srcBtn:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+
+/* ── body: scrolls under the wheel ── */
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 6px 8px 8px;
+}
+
+/* ── the plain list ── */
+.list { display: flex; flex-direction: column; gap: 2px; }
+.row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 0 6px;
+    border-radius: 6px;
+}
+.row:hover { background-color: var(--bg-hover); }
+.rowDone .titleInput { color: var(--text-muted); text-decoration: line-through; }
+.check {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--bg-surface);
+    cursor: pointer;
+}
+.checked { background-color: var(--accent-success); border-color: var(--accent-success); }
+.check:disabled { cursor: default; opacity: 0.5; }
+.titleInput {
+    flex: 1;
+    min-width: 0;
+    font: 15px var(--font-body);
+    color: var(--text-primary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 4px;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.titleInput:focus { border-color: var(--border-strong); background-color: var(--bg-surface); }
+.titleInput:disabled { color: var(--text-primary); }
+.chip {
+    flex: none;
+    max-width: 110px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding: 1px 7px;
+    border-radius: 9px;
+    font: 10.5px var(--font-mono);
+    color: var(--text-secondary);
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+}
+.rowRemove {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+}
+.row:hover .rowRemove { opacity: 1; }
+.rowRemove:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.12); }
+.addInput {
+    margin-top: 4px;
+    font: 14px var(--font-body);
+    color: var(--text-primary);
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    border-radius: 6px;
+    padding: 6px 10px;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.addInput:focus { border-style: solid; border-color: var(--accent-warning); }
+.empty { padding: 14px 8px; font-size: 14px; color: var(--text-muted); font-style: italic; }
+
+/* ── the source menu (portalled) ── */
+.menu {
+    position: fixed;
+    z-index: 1300;
+    width: 232px;
+    max-height: 60vh;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    background-color: rgb(18, 18, 30);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px var(--shadow-color);
+    padding: 6px;
+}
+.menuHead {
+    padding: 8px 10px 4px;
+    font: 10px var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: 13px var(--font-body);
+    text-align: left;
+    cursor: pointer;
+}
+.menuItem:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+.menuTick { flex: none; width: 14px; color: var(--accent-warning); display: flex; }
+.menuLabel { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.menuShows { display: flex; gap: 4px; padding: 2px 8px 6px; }
+.show, .showOn {
+    flex: 1;
+    padding: 4px 0;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background: transparent;
+    color: var(--text-secondary);
+    font: 11px var(--font-mono);
+    cursor: pointer;
+}
+.showOn { border-color: var(--accent-warning); color: var(--accent-warning); }
+.menuNote { padding: 6px 10px 4px; font-size: 12px; color: var(--text-muted); }
+
+/* ── focus mode ── */
+.focusBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background-color: rgba(5, 5, 10, 0.72);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 36px 48px;
+}
+.focusPanel {
+    flex: 1;
+    max-width: 1280px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+.focusPanel .bar { height: 44px; padding: 0 10px 0 16px; cursor: default; }
+.focusPanel .barTitle { font-size: 16px; }
+.focusPanel .body { padding: 10px 16px 16px; }
+.focusPanel .titleInput { font-size: 17px; }
+.focusPanel .row { min-height: 36px; }

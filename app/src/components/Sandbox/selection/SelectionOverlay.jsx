@@ -8,6 +8,7 @@ import { computeSnap, unionAABB } from './snapping'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
+import { isFormat } from '../formats/formats'
 import { isLineKind } from '../shapes/registry'
 import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 
@@ -53,6 +54,10 @@ const HANDLES = {
     w: { opp: 'e', sx: true, sy: false, cursor: 'ew-resize' },
 }
 
+// Drawn in the DOM above the board (cards and Format widgets), not on the Konva stage.
+const DOM_TYPES = new Set(['note', 'task', 'text', 'pdf'])
+const isDomItem = (it) => DOM_TYPES.has(it.type) || isFormat(it)
+
 const clampScale = (s) => (Math.abs(s) < 0.05 ? (s < 0 ? -0.05 : 0.05) : s)
 
 function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt }) {
@@ -85,6 +90,12 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // A lone frame is grabbed by its border/title only, so clicks inside it
     // still reach the things placed on it.
     const frameOnly = boxItems.length > 0 && boxItems.every(isFrame)
+    // Frames and Format widgets have chrome of their own (a frame's border and
+    // title, a widget's title bar), so the selection box doesn't cover them
+    // with a move region — clicks inside reach what's there.
+    const chromeOnly = boxItems.length > 0 && boxItems.every(it => isFrame(it) || isFormat(it))
+    // A widget is a DOM window: it doesn't rotate.
+    const noRotate = boxItems.some(isFormat)
     // A lone line/arrow shape is edited by its ends (and middle), not a box.
     const lineItem = (selectedItems.length === 1 && boxItems.length === 1 && boxItems[0].type === 'shape'
         && isLineKind(boxItems[0].payload?.kind) && !locked) ? boxItems[0] : null
@@ -92,7 +103,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
 
     // Shape that should show the 4 connection dots: the hovered shape, else a
     // single selected shape.
-    const connectable = (it) => it && it.type === 'shape' && !isFrame(it) && !isLineKind(it.payload?.kind)
+    const connectable = (it) => it && it.type === 'shape' && !isFrame(it) && !isFormat(it) && !isLineKind(it.payload?.kind)
     const dotItem = (() => {
         if (canvas.hoverId != null) {
             const h = items.find(it => it.id === canvas.hoverId)
@@ -253,11 +264,16 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         const moving = list.filter(it => it.type !== 'connector' && !it.payload?.locked)
         if (!moving.length) return false
         const selIds = new Set(moving.map(it => it.id))
-        // A frame carries what sits on it. Decided now, at grab time, from where
-        // things are — not stored — so there is no membership to keep in sync.
+        // A frame carries what sits on it, and so does a Format widget. A widget
+        // is a DOM window, so only what shows ON it rides along: cards and
+        // smaller widgets stacked above it. Board shapes always paint beneath
+        // the DOM, so any under a widget are hidden and stay where they are.
+        // Decided now, at grab time, from where things are — not stored — so
+        // there is no membership to keep in sync.
         const riders = []
-        for (const f of moving.filter(isFrame)) {
+        for (const f of moving.filter(it => isFrame(it) || isFormat(it))) {
             for (const c of frameChildren(f, items || [])) {
+                if (isFormat(f) && !(isDomItem(c) && (c.z_index ?? 0) > (f.z_index ?? 0))) continue
                 if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) }
             }
         }
@@ -463,8 +479,10 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                 document.body,
             )}
             <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
-                {/* per-item outlines (subtle), only for multi-select */}
-                {box && selectedItems.length > 1 && selectedItems.map(it => {
+                {/* per-item outlines (subtle), only for multi-select — hidden while
+                    the selection moves: redrawing one polygon per item every frame
+                    is browser paint the drag doesn't need */}
+                {box && selectedItems.length > 1 && !gesturing && selectedItems.map(it => {
                     const a = getOrientedAnchors(getItemBounds(it))
                     const pts = ['nw', 'ne', 'se', 'sw'].map(k => { const s = screenOf(a[k]); return `${s.x},${s.y}` }).join(' ')
                     return <polygon key={it.id} points={pts} fill="none" stroke="var(--accent-warning)" strokeWidth={1} opacity={0.4} />
@@ -503,11 +521,11 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                         <polygon
                             data-sb-move="true"
                             points={outlinePts}
-                            fill={moveInteractive && !frameOnly ? 'rgba(240,184,64,0.04)' : 'none'}
+                            fill={moveInteractive && !chromeOnly ? 'rgba(240,184,64,0.04)' : 'none'}
                             stroke="var(--accent-warning)"
                             strokeWidth={1.5}
-                            style={{ pointerEvents: moveInteractive && !frameOnly ? 'auto' : 'none', cursor: 'move' }}
-                            onPointerDown={moveInteractive && !frameOnly ? onMoveDown : undefined}
+                            style={{ pointerEvents: moveInteractive && !chromeOnly ? 'auto' : 'none', cursor: 'move' }}
+                            onPointerDown={moveInteractive && !chromeOnly ? onMoveDown : undefined}
                         />
                         {/* a frame: grab its border band or its title */}
                         {frameOnly && (
@@ -521,12 +539,16 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                                 fill="transparent" style={{ pointerEvents: 'auto', cursor: 'move' }} onPointerDown={onMoveDown} />
                         })}
                         {/* rotate stalk + knob */}
-                        <line x1={anchorsScreen.n.x} y1={anchorsScreen.n.y} x2={rotateScreen.x} y2={rotateScreen.y}
-                            stroke="var(--accent-warning)" strokeWidth={1} />
-                        <circle cx={rotateScreen.x} cy={rotateScreen.y} r={6}
-                            fill="var(--bg-surface)" stroke="var(--accent-warning)" strokeWidth={1.5}
-                            style={{ pointerEvents: 'auto', cursor: 'grab' }}
-                            onPointerDown={onRotateDown} />
+                        {!noRotate && (
+                            <>
+                                <line x1={anchorsScreen.n.x} y1={anchorsScreen.n.y} x2={rotateScreen.x} y2={rotateScreen.y}
+                                    stroke="var(--accent-warning)" strokeWidth={1} />
+                                <circle cx={rotateScreen.x} cy={rotateScreen.y} r={6}
+                                    fill="var(--bg-surface)" stroke="var(--accent-warning)" strokeWidth={1.5}
+                                    style={{ pointerEvents: 'auto', cursor: 'grab' }}
+                                    onPointerDown={onRotateDown} />
+                            </>
+                        )}
                         {/* resize handles */}
                         {Object.keys(HANDLES).map(k => {
                             const s = anchorsScreen[k]

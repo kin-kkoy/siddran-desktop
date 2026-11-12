@@ -152,9 +152,9 @@ way to build the same thing. Keep the text mode for AI and paste.
       lowering are desktop-only (user's decision).
 - [x] Keep the parity tests between `flowText.js` and `diagram.rs` green.
 
-## Section 5 — Format shell + shared record model (prerequisite for 6–11)
+## Section 5 — Format shell + shared record model (prerequisite for 6–11)  ✅ built (session 5) — **check-in: awaiting the user's hands-on check**
 
-- [ ] **First, before any Format work: measure drag smoothness.** The user
+- [x] **First, before any Format work: measure drag smoothness.** The user
       felt dragging shapes was a bit laggy (2026-11-12). It was unmeasured, and
       likely the dev build plus a nearly full RAM (7.1 GB, ~1.6 GB free, video
       playing). It is not the WebKit flicker workaround: 2.54.2 is installed,
@@ -169,14 +169,14 @@ The spec's §5.13 and §13.1–13.2: a "Format" is a structured widget on the
 canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 (`table` | `kanban` | …), per the "no new types" rule.
 
-- [ ] Window chrome on the canvas: a title bar, resize, and focus mode
+- [x] Window chrome on the canvas: a title bar, resize, and focus mode
       (fullscreen) as an overlay.
-- [ ] Shared dataset model. Records and fields live in the board file
+- [x] Shared dataset model. Records and fields live in the board file
       (decided: inside the board, not a sibling file). Table, Timeline, Kanban and Matrix
       are views of one dataset.
-- [ ] Undo, merge (`mergeRows` is per item; a dataset may need per-record
+- [x] Undo, merge (`mergeRows` is per item; a dataset may need per-record
       merging) and CLI round-trip.
-- [ ] Data source per widget, **linked tasks or own records** (decided: both).
+- [x] Data source per widget, **linked tasks or own records** (decided: both).
       One adapter interface, one set of views.
 
 ## Sections 6–11 — Formats (can run in parallel after section 5)
@@ -499,3 +499,115 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     sticky, the `document` shape, dotted curved links with circle start
     heads, the dashed `no` loop and the diamond head.
 - 2026-11-13 · session 4 · the user had already checked section 3 by hand (see the "fixes from the user's hands-on check" entry), so no review is outstanding. **Next: section 5**, starting with the drag-smoothness measurement.
+- 2026-11-13 · session 5 · **drag smoothness measured** (before any Format
+  work). The dev app was already closed when the session started, so nothing
+  was stopped. A dev-only probe (`app/src/dev/perfProbe.js`, loaded only when
+  `VITE_PERF_PROBE=drag:<board>` is set) drives drags with synthetic pointer
+  events on the busy test board (164 items, headless, Bag copy) and samples
+  per-frame timings. Medians, 3 runs each:
+
+  | | dev build | production bundle |
+  |---|---|---|
+  | drag one shape | 17 ms, 20–28 of 178 frames over 20 ms | 17 ms, 1–7 over 20 ms |
+  | drag all 164 items | 30 ms on every frame (≈33 fps) | 21 ms (≈47 fps) |
+
+  JS work per frame (React render + Konva draw) is only about 4–5 ms + 3–5 ms;
+  the rest of a whole-board drag is browser paint. **Conclusion: the lag the
+  user felt is mostly the dev build (React dev mode); the app code is not at
+  fault for ordinary drags.** On top of that, one cheap paint fix: a
+  multi-selection no longer redraws one outline per item while it moves
+  (SelectionOverlay). That brought a whole-board drag to 20 ms, with
+  17–79 frames over 20 ms instead of ~150. "Production" here means the
+  production frontend bundle (`vite build` + `vite preview`, VITE_PERF_PROBE
+  baked in) loaded by the debug shell. A real release binary would have used
+  the installed app's own localStorage, so it was not run; the Rust side does
+  nothing during a drag.
+- 2026-11-13 · session 5 · **section 5 built** (Format shell + shared record
+  model). New `app/src/components/Sandbox/formats/`:
+  - **Model** (`formats.js`, tested): `type:'shape', kind:'format'` with
+    `payload.view` (table|kanban|timeline|matrix), `title`, `source`,
+    `fields` and `records: [{ id, values, updated_at }]`. Own records live in
+    the payload (decision #5). A new widget has Title / Status (To do, Doing,
+    Done) / Due.
+  - **One adapter** (`dataSource.js`, tested): `{ fields, records, editable,
+    canAdd, canRemove, add, update, remove }`.
+    - `ownSource` writes the widget (one undo step per change, applied to
+      the payload as it is at commit time).
+    - `taskSource` reads the Bag's tasks (or one project's) with an
+      open/all/done filter. It writes only through the app's tasks store
+      (`useTasks` mutators, given to every board mount by the new
+      `contexts/TasksApiContext.js`), so it goes through localStore and live
+      sync and never touches tasks.siddran. Linked rows can't be deleted from
+      a widget (too easy to delete real tasks by accident), and board undo
+      doesn't cover task edits; the source menu says so.
+    - Tasks have no tags in this app, so "filter by tag" became filter by
+      project + open/all/done.
+  - **Views**: `views/index.js` maps `payload.view` → component. Only the
+    plain list (`ListView`) exists: done check, title edited in place, chips
+    for the other fields, × on own records, "+ Add" at the bottom. Every view
+    falls back to it until sections 6–7 add theirs. The Insert (media) menu
+    has **Table**; other entries come with their views.
+  - **Chrome** (`FormatWidget.jsx`): a DOM window drawn with the cards (above
+    the Konva layers):
+    - title bar = the handle; double-click renames;
+    - a source chip with the record count opens the source menu;
+    - ⛶ opens **focus mode** (full-window overlay of the same widget; Esc or
+      the button goes back). Enter on a selected widget does the same.
+    - Resizing uses the normal selection handles; no rotate knob.
+    - The floating bar shows Full screen and Rename plus the usual actions.
+  - **Moving carries what's on it, like a frame.** The title-bar press goes
+    through the overlay's own move (snapping, groups, one undo step). Riders
+    are decided at grab time: cards and smaller widgets stacked ABOVE it.
+    Board shapes always paint beneath DOM, so any under a widget are hidden
+    and are deliberately not carried. A frame carries the widgets in it.
+  - **Merge** (`desktop/sync/merge.js` `mergeSandboxItems`, tested; used by
+    localStore `absorbSandbox`): ordinary items still merge row by row. A
+    widget edited on both sides merges key by key, and its `records` and
+    `fields` record by record. Two sides adding or editing different records
+    both keep their work. Only a record (or key) changed on both sides is a
+    conflict, and the newer change wins.
+  - Excluded from flowcharts everywhere: `isDiagramShape` (flowText.js) and
+    `is_diagram_shape` (diagram.rs) both skip `kind: 'format'`. No connection
+    dots, not a text target. Tab/Alt+arrows don't make "next steps" from it.
+  - **CLI** (`../Siddran-CLI`, branch `whiteboard`): `FORMAT_KIND` /
+    `is_format` in diagram.rs. `sandbox_read` lists `formats`: id, title,
+    view, source; for own records, field names and records with values.
+    Inside a frame a widget counts as `other.formats`. `sandbox_edit`
+    `update` can rename a widget by id or title (`text`) and refuses
+    shape/fill. Records survive any edit byte for byte (tested).
+  - Checks: desktop `npm test` 631 pass, lint at the baseline 25, build and
+    `cargo check` pass; CLI `cargo test` passes (2 new tests), clippy adds
+    nothing. Seen headless in the dev app (Bag copy; dev localStorage backed
+    up and restored afterwards; the headless output removed and every
+    workspace back on eDP-1/HDMI-A-1), scripted by the probe's `format:`
+    scenario. All of these were observed working:
+    - insert from the menu; add 3 records; tick one done;
+    - drag by the title bar: widget and a text card on it both moved
+      (240, 88);
+    - resize from the corner (420×320 → 540×420); no rotate knob;
+    - Enter → full screen;
+    - link to All tasks: 5 open tasks shown, ticking one wrote
+      tasks.siddran in the copy;
+    - back to own records: still 3;
+    - Ctrl+Z / Ctrl+Y over the source change;
+    - the board file holds the widget and its records; `siddran call
+      sandbox_read` lists them.
+  - **Please try (the hand-feel half, which headless can't do):**
+    1. Media menu → Table. Drag it by its title bar. Does it feel like a
+       frame?
+    2. Drop a text box or note card on it, then move the widget.
+    3. Resize it from the corners and edges.
+    4. ⛶ or Enter for full screen, Esc to come back.
+    5. Add and rename records, tick them, delete one; Ctrl+Z each step.
+    6. Source chip → All tasks / a project, Open/All/Done. Tick a task, then
+       check it on the Tasks page.
+    7. Mouse-wheel over a long list scrolls the list; over the board it still
+       zooms.
+    8. Put a widget in a frame and move the frame.
+    9. Say whether a widget should also carry hidden board shapes under it
+       (it doesn't now).
+  - Not done / for later: field editing beyond title and status (section 6
+    Table), per-view settings, record reordering (a merge currently keeps
+    base order, then new records). **Stopped at the planned check-in;
+    section 6 not started.**
+

@@ -82,9 +82,10 @@ describe('itemsToFlow', () => {
     expect(text).toContain('|yes|')
   })
 
-  it('leaves out frames and lines', () => {
+  it('leaves out frames, Format widgets and lines', () => {
     const shape = (id, kind, x, y) => ({ id, type: 'shape', x, y, w: 120, h: 56, payload: { kind, text: id } })
-    const items = [{ ...shape('F', 'frame', -40, -40), payload: { kind: 'frame', title: 'Plan' } }, shape('A', 'rect', 0, 0), shape('L', 'arrow', 0, 100), shape('S', 'sticky', 200, 0)]
+    const items = [{ ...shape('F', 'frame', -40, -40), payload: { kind: 'frame', title: 'Plan' } }, shape('A', 'rect', 0, 0), shape('L', 'arrow', 0, 100), shape('S', 'sticky', 200, 0),
+      { ...shape('W', 'format', 0, 300), payload: { kind: 'format', view: 'table', title: 'Table', records: [] } }]
     expect(itemsToFlow(items)).toBe('flowchart TD\n  n1[A]\n  n2[S]\n')
   })
 })

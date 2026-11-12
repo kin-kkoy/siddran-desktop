@@ -13,7 +13,7 @@
 // a flush re-reads and three-way merges anything that moved under us before
 // writing, and the watcher brings outside changes in as they land (ingest below).
 
-import { mergeVault, mergeRows } from './sync/merge.js'
+import { mergeVault, mergeSandboxItems } from './sync/merge.js'
 import { merge3 } from './sync/text3.js'
 
 // ── id + time ───────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ async function absorbSandbox(fs, path, id) {
     for (const k of new Set([...Object.keys(board), ...Object.keys(theirs.sandbox)])) {
       if (same(board[k], b.sandbox?.[k])) board[k] = theirs.sandbox[k]
     }
-    const r = mergeRows(b.items || [], db.sandboxItems[id] || [], theirs.items || [])
+    const r = mergeSandboxItems(b.items || [], db.sandboxItems[id] || [], theirs.items || [])
     db.sandboxItems[id] = r.rows
     board.item_count = r.rows.length
     conflicts.push(...r.conflicts)

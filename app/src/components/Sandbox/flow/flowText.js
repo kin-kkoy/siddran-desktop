@@ -456,7 +456,9 @@ export function tidy(shapes, connectors, dir = 'down') {
 /** Items → flowchart text (what "Copy as text" puts on the clipboard). */
 // Frames and line shapes are shapes but not boxes, so they are left out (as
 // Siddran-CLI's `describe` does with `is_diagram_shape`).
-export const isDiagramShape = (i) => i?.type === 'shape' && i.payload?.kind !== 'frame' && !isLineKind(i.payload?.kind)
+// Frames and Format widgets are shapes in the file but never boxes in a flowchart
+// (diagram.rs `is_diagram_shape` — change both).
+export const isDiagramShape = (i) => i?.type === 'shape' && i.payload?.kind !== 'frame' && i.payload?.kind !== 'format' && !isLineKind(i.payload?.kind)
 
 export function itemsToFlow(items) {
   const shapes = items.filter(isDiagramShape).sort((a, b) => Math.trunc(a.y / 40) - Math.trunc(b.y / 40) || a.x - b.x)

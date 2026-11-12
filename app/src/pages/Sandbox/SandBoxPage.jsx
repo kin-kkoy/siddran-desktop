@@ -29,6 +29,8 @@ import DiagramModal from '../../components/Sandbox/flow/DiagramModal'
 import TemplatesModal from '../../components/Sandbox/templates/TemplatesModal'
 import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
+import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
+import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
 import { isInkTool } from '../../components/Sandbox/ink/presets'
@@ -143,6 +145,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const [templatesOpen, setTemplatesOpen] = useState(false)
     const [editingFrameId, setEditingFrameId] = useState(null)
     const [textEditReq, setTextEditReq] = useState(null)   // { id, n } — asks a text card to enter edit mode
+    const [focusFormatId, setFocusFormatId] = useState(null)       // a Format widget shown full screen
+    const [renamingFormatId, setRenamingFormatId] = useState(null) // a Format widget whose title is being edited
     const styleClipRef = useRef(null)
     const fileRef = useRef(null)
     const stageRef = useRef(null)
@@ -161,10 +165,12 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // Item buckets, z-sorted for paint order. Strokes + shapes + images share
     // ONE Konva layer so z-order works across all graphic types.
-    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector' && !isFrame(i))), [items])
+    // Format widgets are shapes in the file but DOM windows on screen, drawn
+    // with the cards (above the Konva layers).
+    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector' && !isFrame(i) && !isFormat(i))), [items])
     const frameItems = useMemo(() => sortByZ(items.filter(isFrame)), [items])
     const connectorItems = useMemo(() => sortByZ(items.filter(i => i.type === 'connector')), [items])
-    const cardItems = useMemo(() => sortByZ(items.filter(i => CARD_TYPES.has(i.type))), [items])
+    const cardItems = useMemo(() => sortByZ(items.filter(i => CARD_TYPES.has(i.type) || isFormat(i))), [items])
     const selectedItems = useMemo(() => items.filter(i => canvas.selectedIds.has(i.id)), [items, canvas.selectedIds])
 
     // ---- commits ----
@@ -488,7 +494,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     // ---- text shortcuts on the selection (not while typing) ----
     const textTargets = useCallback(() => items.filter(i => canvas.selectedIds.has(i.id) && !i.payload?.locked
-        && (i.type === 'text' || (i.type === 'shape' && !isFrame(i) && i.payload?.kind && !['line', 'arrow', 'elbowArrow', 'divider'].includes(i.payload.kind)))), [items, canvas.selectedIds])
+        && (i.type === 'text' || (i.type === 'shape' && !isFrame(i) && !isFormat(i) && i.payload?.kind && !['line', 'arrow', 'elbowArrow', 'divider'].includes(i.payload.kind)))), [items, canvas.selectedIds])
     const toggleTextFlag = useCallback((key) => {
         const t = textTargets()
         if (!t.length) return false
@@ -631,6 +637,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const it = items.find(i => i.id === id)
         if (!it || it.payload?.locked) return
         if (isFrame(it)) setEditingFrameId(id)
+        else if (isFormat(it)) setRenamingFormatId(id)
         else if (it.type === 'text') setTextEditReq(r => ({ id, n: (r?.n || 0) + 1 }))
         else if (it.type === 'shape') setEditingShapeId(id)
     }, [items])
@@ -649,6 +656,47 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         act.updateItem(id, { payload })
         bump()
     }, [items, canvas.paintColor, act, bump])
+
+    // ---- Format widgets ----
+    // A widget's own records change through its payload: `fn` gets the payload
+    // as it is now (not as it was at render), one undo step per change.
+    const onCommitFormat = useCallback((id, fn) => {
+        const it = base.getItemById(id)
+        if (!it || it.payload?.locked) return
+        act.updateItem(id, { payload: fn(it.payload) })
+        bump()
+    }, [base, act, bump])
+    // Press on a widget's title bar: select it and drag it in the same motion,
+    // carrying what sits on it — the same move a frame makes.
+    const onGrabFormat = useCallback((e, id, locked) => {
+        const wasSelected = canvas.selectedIds.has(id)
+        if (!wasSelected || e.shiftKey) onSelect(id, e.shiftKey)
+        if (e.shiftKey || locked) return
+        const gid = items.find(i => i.id === id)?.payload?.groupId
+        const ids = wasSelected ? [...canvas.selectedIds]
+            : gid ? items.filter(i => i.payload?.groupId === gid).map(i => i.id) : [id]
+        canvas.overlayApiRef?.current?.beginMove?.(e, ids)
+    }, [canvas, items, onSelect])
+    const insertFormat = useCallback((view = 'table') => {
+        const c = centerWorld()
+        const { w, h } = FORMAT_SIZE
+        const created = act.addItem({
+            type: 'shape', x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w, h, rotation: 0, z_index: nextZ(),
+            payload: formatPayload(view, nextFormatTitle(items, view)),
+        })
+        setOpenMenu(null)
+        canvas.setTool('pointer')
+        canvas.selectOnly(created.id)
+        bump()
+    }, [centerWorld, act, nextZ, items, canvas, bump])
+    // A full-screen widget that goes away (undo, the CLI) takes focus mode with it,
+    // or the page would go on ignoring keys.
+    useEffect(() => {
+        if (focusFormatId && !items.some(i => i.id === focusFormatId)) setFocusFormatId(null)
+    }, [focusFormatId, items])
+    const openFormatFocus = useCallback((id) => setFocusFormatId(id), [])
+    const closeFormatFocus = useCallback(() => setFocusFormatId(null), [])
+    const endFormatRename = useCallback(() => setRenamingFormatId(null), [])
 
     // ---- keyboard-driven actions ----
     const selectAll = useCallback(() => { canvas.setSelection(new Set(items.map(i => i.id))) }, [canvas, items])
@@ -711,7 +759,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     useEffect(() => {
         const onKeyDown = (e) => {
             if (isEditable(document.activeElement)) return
-            if (diagram) return   // the pop-up handles its own keys
+            if (diagram || focusFormatId) return   // the pop-up / full-screen widget handles its own keys
             const meta = e.metaKey || e.ctrlKey
 
             if (meta && (e.key === 'z' || e.key === 'Z')) {
@@ -739,7 +787,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             // ── flowchart keys ──
             const sel = [...canvas.selectedIds]
             const one = sel.length === 1 ? items.find(i => i.id === sel[0]) : null
-            const oneShape = one?.type === 'shape' ? one : null
+            const oneShape = one?.type === 'shape' && !isFormat(one) ? one : null
+            if (e.key === 'Enter' && one && isFormat(one)) { e.preventDefault(); setFocusFormatId(one.id); return }
             if (e.key === 'Tab' && oneShape && !isFrame(oneShape)) { e.preventDefault(); if (e.shiftKey) flow.createSibling(oneShape.id); else flow.createNext(oneShape.id, 's'); return }
             if (e.key === 'Enter' && one && (one.type === 'shape' || one.type === 'text')) { e.preventDefault(); onEditText(one.id); return }
             if (e.altKey && ARROW_DIRS[e.key] && oneShape && !isFrame(oneShape)) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
@@ -777,7 +826,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
-        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleDockMenu, diagram, openDiagram])
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleDockMenu, diagram, openDiagram, focusFormatId])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -799,6 +848,12 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }
 
     const cardEls = cardItems.map(item => {
+        if (isFormat(item)) {
+            return <FormatWidget key={item.id} item={item} tool={canvas.tool}
+                selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
+                onSelect={onSelect} onGrab={onGrabFormat} onRemove={onErase} onCommit={onCommitFormat}
+                onOpenFocus={openFormatFocus} onRenameDone={endFormatRename} />
+        }
         const shared = {
             item, zoom: canvas.viewport.zoom, tool: canvas.tool,
             selected: canvas.selectedIds.has(item.id), onSelect,
@@ -865,6 +920,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onAttachTaskClick={() => setTaskPickerOpen(true)}
                     onPickImage={onPickImageClick}
                     onPickPdf={onPickPdf}
+                    onInsertTable={insertFormat}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}
@@ -946,6 +1002,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             editingShapeId={editingShapeId}
                             flow={flow}
                             onEditDiagram={() => openDiagram(flow.diagramSource())}
+                            onOpenFormat={openFormatFocus}
                         />
                     }
                     onShapeDoubleClick={onShapeDoubleClick}
@@ -1012,6 +1069,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             <TaskAttachPicker isOpen={taskPickerOpen} tasks={tasks} onPick={onPickTask} onClose={() => setTaskPickerOpen(false)} />
             <ShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
             <TemplatesModal isOpen={templatesOpen} onClose={() => setTemplatesOpen(false)} onInsert={insertTemplate} />
+            {focusFormatId && (() => {
+                const f = items.find(i => i.id === focusFormatId)
+                return f && isFormat(f) ? <FormatFocus key={f.id} item={f} onClose={closeFormatFocus} onCommit={onCommitFormat} /> : null
+            })()}
             <DiagramModal
                 isOpen={!!diagram}
                 source={diagram?.source || null}

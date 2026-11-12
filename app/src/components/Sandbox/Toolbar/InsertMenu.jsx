@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuStickyNote, LuListTodo, LuImage, LuFileText } from 'react-icons/lu'
+import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2 } from 'react-icons/lu'
 import styles from './ShapePicker.module.css'
 
 /**
@@ -8,7 +8,7 @@ import styles from './ShapePicker.module.css'
  * "Insert +" menu. Portal + fixed positioning + click-outside + Escape, mirroring
  * ShapePicker (whose CSS it reuses).
  */
-function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf }) {
+function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf, onPickTable }) {
     const panelRef = useRef(null)
     const [pos, setPos] = useState(null)
 
@@ -45,6 +45,8 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
         { label: 'Task', Icon: LuListTodo, onClick: onPickTask },
         { label: 'Image', Icon: LuImage, onClick: onPickImage },
         { label: 'PDF', Icon: LuFileText, onClick: onPickPdf },
+        // A Format widget: records you keep in the board, or your tasks.
+        ...(onPickTable ? [{ label: 'Table', Icon: LuTable2, onClick: onPickTable }] : []),
     ]
 
     return createPortal(

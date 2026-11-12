@@ -11,12 +11,13 @@ import { isLineKind } from '../shapes/registry'
 import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon } from '../selection/hitTest'
 import { connectorPoints, connectorHitTest } from '../connectors/geometry'
 import { isFrame, frameHit, marqueeTakesFrame } from '../frames/frames'
+import { isFormat } from '../formats/formats'
 import { resolveHover } from '../selection/hover'
 import { DRAWS_INK, presetGroupFor, strokeStyleFor } from '../ink/presets'
 
 const GRID_MINOR = 24
 // A shape that can take connector arrows (not a frame, a line, or a locked item).
-const isConnectable = (it) => it?.type === 'shape' && !isFrame(it) && !isLineKind(it.payload?.kind) && !it.payload?.locked
+const isConnectable = (it) => it?.type === 'shape' && !isFrame(it) && !isFormat(it) && !isLineKind(it.payload?.kind) && !it.payload?.locked
 const GRID_MAJOR = 120
 const GRAPHIC_TYPES = new Set(['stroke', 'shape', 'image'])
 
@@ -174,7 +175,8 @@ function SandboxCanvas({
         const topHitAt = (world) => {
             const all = latestRef.current.items
             const zoom = latestRef.current.canvas.viewport.zoom || 1
-            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type) && !isFrame(i)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+            // Format widgets are DOM windows that take their own presses (like cards).
+            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type) && !isFrame(i) && !isFormat(i)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
             for (const it of sorted) if (itemHitTest(it, world.x, world.y, 2)) return it
             // Connectors sit below shapes — test them only when no shape was hit.
             const connectors = all.filter(i => i.type === 'connector')

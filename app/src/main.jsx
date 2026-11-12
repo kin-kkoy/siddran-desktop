@@ -13,6 +13,8 @@ import { installTauriFileDrop } from './desktop/fileDrop'
 installDropGuard()
 installLinkGuard()
 installTauriFileDrop()
+// Dev-only drag-smoothness probe (src/dev/perfProbe.js); compiled out unless VITE_PERF_PROBE is set.
+if (import.meta.env.VITE_PERF_PROBE) import('./dev/perfProbe.js')
 
 createRoot(document.getElementById('root')).render(
     // CalendarViewProvider wraps App so the app shell itself can react to the peek/half state
