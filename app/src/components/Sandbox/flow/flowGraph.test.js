@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { parseFlow, flowToItems, itemsToFlow } from './flowText'
 import {
   emptyGraph, addNode, addNext, connect, removeNode, updateEdge, reverseEdge,
-  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm,
+  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm, familiesOf, moveFamily, setLowered, GAP_FAMILY, anchorOf,
 } from './flowGraph'
 import { shapeOutline } from './svgPath'
+import { routeConnector } from '../connectors/geometry'
 
 const ids = () => { let i = 0; return () => `id${++i}` }
 const strip = (g) => ({ dir: g.dir, nodes: g.nodes.map(({ key, label, kind, round }) => ({ key, label, kind, round })), edges: g.edges.map(({ from, to, label, head, dashed }) => ({ from, to, label, head, dashed })) })
@@ -220,22 +221,122 @@ describe('planDiagram ≡ flowToItems for a new diagram', () => {
 })
 
 describe('families', () => {
-  it('stacks unlinked groups as rows, well apart', () => {
-    let g = addNode(emptyGraph(), { label: 'a' }).graph
+  const twoFamilies = (dir) => {
+    let g = addNode(emptyGraph(dir), { label: 'a' }).graph
     g = addNext(g, 'n1', { label: 'b' }).graph
     g = addNext(g, 'n1', { label: 'c' }).graph
-    g = addNode(g, { label: 'lonely' }).graph
-    const { nodes, sides } = layoutFor(g)
-    const at = (k) => nodes.find((n) => n.key === k)
-    const bottom = Math.max(...['n1', 'n2', 'n3'].map((k) => at(k).y + at(k).h))
-    expect(at('n4').y - bottom).toBe(144)
-    expect(at('n4').x).toBe(Math.min(...nodes.map((n) => n.x)))
+    return addNode(g, { label: 'lonely' }).graph
+  }
+  const box = (nodes, keys) => {
+    const ns = nodes.filter((n) => keys.includes(n.key))
+    return { l: Math.min(...ns.map((n) => n.x)), r: Math.max(...ns.map((n) => n.x + n.w)), t: Math.min(...ns.map((n) => n.y)), b: Math.max(...ns.map((n) => n.y + n.h)) }
+  }
+
+  it('puts a new family beside the others, across the flow (top to bottom → a column to the right)', () => {
+    const { nodes, sides, families } = layoutFor(twoFamilies('down'))
+    expect(families).toBe(2)
+    const tree = box(nodes, ['n1', 'n2', 'n3']), lone = box(nodes, ['n4'])
+    expect(lone.l - tree.r).toBe(GAP_FAMILY)
+    expect(lone.t).toBe(tree.t)
     expect(sides).toEqual([['s', 'n'], ['s', 'n']])
   })
 
-  it('lays one family out exactly as before (CLI parity)', () => {
+  it('… and left to right → a row below', () => {
+    const { nodes } = layoutFor(twoFamilies('right'))
+    const tree = box(nodes, ['n1', 'n2', 'n3']), lone = box(nodes, ['n4'])
+    expect(lone.t - tree.b).toBe(GAP_FAMILY)
+    expect(lone.l).toBe(tree.l)
+  })
+
+  it('reorders families, keeping each family\'s own order', () => {
+    const g = twoFamilies('down')
+    const moved = moveFamily(g, 'n4', -1)
+    expect(moved.nodes.map((n) => n.key)).toEqual(['n4', 'n1', 'n2', 'n3'])
+    expect(familiesOf(moved)).toEqual([['n4'], ['n1', 'n2', 'n3']])
+    expect(moveFamily(g, 'n4', 1)).toBe(g)         // already last
+    const { nodes } = layoutFor(moved)
+    expect(box(nodes, ['n4']).r).toBeLessThan(box(nodes, ['n1', 'n2', 'n3']).l)
+  })
+
+  it('lays one family out exactly as text-to-diagram does', () => {
     const g = parseFlow('A --> B\nA --> C\nC --> D').graph
     const { shapes } = flowToItems(g, { newId: ids() })
-    expect(shapes.map((s) => [s.x, s.y])).toEqual([[84, 0], [0, 128], [168, 128], [168, 256]])
+    const { nodes } = layoutFor(g)
+    expect(nodes.map((n) => [n.x, n.y])).toEqual(shapes.map((s) => [s.x, s.y]))
+  })
+})
+
+describe('lowering a node', () => {
+  // parent P with two children: L (which has a long line of descendants) and R (alone).
+  const tree = () => parseFlow('P --> L\nP --> R\nL --> L1 --> L2 --> L3').graph
+  const at = (laid, k) => laid.nodes.find((n) => n.key === k)
+
+  it('lets a childless node drop down beside the deep leaves of its sibling\'s branch', () => {
+    const g = tree()
+    let laid = layoutFor(g)
+    expect(at(laid, 'R')).toMatchObject({ level: 1, canLower: true, canRaise: false })
+    expect(at(laid, 'L')).toMatchObject({ canLower: false, hasKids: true })   // has children: stays above them
+    const low = setLowered(g, 'R', 3)
+    laid = layoutFor(low)
+    expect(at(laid, 'R')).toMatchObject({ level: 4, lowered: 3, canLower: false, canRaise: true })
+    expect(at(laid, 'R').y).toBe(at(laid, 'L3').y)
+    expect(laid.sides[1]).toEqual(['s', 'n'])
+  })
+
+  it('gives the lowered node a clear lane: its link misses every box on the way down', () => {
+    for (const dir of ['down', 'right']) {
+      const g = { ...setLowered(tree(), 'R', 3), dir }
+      const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+      const byId = new Map(plan.add.map((i) => [i.id, i]))
+      const link = plan.add.find((i) => i.type === 'connector' && byId.get(i.payload.to.itemId).payload.text === 'R')
+      expect(link.payload.bend).toBeTruthy()
+      const from = byId.get(link.payload.from.itemId), to = byId.get(link.payload.to.itemId)
+      const pts = routeConnector(anchorOf(from, link.payload.from.side), anchorOf(to, link.payload.to.side), 'elbow',
+        { fromSide: link.payload.from.side, toSide: link.payload.to.side, bend: link.payload.bend })
+      const others = plan.add.filter((i) => i.type === 'shape' && i !== from && i !== to)
+      for (let k = 0; k < pts.length - 2; k += 2) {
+        const [x1, y1, x2, y2] = [pts[k], pts[k + 1], pts[k + 2], pts[k + 3]]
+        for (const o of others) {
+          const hits = Math.max(x1, x2) > o.x && Math.min(x1, x2) < o.x + o.w && Math.max(y1, y2) > o.y && Math.min(y1, y2) < o.y + o.h
+          expect(hits, `${dir}: segment ${[x1, y1, x2, y2]} crosses ${o.payload.text}`).toBe(false)
+        }
+      }
+      // and the boxes themselves never overlap
+      const shapes = plan.add.filter((i) => i.type === 'shape')
+      for (const p of shapes) for (const q of shapes) if (p !== q) {
+        expect(p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h).toBe(false)
+      }
+    }
+  })
+
+  it('leaves links without a lowered node unbent', () => {
+    const plan = planDiagram(tree(), { origin: { x: 0, y: 0 }, newId: ids() })
+    expect(plan.add.filter((i) => i.type === 'connector').every((c) => !c.payload.bend)).toBe(true)
+  })
+
+  it('never goes past the deepest level of its family', () => {
+    const laid = layoutFor(setLowered(tree(), 'R', 99))
+    expect(at(laid, 'R').level).toBe(4)
+  })
+
+  it('a node that has children ignores a drop', () => {
+    const laid = layoutFor(setLowered(tree(), 'L', 2))
+    expect(at(laid, 'L').level).toBe(1)
+  })
+
+  it('back to its natural place at 0, and the field goes', () => {
+    const g = setLowered(setLowered(tree(), 'R', 2), 'R', 0)
+    expect(g.nodes.find((n) => n.key === 'R').drop).toBeUndefined()
+  })
+
+  it('is kept on the board and comes back when reopened, and survives a Text-tab round trip', () => {
+    const g = setLowered(tree(), 'R', 3)
+    const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+    const r = plan.add.find((i) => i.payload?.text === 'R')
+    expect(r.payload.flowDrop).toBe(3)
+    const back = itemsToGraph(plan.add).graph
+    const rr = back.nodes.find((n) => n.label === 'R')
+    expect(rr.drop).toBe(3)
+    expect(textToGraph(graphToText(back), back).graph.nodes.find((n) => n.label === 'R').drop).toBe(3)
   })
 })

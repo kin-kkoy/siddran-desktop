@@ -142,12 +142,6 @@ way to build the same thing. Keep the text mode for AI and paste.
 - [ ] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
       `lineStyle` and `routing: "curved"`.
 - [ ] Keep the parity tests between `flowText.js` and `diagram.rs` green.
-- [ ] **Port the family rows to `diagram.rs`** (done in `flowText.js` in session 3).
-      `layoutGraph` now lays each connected group out on its own and stacks
-      the groups top to bottom, `GAP_FAMILY = 144` apart, left-aligned, in
-      order of their first node. A graph with one family is unchanged, so the
-      existing parity tests still hold. Mirror the "families" tests in
-      `flowGraph.test.js`.
 
 ## Section 5 — Format shell + shared record model (prerequisite for 6–11)
 
@@ -308,8 +302,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     keys `=`/`-` zoom on the selected node and `1` fits everything.
   - **One "+" handle** on the outgoing side, in place of the four dots:
     click it for the next step, drag it onto a node to link.
-  - **Families as rows:** unlinked groups stack top to bottom, 144 px apart
-    (in `layoutGraph`, see section 4).
+  - **Families as rows:** unlinked groups stack top to bottom, 144 px apart.
+    (Superseded in the next round: families now sit side by side, desktop only.)
   - **Shapes:** the kind picker is the shape menu's own Basic / Flowchart /
     Callouts sections (`ShapeThumb` is exported from ShapePicker). Kinds
     with no text form are written as `[box]` and kept when that line comes
@@ -326,3 +320,35 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   - Verified headless (Bag copy, localStorage restored): the T→S dock fix,
     the new family's row, the camera following, zoom on the selection, the
     shape picker, both icons.
+- 2026-11-12 · session 3 · second feedback round: arranging. **Desktop only
+  (the user's decision): the CLI/MCP layout is NOT to follow.** `flowText.js`
+  is back to the CLI mirror, plus one opt-in hook (below) that diagram.rs
+  doesn't need.
+  - **Families side by side, across the flow:** in columns when the flow runs
+    down, in rows when it runs right, `GAP_FAMILY` (144) apart. This lives in
+    `flowGraph.layoutFor` (one `layoutGraph` call per family). Family order is
+    node order, so **Arrange → Family ‹ ›** (or Alt + an arrow across the
+    flow) swaps whole node blocks (`moveFamily`). On re-open, reading order
+    gives back the same order.
+  - **Lowering a node** (Arrange → Level, or Alt + an arrow along the flow):
+    only a node with no children; never past its family's deepest level; a
+    parent always stays directly above its children. Stored on the graph as
+    `node.drop` and on the board as the optional `payload.flowDrop` (kept by
+    the Text tab by key). `layoutGraph(…, { drop })` applies it, and only
+    then adds invisible **lane nodes** on the levels a lowered link skips (the
+    classic layered-layout dummy, `LANE` = 48), so the link has a clear
+    column. It returns `turns`, and `laneBend` turns them into a connector
+    `bend` (jog just past the parent, then straight down the lane), used by
+    both the preview and the board. Tested: in both directions the link
+    crosses no box and no boxes overlap.
+  - "**+ Root node**" is a labelled button. The how-to is a card toggled by a
+    ? button (or the `?` key) that stays up while you edit (remembered in
+    `siddran_sandbox_diagram_help`). The side panel says what to do when
+    nothing is selected.
+  - Fixed: the view could open scrolled wrong when the first fit ran while the
+    pop-up was still settling its size. It now keeps fitting until you zoom,
+    pan or edit.
+  - Verified headless: the user's example (the right child lowered beside
+    the left branch's deepest leaf, its link down a clear lane), the family
+    columns and Alt+← reorder, the Arrange panel, Update matching the
+    preview, and the help toggle.

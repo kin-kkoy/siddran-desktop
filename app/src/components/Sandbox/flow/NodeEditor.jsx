@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuMoveRight, LuScan } from 'react-icons/lu'
-import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm } from './flowGraph'
+import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuArrowUp, LuArrowLeft, LuMoveRight, LuScan, LuCircleHelp, LuChevronLeft, LuChevronRight, LuChevronUp, LuChevronDown } from 'react-icons/lu'
+import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm, moveFamily, setLowered, laneBend } from './flowGraph'
 import { shapeOutline } from './svgPath'
 import { NextStepIcon } from './icons'
 import { ShapeThumb } from '../Toolbar/ShapePicker'
@@ -19,6 +19,15 @@ import { fontCss } from '../text/textStyle'
 // and the view holds still around the node you're working on: the camera
 // moves with it, so it stays put on screen while the rest re-flows.
 // Wheel zooms at the pointer, as on the board; drag empty space to pan.
+//
+// Arranging, within what the layout allows: families (groups with no link
+// between them) sit side by side across the flow and can be reordered; a node
+// with no children can be lowered, down to its family's deepest level, so a
+// lone branch can sit beside the leaves of a long one. A node with children
+// always stays directly above them.
+
+const HELP_KEY = 'siddran_sandbox_diagram_help'
+const helpRemembered = () => { try { return localStorage.getItem(HELP_KEY) === '1' } catch { return false } }
 
 const PAD = 48
 const DUR = 200             // ms a re-flow takes to glide into place
@@ -48,17 +57,29 @@ const s = {
   },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 },
   row: { display: 'flex', gap: 4, flexWrap: 'wrap' },
-  help: { fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 },
   kbd: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', background: 'var(--bg-elevated)', borderRadius: 4, padding: '0 4px' },
+  help: { fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 },
+  helpCard: {
+    position: 'absolute', top: 50, right: 8, width: 290, zIndex: 2, fontFamily: fontCss(), display: 'flex', flexDirection: 'column', gap: 8,
+    background: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 14px', boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+  },
+  textBtn: {
+    height: 34, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 11px 0 8px', cursor: 'pointer', borderRadius: 7, fontSize: 13,
+    border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontFamily: fontCss(),
+  },
+  arrangeRow: { display: 'flex', alignItems: 'center', gap: 4 },
+  arrangeLabel: { fontSize: 12.5, color: 'var(--text-secondary)', width: 64 },
+  note: { fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.45, margin: 0 },
   empty: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13, pointerEvents: 'none' },
 }
 
-function IconBtn({ active, title, onClick, children, danger, size = 34, plain }) {
+function IconBtn({ active, title, onClick, children, danger, size = 34, plain, disabled }) {
   return (
     <button
-      type="button" title={title} aria-label={title} aria-pressed={active || undefined} onClick={onClick}
+      type="button" title={title} aria-label={title} aria-pressed={active || undefined} onClick={onClick} disabled={disabled}
       style={{
-        width: size, height: size, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 7,
+        width: size, height: size, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: disabled ? 'default' : 'pointer', borderRadius: 7,
+        opacity: disabled ? 0.35 : 1,
         border: plain ? '1px solid transparent' : `1px solid ${active ? 'var(--accent-warning)' : 'var(--border-default)'}`,
         background: active ? 'color-mix(in srgb, var(--accent-warning) 16%, transparent)' : plain ? 'transparent' : 'var(--bg-surface)',
         color: danger ? 'var(--accent-danger, #e05c5c)' : active ? 'var(--accent-warning)' : 'var(--text-secondary)',
@@ -78,7 +99,10 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   const [pan, setPan] = useState(null)     // { sx, sy, cam, moved }
   const [anim, setAnim] = useState(null)   // { from: Map key → {x,y}, t0 }
   const [now, setNow] = useState(0)
-  const fittedRef = useRef(false)
+  const [helpOpen, setHelpOpen] = useState(helpRemembered)
+  // Until you zoom, pan or change something, the view keeps itself fitted —
+  // the stage's size can still be settling just after the pop-up opens.
+  const touchedRef = useRef(false)
   const prevLaidRef = useRef(null)
   const shownRef = useRef(new Map())
 
@@ -113,10 +137,8 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     return { x: (minX + maxX) / 2 - box.w / z / 2, y: (minY + maxY) / 2 - box.h / z / 2 + 20 / z, z }
   }
 
-  // Fit once, when the stage first has a size.
   useLayoutEffect(() => {
-    if (fittedRef.current || !size.w) return
-    fittedRef.current = true
+    if (touchedRef.current || !size.w || !size.h) return
     setCam(fitCam(laid.nodes))
   }, [size]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -125,6 +147,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     const prev = prevLaidRef.current
     prevLaidRef.current = laid
     if (!prev || prev === laid) return
+    touchedRef.current = true
     const before = new Map(prev.nodes.map((n) => [n.key, n]))
     const after = new Map(laid.nodes.map((n) => [n.key, n]))
     const still = [selected?.key, ...prev.nodes.map((n) => n.key)].find((k) => k && before.has(k) && after.has(k))
@@ -172,6 +195,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     if (!el) return
     const onWheel = (e) => {
       e.preventDefault()
+      touchedRef.current = true
       const r = el.getBoundingClientRect()
       const px = e.clientX - r.left, py = e.clientY - r.top
       setCam((c) => {
@@ -185,7 +209,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   }, [])
 
   // Buttons and keys zoom on the node you're on (else the middle of the view).
-  const zoomBy = (f) => setCam((c) => {
+  const zoomBy = (f) => { touchedRef.current = true; setCam((c) => {
     const z = clampZ(c.z * f)
     const sel = selected?.type === 'node' && laid.nodes.find((n) => n.key === selected.key)
     const focus = sel ? { x: sel.x + sel.w / 2, y: sel.y + sel.h / 2 } : { x: c.x + size.w / c.z / 2, y: c.y + size.h / c.z / 2 }
@@ -194,20 +218,20 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     // Keep it where it is on screen; if it was off screen, bring it to the middle.
     const px = inView ? sx : size.w / 2, py = inView ? sy : size.h / 2
     return { x: focus.x - px / z, y: focus.y - py / z, z }
-  })
+  }) }
   const fit = () => setCam(fitCam(laid.nodes))
 
   const edges = useMemo(() => graph.edges.map((e, i) => {
     const a = shownAt.get(e.from), b = shownAt.get(e.to), sd = laid.sides[i]
     if (!a || !b || !sd) return null
     const pts = routeConnector(anchor(a, sd[0]), anchor(b, sd[1]), 'elbow', {
-      fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b,
+      fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b, bend: laneBend(a, b, sd, laid.turns[i], graph.dir),
       // Round the other boxes, as the board routes it.
       obstacles: () => shown.filter((n) => n !== a && n !== b),
     })
     const end = pathEnds(pts)?.end
     return { e, i, pts, head: e.head && end ? headGeometry('arrow', end.tip, end.prev, 2) : null, label: e.label ? labelBox(pts, e.label) : null }
-  }).filter(Boolean), [graph.edges, shownAt, shown, laid.sides])
+  }).filter(Boolean), [graph.edges, shownAt, shown, laid.sides, laid.turns, graph.dir])
 
   const selNode = selected?.type === 'node' ? graph.nodes.find((n) => n.key === selected.key) : null
   const selEdge = selected?.type === 'edge' ? graph.edges[selected.i] : null
@@ -243,6 +267,19 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     else if (selEdge) { onChange(removeEdge(graph, selected.i)); select(null) }
   }
 
+  // Arranging. "Earlier/later" for a family is left/right when the flow runs
+  // down, up/down when it runs right; "lower" is always further along the flow.
+  const selLaid = selNode ? laid.nodes.find((n) => n.key === selNode.key) : null
+  const moveFam = (d) => { if (selNode) onChange(moveFamily(graph, selNode.key, d)) }
+  const lower = (d) => {
+    if (!selLaid || (d > 0 ? !selLaid.canLower : !selLaid.canRaise)) return
+    onChange(setLowered(graph, selLaid.key, selLaid.lowered + d))
+  }
+  const toggleHelp = () => setHelpOpen((o) => {
+    try { localStorage.setItem(HELP_KEY, o ? '0' : '1') } catch { /* not remembered */ }
+    return !o
+  })
+
   const capture = (ev) => svgRef.current.setPointerCapture?.(ev.pointerId)
   const startHandle = (ev, key) => {
     if (ev.button !== 0) return
@@ -259,6 +296,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     if (pan) {
       const dx = ev.clientX - pan.sx, dy = ev.clientY - pan.sy
       const moved = pan.moved || Math.hypot(dx, dy) > 3
+      if (moved) touchedRef.current = true
       if (moved) setCam({ ...pan.cam, x: pan.cam.x - dx / pan.cam.z, y: pan.cam.y - dy / pan.cam.z })
       if (moved !== pan.moved) setPan({ ...pan, moved })
       return
@@ -292,6 +330,14 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   // Keys while the drawing (not a text box) has focus.
   const onKey = (ev) => {
     if (ev.target.closest('input, textarea')) return
+    if (ev.altKey && ev.key.startsWith('Arrow') && selNode) {
+      ev.preventDefault()
+      const along = graph.dir === 'right' ? { ArrowRight: 1, ArrowLeft: -1 } : { ArrowDown: 1, ArrowUp: -1 }
+      const across = graph.dir === 'right' ? { ArrowDown: 1, ArrowUp: -1 } : { ArrowRight: 1, ArrowLeft: -1 }
+      if (along[ev.key]) lower(along[ev.key])
+      else if (across[ev.key]) moveFam(across[ev.key])
+      return
+    }
     if ((ev.key === 'Delete' || ev.key === 'Backspace') && selected) { ev.preventDefault(); del() }
     else if (ev.key === 'Tab' && selNode) { ev.preventDefault(); next(selNode.key) }
     else if (ev.key === 'Enter' && selected) { ev.preventDefault(); labelRef.current?.focus(); labelRef.current?.select() }
@@ -299,6 +345,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     else if ((ev.key === '=' || ev.key === '+') && !ev.ctrlKey) { ev.preventDefault(); zoomBy(1.2) }
     else if (ev.key === '-' && !ev.ctrlKey) { ev.preventDefault(); zoomBy(1 / 1.2) }
     else if (ev.key === '1') { ev.preventDefault(); fit() }
+    else if (ev.key === '?') { ev.preventDefault(); toggleHelp() }
   }
 
   const accent = 'var(--accent-warning)'
@@ -308,10 +355,33 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     <div style={s.wrap} onKeyDown={onKey}>
       <div ref={stageRef} style={s.stage}>
         <div style={s.bar}>
-          <IconBtn title="Add a node (N) — a new family, on its own row" onClick={add}><LuPlus size={17} /></IconBtn>
+          <button type="button" style={s.textBtn} onClick={add} title="Add a root node (N): it starts a new family, beside the others. To add after a node, use its + handle or Tab.">
+            <LuPlus size={16} /> Root node
+          </button>
           <IconBtn title="Top to bottom" active={graph.dir !== 'right'} onClick={() => onChange({ ...graph, dir: 'down' })}><LuArrowDown size={17} /></IconBtn>
           <IconBtn title="Left to right" active={graph.dir === 'right'} onClick={() => onChange({ ...graph, dir: 'right' })}><LuArrowRight size={17} /></IconBtn>
         </div>
+        <div style={{ ...s.bar, left: 'auto', right: 8 }}>
+          <IconBtn title={helpOpen ? 'Hide how-to (?)' : 'How to use this (?)'} active={helpOpen} onClick={toggleHelp}><LuCircleHelp size={17} /></IconBtn>
+        </div>
+        {/* Stays up while you work; only its button closes it. */}
+        {helpOpen && (
+          <div style={s.helpCard} role="note" aria-label="How to use the node editor">
+            <span style={s.label}>How</span>
+            <p style={s.help}><b>Root node</b> (or <span style={s.kbd}>N</span>) starts a new family, beside the others.</p>
+            <p style={s.help}>
+              Hover a node for its <b style={{ color: accent }}>+</b> handle: <b>click</b> it for the next step, or <b>drag</b> it onto
+              another node to link them. <span style={s.kbd}>Tab</span> also adds the next step.
+            </p>
+            <p style={s.help}>Click a node or link to edit it. <span style={s.kbd}>Del</span> removes, <span style={s.kbd}>Enter</span> renames.</p>
+            <p style={s.help}>
+              <b>Arrange</b> (side panel, or <span style={s.kbd}>Alt</span>+arrows): move a whole family earlier or later, or lower a
+              node with no children — down to its family's deepest level. A node with children stays right above them.
+            </p>
+            <p style={s.help}>Wheel zooms, drag empty space to pan, <span style={s.kbd}>1</span> fits everything.</p>
+            <p style={s.help}>The layout is the board's own: what you see here is what lands on the board.</p>
+          </div>
+        )}
         <div style={s.zoom}>
           <IconBtn plain size={28} title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}><LuMinus size={15} /></IconBtn>
           <span style={s.pct}>{Math.round(cam.z * 100)}%</span>
@@ -410,6 +480,38 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
               <IconBtn title="Add the next step — a new node linked after this one (Tab)" onClick={() => next(selNode.key)}><NextStepIcon size={18} /></IconBtn>
               <IconBtn title="Delete node (Del)" danger onClick={del}><LuTrash2 size={17} /></IconBtn>
             </div>
+            {selLaid && (
+              <>
+                <span style={s.label}>Arrange</span>
+                <div style={s.arrangeRow}>
+                  <span style={s.arrangeLabel}>Family</span>
+                  {graph.dir === 'right' ? (
+                    <>
+                      <IconBtn size={30} title="Move this family up (Alt+↑)" disabled={selLaid.family === 0} onClick={() => moveFam(-1)}><LuChevronUp size={16} /></IconBtn>
+                      <IconBtn size={30} title="Move this family down (Alt+↓)" disabled={selLaid.family >= laid.families - 1} onClick={() => moveFam(1)}><LuChevronDown size={16} /></IconBtn>
+                    </>
+                  ) : (
+                    <>
+                      <IconBtn size={30} title="Move this family left (Alt+←)" disabled={selLaid.family === 0} onClick={() => moveFam(-1)}><LuChevronLeft size={16} /></IconBtn>
+                      <IconBtn size={30} title="Move this family right (Alt+→)" disabled={selLaid.family >= laid.families - 1} onClick={() => moveFam(1)}><LuChevronRight size={16} /></IconBtn>
+                    </>
+                  )}
+                  <span style={{ ...s.note, marginLeft: 6 }}>{selLaid.family + 1} of {laid.families}</span>
+                </div>
+                <div style={s.arrangeRow}>
+                  <span style={s.arrangeLabel}>Level</span>
+                  <IconBtn size={30} title={`Lower — further along the flow (Alt+${graph.dir === 'right' ? '→' : '↓'})`} disabled={!selLaid.canLower} onClick={() => lower(1)}>
+                    {graph.dir === 'right' ? <LuArrowRight size={16} /> : <LuArrowDown size={16} />}
+                  </IconBtn>
+                  <IconBtn size={30} title={`Raise — back toward its parent (Alt+${graph.dir === 'right' ? '←' : '↑'})`} disabled={!selLaid.canRaise} onClick={() => lower(-1)}>
+                    {graph.dir === 'right' ? <LuArrowLeft size={16} /> : <LuArrowUp size={16} />}
+                  </IconBtn>
+                  {selLaid.lowered > 0 && <span style={{ ...s.note, marginLeft: 6 }}>{selLaid.lowered} lower</span>}
+                </div>
+                {selLaid.hasKids && <p style={s.note}>Has children, so it stays directly above them.</p>}
+                {!selLaid.hasKids && !selLaid.canLower && !selLaid.canRaise && <p style={s.note}>Already at its family's deepest level.</p>}
+              </>
+            )}
             <span style={s.label}>Shape · {kindLabel(selNode.kind)}</span>
             {NODE_GROUPS.map((g) => (
               <div key={g.id}>
@@ -448,22 +550,10 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
           </>
         )}
         {!selNode && !selEdge && (
-          <>
-            <span style={s.label}>How</span>
-            <p style={s.help}>
-              <b>+</b> (or <span style={s.kbd}>N</span>) adds a node. With nothing selected it starts a new family, on its own row.
-            </p>
-            <p style={s.help}>
-              Hover a node for its <b style={{ color: accent }}>+</b> handle: <b>click</b> it for the next step, or <b>drag</b> it onto
-              another node to link them.
-            </p>
-            <p style={s.help}>
-              Click a node or link to edit it. <span style={s.kbd}>Tab</span> next step, <span style={s.kbd}>Del</span> remove,{' '}
-              <span style={s.kbd}>Enter</span> rename.
-            </p>
-            <p style={s.help}>Wheel zooms, drag empty space to pan, <span style={s.kbd}>1</span> fits everything.</p>
-            <p style={s.help}>The layout is automatic, the same one the board uses: what you see here is what lands on the board.</p>
-          </>
+          <p style={s.note}>
+            Select a node or a link to edit it{graph.nodes.length ? '' : ' — start with Root node'}. The <LuCircleHelp size={12} style={{ verticalAlign: '-2px' }} /> button
+            (top right) shows how everything works.
+          </p>
         )}
       </div>
     </div>

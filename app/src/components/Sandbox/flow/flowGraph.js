@@ -143,6 +143,7 @@ export function textToGraph(text, prev = null) {
       const old = byKey.get(n.key)
       if (!old) continue
       if (old.itemId) n.itemId = old.itemId
+      if (old.drop) n.drop = old.drop
       // Written the same way as before means the same shape: the text has no
       // word for a cloud or a terminator, so their [box] / ([pill]) coming
       // back unchanged keeps them a cloud or a terminator.
@@ -182,6 +183,7 @@ export function itemsToGraph(items) {
   const nodes = shapes.map((s) => ({
     key: key.get(s.id), label: String(s.payload?.text || '').replace(/\n/g, ' '),
     kind: s.payload?.kind || 'rect', round: roundOf(s), itemId: s.id,
+    ...(s.payload?.flowDrop > 0 ? { drop: s.payload.flowDrop } : {}),
   }))
   const links = items.filter((i) => i.type === 'connector' && key.has(i.payload?.from?.itemId) && key.has(i.payload?.to?.itemId))
   const edges = links.map((c) => ({
@@ -211,8 +213,94 @@ export function layoutFor(g, { byId = new Map(), origin = { x: 0, y: 0 }, font =
     }
     return { ...n, ...nodeSize(n.label || ' ', n.kind, font), text: n.label ? wrap(n.label, 22).join('\n') : '' }
   })
-  const { pos, sides } = layoutGraph(sized, g.edges, g.dir || 'down', origin)
-  return { nodes: sized.map((n) => ({ ...n, ...pos.get(n.key) })), sides }
+  const dir = g.dir || 'down'
+  const drop = new Map(g.nodes.filter((n) => n.drop > 0).map((n) => [n.key, n.drop]))
+  const fams = familiesOf(g)
+  const sides = new Array(g.edges.length).fill(null)
+  const turns = new Array(g.edges.length).fill(null)
+  const nodes = []
+  // Families sit side by side across the flow: in columns when it runs down,
+  // in rows when it runs right. Each is laid out on its own, so no node ever
+  // crosses into a neighbour's tree.
+  let across = dir === 'down' ? origin.x : origin.y
+  fams.forEach((keys, f) => {
+    const set = new Set(keys)
+    const sub = sized.filter((n) => set.has(n.key))
+    const at = [], subEdges = []
+    g.edges.forEach((e, i) => { if (set.has(e.from) && set.has(e.to)) { at.push(i); subEdges.push(e) } })
+    const placed = layoutGraph(sub, subEdges, dir, dir === 'down' ? { x: across, y: origin.y } : { x: origin.x, y: across }, { drop })
+    placed.sides.forEach((sd, j) => { sides[at[j]] = sd; turns[at[j]] = placed.turns[j] })
+    for (const n of sub) {
+      const level = placed.layers.get(n.key), natural = placed.natural.get(n.key)
+      nodes.push({
+        ...n, ...placed.pos.get(n.key), family: f, level,
+        lowered: level - natural,
+        // May it go lower / back up? Only a node with no children moves,
+        // and never past the deepest level of its own family.
+        canLower: placed.leaves.has(n.key) && level < placed.depth - 1,
+        canRaise: level > natural,
+        hasKids: !placed.leaves.has(n.key),
+      })
+    }
+    const far = Math.max(...sub.map((n) => (dir === 'down' ? placed.pos.get(n.key).x + n.w : placed.pos.get(n.key).y + n.h)))
+    across = far + GAP_FAMILY
+  })
+  const order = new Map(g.nodes.map((n, i) => [n.key, i]))
+  nodes.sort((a, b) => order.get(a.key) - order.get(b.key))
+  return { nodes, sides, turns, families: fams.length }
+}
+
+/** Where a link meets a (laid-out, unrotated) box on `side`. */
+export const anchorOf = (n, side) => ({
+  n: { x: n.x + n.w / 2, y: n.y }, s: { x: n.x + n.w / 2, y: n.y + n.h },
+  e: { x: n.x + n.w, y: n.y + n.h / 2 }, w: { x: n.x, y: n.y + n.h / 2 },
+}[side])
+
+/**
+ * The connector `bend` that sends a lowered node's link down its lane: turn
+ * `turn` past the parent, cross to the child's column, then run straight in.
+ * (A bend is stored as an offset from the midpoint of the two ends.)
+ */
+export function laneBend(a, b, sides, turn, dir) {
+  if (turn == null || !sides) return null
+  const p = anchorOf(a, sides[0]), q = anchorOf(b, sides[1])
+  return dir === 'right'
+    ? { dx: Math.round(p.x + turn - (p.x + q.x) / 2), dy: 0 }
+    : { dx: 0, dy: Math.round(p.y + turn - (p.y + q.y) / 2) }
+}
+
+/** Space between families (groups with no link between them), so they read as separate. */
+export const GAP_FAMILY = 144
+
+/** The families of a graph — groups of linked nodes — in order of their first node. */
+export function familiesOf(g) {
+  const index = new Map(g.nodes.map((n, i) => [n.key, i]))
+  const parent = g.nodes.map((_, i) => i)
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i }
+  for (const e of g.edges) {
+    const a = index.get(e.from), b = index.get(e.to)
+    if (a != null && b != null) parent[find(a)] = find(b)
+  }
+  const groups = new Map()
+  g.nodes.forEach((n, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n.key) })
+  return [...groups.values()]
+}
+
+/** Move the family `key` belongs to one place earlier (-1) or later (+1). */
+export function moveFamily(g, key, delta) {
+  const fams = familiesOf(g)
+  const i = fams.findIndex((f) => f.includes(key))
+  const j = i + delta
+  if (i < 0 || j < 0 || j >= fams.length) return g
+  ;[fams[i], fams[j]] = [fams[j], fams[i]]
+  const byKey = new Map(g.nodes.map((n) => [n.key, n]))
+  return { ...g, nodes: fams.flat().map((k) => byKey.get(k)) }
+}
+
+/** Set how many levels below its natural place a childless node sits (0 = natural). */
+export function setLowered(g, key, levels) {
+  const drop = Math.max(0, levels)
+  return updateNode(g, key, { drop: drop || undefined })
 }
 
 const radiusFor = (n, h) => (n.round === 'pill' ? Math.trunc(h / 2) : n.round === 'some' ? 10 : 0)
@@ -237,7 +325,10 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
     if (item) {
       idOf.set(n.key, item.id)
       const keepRadius = item.payload?.kind === n.kind && roundOf(item) === n.round
-      update.push({ id: item.id, patch: { ...box, payload: { ...item.payload, kind: n.kind, text: n.text, radius: keepRadius ? item.payload?.radius : radiusFor(n, n.h) } } })
+      const payload = { ...item.payload, kind: n.kind, text: n.text, radius: keepRadius ? item.payload?.radius : radiusFor(n, n.h) }
+      // How far the editor lowered it, so it opens the same way next time.
+      if (n.drop > 0) payload.flowDrop = n.drop; else delete payload.flowDrop
+      update.push({ id: item.id, patch: { ...box, payload } })
     } else {
       const id = newId()
       idOf.set(n.key, id)
@@ -246,20 +337,24 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
         payload: {
           kind: n.kind, fill: style.fill, stroke: style.stroke, strokeWidth: 2, radius: radiusFor(n, n.h),
           text: n.text, textAlign: 'center', textColor: style.text, fontSize: style.font,
+          ...(n.drop > 0 ? { flowDrop: n.drop } : {}),
         },
       })
     }
   }
 
+  const at = new Map(laid.nodes.map((n) => [n.key, n]))
   g.edges.forEach((e, i) => {
     const sides = laid.sides[i]
     if (!sides) return
+    const bend = laneBend(at.get(e.from), at.get(e.to), sides, laid.turns[i], g.dir)
     const item = e.itemId && byId.get(e.itemId)
     const ends = { from: { itemId: idOf.get(e.from), side: sides[0] }, to: { itemId: idOf.get(e.to), side: sides[1] } }
     if (item) {
       const p = { ...item.payload, ...ends }
-      // Re-laid-out, an old bend would pull the line somewhere strange.
-      delete p.bend
+      // Re-laid-out, an old bend would pull the line somewhere strange;
+      // a link to a lowered node gets the one that takes it down its lane.
+      if (bend) p.bend = bend; else delete p.bend
       if (e.label) p.label = e.label; else delete p.label
       if (!e.head) p.head = 'none'
       else if (!p.head || p.head === 'none') p.head = 'arrow'
@@ -271,7 +366,7 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
         id: newId(), type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0,
         payload: {
           ...ends, routing: 'elbow', head: e.head ? 'arrow' : 'none', stroke: style.stroke, strokeWidth: 2,
-          ...(e.label ? { label: e.label } : {}), ...(e.dashed ? { dash: true } : {}),
+          ...(e.label ? { label: e.label } : {}), ...(e.dashed ? { dash: true } : {}), ...(bend ? { bend } : {}),
         },
       })
     }
