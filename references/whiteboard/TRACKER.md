@@ -145,6 +145,17 @@ way to build the same thing. Keep the text mode for AI and paste.
 
 ## Section 5 — Format shell + shared record model (prerequisite for 6–11)
 
+- [ ] **First, before any Format work: measure drag smoothness.** The user
+      felt dragging shapes was a bit laggy (2026-11-12). It was unmeasured, and
+      likely the dev build plus a nearly full RAM (7.1 GB, ~1.6 GB free, video
+      playing). It is not the WebKit flicker workaround: 2.54.2 is installed,
+      so the workaround is off. Formats are heavy canvas widgets, so settle this
+      first. With the dev app CLOSED, use the perf-probe recipe in the memory
+      note `reference-webkit-render-mode` to sample frame times while moving a
+      selection on a busy board. Compare against a release build. If the app
+      code is at fault: each pointer move re-renders the page, the overlay and
+      the floating bar.
+
 The spec's §5.13 and §13.1–13.2: a "Format" is a structured widget on the
 canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 (`table` | `kanban` | …), per the "no new types" rule.
