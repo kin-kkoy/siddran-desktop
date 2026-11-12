@@ -118,7 +118,7 @@ Screenshot reference: clicking the pen opens a second column, top to bottom:
       undo. Rule-based recogniser first. This could be its own session if it
       runs long.
 
-## Section 3 — Diagram from nodes (node editor)  ✅ built (session 3) — user reviews at the end with 4
+## Section 3 — Diagram from nodes (node editor)  ✅ done (session 3) — checked by the user, committed
 
 The user loves "Diagram from text" (Mermaid) but wants a **human, node-based**
 way to build the same thing. Keep the text mode for AI and paste.
@@ -135,7 +135,7 @@ way to build the same thing. Keep the text mode for AI and paste.
 - [x] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
       change both.
 
-## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)  ✅ built (session 4) — user reviews at the end with 3
+## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)  ✅ done (session 4) — checked headless, committed
 
 - [x] `sandbox_read`: list frames as frames (title plus contents), not as empty
       boxes. Stickies read as sticky notes.
@@ -494,3 +494,4 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     `app_open`): all of it renders as intended. That's the titled frame, the
     sticky, the `document` shape, dotted curved links with circle start
     heads, the dashed `no` loop and the diamond head.
+- 2026-11-13 · session 4 · the user had already checked section 3 by hand (see the "fixes from the user's hands-on check" entry), so no review is outstanding. **Next: section 5**, starting with the drag-smoothness measurement.
