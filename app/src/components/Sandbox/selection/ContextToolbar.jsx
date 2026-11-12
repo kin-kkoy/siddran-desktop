@@ -17,6 +17,7 @@ import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
 import { connectorPoints, connectorMidpoint } from '../connectors/geometry'
 import { HEAD_TYPES, HEAD_LABELS } from '../connectors/heads'
 import { LINE_STYLES, lineStyleOf } from '../connectors/lineStyle'
+import { LINK_PALETTE as PALETTE, ROUTINGS, LINE_GLYPH, HEAD_GLYPH } from '../connectors/controls'
 import { SHAPES, SHAPE_GROUPS, shapesInGroup, isLineKind } from '../shapes/registry'
 import { FONT_FAMILIES, FONT_SIZES, TEXT_PRESETS, stepFontSize, STICKY_COLORS } from '../text/textStyle'
 import { isFrame, FRAME_FILLS } from '../frames/frames'
@@ -39,10 +40,6 @@ import { CustomColor } from '../Toolbar/ColorMenu'
  */
 
 // Canvas colours: theme-neutral enough to read on the dark board and in exports.
-const PALETTE = [
-    '#e2ddf5', '#ffffff', '#9e9bb5', '#1f2430', '#f0b840', '#ffb84d', '#ff7a6b', '#e05c5c',
-    '#ff9ec4', '#c39bff', '#5a9cf0', '#a9d8ff', '#6fd6c4', '#52c47a', '#d6e86b', '#000000',
-]
 
 // Alignment grid (shown when ≥2 items selected). Distribute needs ≥3.
 const ALIGN_OPS = [
@@ -68,13 +65,6 @@ const V_ALIGN = [
     { v: 'bottom', Icon: LuAlignVerticalJustifyEnd, title: 'Text to bottom' },
 ]
 
-const ROUTINGS = [
-    { v: 'straight', label: '╱', title: 'Straight' },
-    { v: 'elbow', label: '⌐', title: 'Elbow' },
-    { v: 'curved', label: '∿', title: 'Curved' },
-]
-const LINE_GLYPH = { solid: '━', dashed: '┅', dotted: '┈' }
-const HEAD_GLYPH = { none: '—', arrow: '▶', open: '›', triangle: '▷', circle: '●', diamond: '◇', bar: '┃' }
 
 const GAP = 64  // px between the selection top and the bar, in screen space
 // The bar is one row tall. Placed above a selection near the top of the view

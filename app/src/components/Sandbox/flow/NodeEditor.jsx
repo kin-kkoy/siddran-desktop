@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuArrowUp, LuArrowLeft, LuMoveRight, LuScan, LuCircleHelp, LuChevronLeft, LuChevronRight, LuChevronUp, LuChevronDown } from 'react-icons/lu'
-import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm, moveFamily, setLowered, laneBend } from './flowGraph'
+import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuArrowUp, LuArrowLeft, LuScan, LuCircleHelp, LuChevronLeft, LuChevronRight, LuChevronUp, LuChevronDown } from 'react-icons/lu'
+import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm, moveFamily, setLowered, laneBend, linkLook, styleLinks } from './flowGraph'
 import { shapeOutline } from './svgPath'
 import { NextStepIcon } from './icons'
+import { keepInView } from './camera'
 import { ShapeThumb } from '../Toolbar/ShapePicker'
 import { routeConnector, labelBox, LABEL_FONT } from '../connectors/geometry'
-import { headGeometry, pathEnds } from '../connectors/heads'
+import { headGeometry, headInset, pathEnds, trimPath, taperedArrowPolygon } from '../connectors/heads'
+import { svgDashFor } from '../connectors/lineStyle'
+import LinkControls from './LinkControls'
 import { fontCss } from '../text/textStyle'
 
 // The Nodes tab: build a flowchart by hand, without writing any text.
@@ -142,39 +145,27 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     setCam(fitCam(laid.nodes))
   }, [size]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The layout changed: glide there, holding the node you're on still.
+  // The layout changed: glide there. The view stays put — unless the node
+  // you're on gets into the outer band of the view (or past it): then it pans,
+  // on that axis only, to bring the node halfway back toward the middle.
   useLayoutEffect(() => {
     const prev = prevLaidRef.current
     prevLaidRef.current = laid
     if (!prev || prev === laid) return
     touchedRef.current = true
-    const before = new Map(prev.nodes.map((n) => [n.key, n]))
     const after = new Map(laid.nodes.map((n) => [n.key, n]))
-    const still = [selected?.key, ...prev.nodes.map((n) => n.key)].find((k) => k && before.has(k) && after.has(k))
-    const d = still ? { x: after.get(still).x - before.get(still).x, y: after.get(still).y - before.get(still).y } : { x: 0, y: 0 }
     const cur = shownRef.current
     const from = new Map()
     for (const n of laid.nodes) {
       const at = cur.get(n.key)
-      if (at) { from.set(n.key, { x: at.x + d.x, y: at.y + d.y }); continue }
+      if (at) { from.set(n.key, { x: at.x, y: at.y }); continue }
       // New: grows out of the node it's linked to.
       const e = graph.edges.find((x) => (x.to === n.key && cur.has(x.from)) || (x.from === n.key && cur.has(x.to)))
       const nb = e && cur.get(e.to === n.key ? e.from : e.to)
-      if (nb) from.set(n.key, { x: nb.x + d.x, y: nb.y + d.y })
+      if (nb) from.set(n.key, { x: nb.x, y: nb.y })
     }
-    setCam((c) => {
-      let x = c.x + d.x, y = c.y + d.y
-      // …and if the node you're on ended up out of view, bring it in.
-      const sel = selected?.type === 'node' && after.get(selected.key)
-      if (sel && size.w) {
-        const vw = size.w / c.z, vh = size.h / c.z, m = 56 / c.z
-        if (sel.x - m < x) x = sel.x - m
-        else if (sel.x + sel.w + m > x + vw) x = sel.x + sel.w + m - vw
-        if (sel.y - m < y) y = sel.y - m
-        else if (sel.y + sel.h + m > y + vh) y = sel.y + sel.h + m - vh
-      }
-      return { ...c, x, y }
-    })
+    const sel = selected?.type === 'node' && after.get(selected.key)
+    if (sel && size.w) setCam((c) => keepInView(c, sel, size))
     const t = performance.now()
     setAnim({ from, t0: t }); setNow(t)
   }, [laid, selected, graph.edges, size])
@@ -224,14 +215,23 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   const edges = useMemo(() => graph.edges.map((e, i) => {
     const a = shownAt.get(e.from), b = shownAt.get(e.to), sd = laid.sides[i]
     if (!a || !b || !sd) return null
-    const pts = routeConnector(anchor(a, sd[0]), anchor(b, sd[1]), 'elbow', {
-      fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b, bend: laneBend(a, b, sd, laid.turns[i], graph.dir),
+    // Drawn as the board will draw it (ConnectorLayer): route, heads, trim, dash, taper.
+    const L = linkLook(e, colors.stroke)
+    const pts = routeConnector(anchor(a, sd[0]), anchor(b, sd[1]), L.routing, {
+      fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b,
+      bend: L.routing === 'elbow' ? laneBend(a, b, sd, laid.turns[i], graph.dir) : null,
       // Round the other boxes, as the board routes it.
       obstacles: () => shown.filter((n) => n !== a && n !== b),
     })
-    const end = pathEnds(pts)?.end
-    return { e, i, pts, head: e.head && end ? headGeometry('arrow', end.tip, end.prev, 2) : null, label: e.label ? labelBox(pts, e.label) : null }
-  }).filter(Boolean), [graph.edges, shownAt, shown, laid.sides, laid.turns, graph.dir])
+    const sw = L.strokeWidth
+    const n = pts.length
+    const taper = L.body === 'tapered' && n >= 4 ? taperedArrowPolygon({ x: pts[0], y: pts[1] }, { x: pts[n - 2], y: pts[n - 1] }, sw) : null
+    const ends = pathEnds(pts)
+    const gEnd = !taper && ends ? headGeometry(L.head, ends.end.tip, ends.end.prev, sw) : null
+    const gStart = !taper && ends ? headGeometry(L.headStart, ends.start.tip, ends.start.prev, sw) : null
+    const body = trimPath(pts, gStart ? headInset(L.headStart, sw) : 0, gEnd ? headInset(L.head, sw) : 0)
+    return { e, i, L, pts, body, taper, heads: [gStart, gEnd].filter(Boolean), dash: svgDashFor({ lineStyle: L.lineStyle, strokeWidth: sw }), label: e.label ? labelBox(pts, e.label) : null }
+  }).filter(Boolean), [graph.edges, shownAt, shown, laid.sides, laid.turns, graph.dir, colors.stroke])
 
   const selNode = selected?.type === 'node' ? graph.nodes.find((n) => n.key === selected.key) : null
   const selEdge = selected?.type === 'edge' ? graph.edges[selected.i] : null
@@ -400,15 +400,23 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             if (ev.target === svgRef.current || ev.button === 1) { ev.preventDefault(); startPan(ev) }
           }}
         >
-          {edges.map(({ e, i, pts, head, label }) => {
+          {edges.map(({ e, i, L, pts, body, taper, heads, dash, label }) => {
             const on = selected?.type === 'edge' && selected.i === i
-            const col = on ? accent : colors.stroke
+            const col = L.stroke
             return (
               <g key={`e${i}`} onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i }) }}
                 onDoubleClick={() => select({ type: 'edge', i }, true)} style={{ cursor: 'pointer' }}>
                 <polyline points={pairs(pts)} fill="none" stroke="transparent" strokeWidth={14 / cam.z} />
-                <polyline points={pairs(pts)} fill="none" stroke={col} strokeWidth={on ? 2.5 : 2} strokeDasharray={e.dashed ? '8 6' : undefined} strokeLinejoin="round" />
-                {head && <polygon points={pairs(head.pts)} fill={col} />}
+                {/* selected: a soft accent halo under the line, so its own colour still shows */}
+                {on && <polyline points={pairs(pts)} fill="none" stroke={accent} strokeOpacity={0.35} strokeWidth={L.strokeWidth + 6} strokeLinejoin="round" strokeLinecap="round" />}
+                {taper
+                  ? <polygon points={pairs(taper)} fill={col} stroke={col} strokeWidth={1.5} strokeLinejoin="round" />
+                  : <polyline points={pairs(body)} fill="none" stroke={col} strokeWidth={L.strokeWidth} strokeDasharray={dash || undefined} strokeLinejoin="round" strokeLinecap="round" />}
+                {heads.map((h, k) => (h.shape === 'circle'
+                  ? <circle key={k} cx={h.cx} cy={h.cy} r={h.r} fill={h.filled ? col : 'var(--bg-primary)'} stroke={col} strokeWidth={L.strokeWidth} />
+                  : h.closed
+                    ? <polygon key={k} points={pairs(h.pts)} fill={h.filled ? col : 'var(--bg-primary)'} stroke={col} strokeWidth={h.filled ? 1 : L.strokeWidth} strokeLinejoin="round" />
+                    : <polyline key={k} points={pairs(h.pts)} fill="none" stroke={col} strokeWidth={L.strokeWidth} strokeLinejoin="round" strokeLinecap="round" />))}
                 {label && (
                   <g>
                     <rect x={label.x} y={label.y} width={label.w} height={label.h} rx={label.h / 2} fill="var(--bg-surface)" stroke={col} strokeWidth={1} />
@@ -538,15 +546,10 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
               onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); svgRef.current?.focus() } }}
             />
             <div style={s.row}>
-              <IconBtn title="Arrowhead" active={selEdge.head} onClick={() => onChange(updateEdge(graph, selected.i, { head: !selEdge.head }))}>
-                {selEdge.head ? <LuMoveRight size={17} /> : <LuMinus size={17} />}
-              </IconBtn>
-              <IconBtn title="Dashed" active={selEdge.dashed} onClick={() => onChange(updateEdge(graph, selected.i, { dashed: !selEdge.dashed }))}>
-                <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true"><path d="M1 9h4M7 9h4M13 9h4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" /></svg>
-              </IconBtn>
-              <IconBtn title="Reverse direction" onClick={() => onChange(reverseEdge(graph, selected.i))}><LuArrowRightLeft size={17} /></IconBtn>
+              <IconBtn title="Reverse direction — the link runs the other way" onClick={() => onChange(reverseEdge(graph, selected.i))}><LuArrowRightLeft size={17} /></IconBtn>
               <IconBtn title="Delete link (Del)" danger onClick={del}><LuTrash2 size={17} /></IconBtn>
             </div>
+            <LinkControls look={linkLook(selEdge, colors.stroke)} onPatch={(patch) => onChange(styleLinks(graph, selected.i, patch))} />
           </>
         )}
         {!selNode && !selEdge && (
@@ -554,6 +557,13 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             Select a node or a link to edit it{graph.nodes.length ? '' : ' — start with Root node'}. The <LuCircleHelp size={12} style={{ verticalAlign: '-2px' }} /> button
             (top right) shows how everything works.
           </p>
+        )}
+        {!selNode && !selEdge && graph.edges.length > 0 && (
+          <>
+            <span style={s.label}>All links</span>
+            <p style={s.note}>Sets every link at once — e.g. straight or curved branches instead of elbows. Select one link to style just that one.</p>
+            <LinkControls look={linkLook(graph.edges[0], colors.stroke)} onPatch={(patch) => onChange(styleLinks(graph, 'all', patch))} />
+          </>
         )}
       </div>
     </div>

@@ -352,3 +352,26 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     the left branch's deepest leaf, its link down a clear lane), the family
     columns and Alt+← reorder, the Arrange panel, Update matching the
     preview, and the help toggle.
+- 2026-11-12 · session 3 · third feedback round:
+  - **Camera only follows near the edge** (`flow/camera.js`, tested). No more
+    holding the node still. When the layout changes, the view stays put
+    unless the node you're on gets into the outer 10% band of the view (or
+    out of it). Then it pans, on that axis only, so the node sits halfway
+    between the middle and that band. Zoomed out with everything in view,
+    nothing moves.
+  - **Link styles in the editor**, the same choices as the floating bar's
+    connector row (shared constants in `connectors/controls.js`): route
+    (straight = separate arrows fanning out to each child, elbow = one
+    trunk that splits, curved), start and end heads, solid/dashed/dotted,
+    tapered, width, colour, and the label. Per link when one is selected;
+    **All links** when nothing is. The preview draws them exactly as
+    ConnectorLayer does (trim, heads, dash, taper; selection is a halo, so
+    the colour still shows).
+  - Model: a link's text-expressible facts stay `head` / `dashed`; the rest
+    is an optional `edge.look` (routing, head, headStart, stroke,
+    strokeWidth, lineStyle, body). It is read from and written to the
+    connector payload, and kept across Text-tab edits by matching ends.
+    Lowered-node lanes only bend elbow links.
+  - Verified headless: board vs preview with five styled links, the All
+    links panel, and the camera (a new root at the edge pans the view;
+    moving a family that stays in view doesn't).

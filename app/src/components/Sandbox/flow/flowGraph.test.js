@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseFlow, flowToItems, itemsToFlow } from './flowText'
 import {
   emptyGraph, addNode, addNext, connect, removeNode, updateEdge, reverseEdge,
-  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm, familiesOf, moveFamily, setLowered, GAP_FAMILY, anchorOf,
+  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm, familiesOf, moveFamily, setLowered, GAP_FAMILY, anchorOf, styleLinks, linkLook,
 } from './flowGraph'
 import { shapeOutline } from './svgPath'
 import { routeConnector } from '../connectors/geometry'
@@ -338,5 +338,53 @@ describe('lowering a node', () => {
     const rr = back.nodes.find((n) => n.label === 'R')
     expect(rr.drop).toBe(3)
     expect(textToGraph(graphToText(back), back).graph.nodes.find((n) => n.label === 'R').drop).toBe(3)
+  })
+})
+
+describe('link looks', () => {
+  const fan = () => parseFlow('P --> A\nP --> B').graph
+
+  it('restyles one link or all of them, keeping head/dashed in step', () => {
+    let g = styleLinks(fan(), 'all', { routing: 'straight' })
+    expect(g.edges.map((e) => linkLook(e, '#fff').routing)).toEqual(['straight', 'straight'])
+    g = styleLinks(g, 1, { head: 'none', lineStyle: 'dotted', headStart: 'circle', stroke: '#ff0000', strokeWidth: 4 })
+    expect(g.edges[1]).toMatchObject({ head: false, dashed: true })
+    expect(linkLook(g.edges[1], '#fff')).toEqual({ routing: 'straight', head: 'none', headStart: 'circle', stroke: '#ff0000', strokeWidth: 4, lineStyle: 'dotted', body: null })
+    expect(linkLook(g.edges[0], '#fff')).toMatchObject({ head: 'arrow', lineStyle: 'solid', stroke: '#fff' })
+    g = styleLinks(g, 0, { body: 'tapered', routing: 'curved' })
+    expect(linkLook(g.edges[0], '#fff')).toMatchObject({ body: 'tapered', routing: 'straight' })
+  })
+
+  it('lands on the board as the floating bar would set it, and reads back', () => {
+    const g = styleLinks(styleLinks(fan(), 'all', { routing: 'curved', head: 'open' }), 1, { lineStyle: 'dotted', headStart: 'diamond' })
+    const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+    const links = plan.add.filter((i) => i.type === 'connector')
+    expect(links[0].payload).toMatchObject({ routing: 'curved', head: 'open' })
+    expect(links[1].payload).toMatchObject({ routing: 'curved', head: 'open', lineStyle: 'dotted', dash: true, headStart: 'diamond' })
+    const back = itemsToGraph(plan.add).graph
+    expect(back.edges.map((e) => linkLook(e, '#e2ddf5'))).toEqual(g.edges.map((e) => linkLook(e, '#e2ddf5')))
+  })
+
+  it('updates a board link in place to the new look', () => {
+    const { shapes, connectors } = flowToItems(fan(), { newId: ids() })
+    const items = [...shapes, ...connectors]
+    const { graph, origin } = itemsToGraph(items)
+    const g = styleLinks(graph, 'all', { routing: 'straight', strokeWidth: 3, lineStyle: 'dashed' })
+    const plan = planDiagram(g, { items, origin, scope: { shapeIds: shapes.map((x) => x.id), connectorIds: connectors.map((x) => x.id) }, newId: ids() })
+    const p = plan.update.find((u) => u.id === connectors[0].id).patch.payload
+    expect(p).toMatchObject({ routing: 'straight', strokeWidth: 3, lineStyle: 'dashed', dash: true })
+  })
+
+  it('keeps a link\'s look through a Text-tab edit', () => {
+    const g = styleLinks(fan(), 0, { routing: 'curved', stroke: '#52c47a' })
+    const back = textToGraph(graphToText(g) + '  A --> B\n', g).graph
+    expect(linkLook(back.edges[0], '#fff')).toMatchObject({ routing: 'curved', stroke: '#52c47a' })
+    expect(back.edges[2].look).toBeUndefined()
+  })
+
+  it('a lowered node\'s link only takes the lane as an elbow', () => {
+    const g = styleLinks(setLowered(parseFlow('P --> L\nP --> R\nL --> L1 --> L2').graph, 'R', 2), 'all', { routing: 'straight' })
+    const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+    expect(plan.add.filter((i) => i.type === 'connector').every((c) => !c.payload.bend)).toBe(true)
   })
 })

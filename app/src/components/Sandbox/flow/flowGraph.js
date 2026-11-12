@@ -93,6 +93,59 @@ export function reverseEdge(g, i) {
   return updateEdge(g, i, { from: e.to, to: e.from })
 }
 
+// ── link looks ───────────────────────────────────────────────────────
+//
+// What a link's text can say is on/off: an arrowhead or not (`head`), dashed
+// or not (`dashed`). Everything else the floating bar can set — which head,
+// a head at the start, the route, colour, width, dotted vs dashed, tapered —
+// rides along in an optional `look`, kept by the editor and the board.
+
+const LOOK_KEYS = ['routing', 'head', 'headStart', 'stroke', 'strokeWidth', 'lineStyle', 'body']
+
+/** A board connector's payload → the look fields it sets. */
+function lookOf(p) {
+  const look = {}
+  for (const k of LOOK_KEYS) if (p[k] != null && p[k] !== '') look[k] = p[k]
+  return look
+}
+
+/** A link's effective look: its own settings over the defaults (`stroke` = the diagram's colour). */
+export function linkLook(e, stroke) {
+  const k = e.look || {}
+  return {
+    routing: k.body === 'tapered' ? 'straight' : (k.routing || 'elbow'),
+    head: e.head ? (k.head && k.head !== 'none' ? k.head : 'arrow') : 'none',
+    headStart: k.headStart || 'none',
+    stroke: k.stroke || stroke,
+    strokeWidth: k.strokeWidth || 2,
+    lineStyle: e.dashed ? (k.lineStyle === 'dotted' ? 'dotted' : 'dashed') : 'solid',
+    body: k.body === 'tapered' ? 'tapered' : null,
+  }
+}
+
+/**
+ * Restyle link `which` (its index) or every link ('all'). `patch` holds any of
+ * routing, head, headStart, stroke, strokeWidth, lineStyle, body (null clears).
+ */
+export function styleLinks(g, which, patch) {
+  return {
+    ...g,
+    edges: g.edges.map((e, i) => {
+      if (which !== 'all' && which !== i) return e
+      const out = { ...e }, look = { ...(e.look || {}) }
+      for (const [k, v] of Object.entries(patch)) {
+        if (k === 'head') out.head = v !== 'none'
+        if (k === 'lineStyle') out.dashed = v !== 'solid'
+        if (v == null) delete look[k]; else look[k] = v
+      }
+      // A tapered body is one straight, swelling arrow.
+      if (look.body === 'tapered') look.routing = 'straight'
+      out.look = look
+      return out
+    }),
+  }
+}
+
 // ── text ⇄ graph ─────────────────────────────────────────────────────
 
 const BRACKETS = {
@@ -150,10 +203,15 @@ export function textToGraph(text, prev = null) {
       if (brackets(n).join() === brackets(old).join()) { n.kind = old.kind; n.round = old.round }
       if (n.label === '…' && !old.label) n.label = ''
     }
-    const pool = prev.edges.filter((e) => e.itemId)
+    // A link the text still has (same two ends) keeps its board id and its
+    // look — the head type, route, colour… the text has no words for.
+    const pool = [...prev.edges]
     for (const e of g.edges) {
       const i = pool.findIndex((p) => p.from === e.from && p.to === e.to)
-      if (i >= 0) { e.itemId = pool[i].itemId; pool.splice(i, 1) }
+      if (i < 0) continue
+      if (pool[i].itemId) e.itemId = pool[i].itemId
+      if (pool[i].look) e.look = pool[i].look
+      pool.splice(i, 1)
     }
   }
   for (const n of g.nodes) if (n.label === '…') n.label = ''
@@ -190,6 +248,7 @@ export function itemsToGraph(items) {
     from: key.get(c.payload.from.itemId), to: key.get(c.payload.to.itemId),
     label: c.payload.label || null, head: (c.payload.head || 'arrow') !== 'none',
     dashed: ['dashed', 'dotted'].includes(c.payload.lineStyle) || (!c.payload.lineStyle && !!c.payload.dash), itemId: c.id,
+    look: lookOf(c.payload),
   }))
   // Running sideways if most links leave and enter through the left/right sides.
   const sideways = links.filter((c) => 'ew'.includes(c.payload.from.side || 'x') && 'ew'.includes(c.payload.to.side || 'x')).length
@@ -347,8 +406,10 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
   g.edges.forEach((e, i) => {
     const sides = laid.sides[i]
     if (!sides) return
-    const bend = laneBend(at.get(e.from), at.get(e.to), sides, laid.turns[i], g.dir)
     const item = e.itemId && byId.get(e.itemId)
+    const L = linkLook(e, item?.payload?.stroke || style.stroke)
+    // Only an elbow takes the lane; a straight or curved link goes its own way.
+    const bend = L.routing === 'elbow' ? laneBend(at.get(e.from), at.get(e.to), sides, laid.turns[i], g.dir) : null
     const ends = { from: { itemId: idOf.get(e.from), side: sides[0] }, to: { itemId: idOf.get(e.to), side: sides[1] } }
     if (item) {
       const p = { ...item.payload, ...ends }
@@ -356,17 +417,21 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
       // a link to a lowered node gets the one that takes it down its lane.
       if (bend) p.bend = bend; else delete p.bend
       if (e.label) p.label = e.label; else delete p.label
-      if (!e.head) p.head = 'none'
-      else if (!p.head || p.head === 'none') p.head = 'arrow'
-      const wasDashed = ['dashed', 'dotted'].includes(p.lineStyle) || (!p.lineStyle && !!p.dash)
-      if (e.dashed !== wasDashed) { p.lineStyle = e.dashed ? 'dashed' : 'solid'; delete p.dash }
+      Object.assign(p, { routing: L.routing, head: L.head, stroke: L.stroke, strokeWidth: L.strokeWidth })
+      if (L.headStart !== 'none') p.headStart = L.headStart; else delete p.headStart
+      if (L.body) p.body = L.body; else delete p.body
+      const was = ['dashed', 'dotted'].includes(p.lineStyle) ? p.lineStyle : (!p.lineStyle && p.dash ? 'dashed' : 'solid')
+      // `dash` kept in step, as the floating bar does, for siddran-cli and older builds.
+      if (L.lineStyle !== was) { p.lineStyle = L.lineStyle; p.dash = L.lineStyle !== 'solid' }
       update.push({ id: item.id, patch: { payload: p } })
     } else {
       add.push({
         id: newId(), type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0,
         payload: {
-          ...ends, routing: 'elbow', head: e.head ? 'arrow' : 'none', stroke: style.stroke, strokeWidth: 2,
+          ...ends, routing: L.routing, head: L.head, stroke: L.stroke, strokeWidth: L.strokeWidth,
           ...(e.label ? { label: e.label } : {}), ...(e.dashed ? { dash: true } : {}), ...(bend ? { bend } : {}),
+          ...(L.lineStyle === 'dotted' ? { lineStyle: 'dotted' } : {}),
+          ...(L.headStart !== 'none' ? { headStart: L.headStart } : {}), ...(L.body ? { body: L.body } : {}),
         },
       })
     }
