@@ -76,6 +76,15 @@ function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
             ctx.stroke()
             return
         }
+        if (kind === 'taperedArrow') {
+            ctx.beginPath()
+            ctx.moveTo(1, h / 2 + 0.6); ctx.lineTo(w - 6, h / 2 + 1.6); ctx.lineTo(w - 6, h / 2 + 4.5)
+            ctx.lineTo(w - 1, h / 2); ctx.lineTo(w - 6, h / 2 - 4.5); ctx.lineTo(w - 6, h / 2 - 1.6)
+            ctx.lineTo(1, h / 2 - 0.6); ctx.closePath()
+            ctx.fillStyle = ctx.strokeStyle
+            ctx.fill()
+            return
+        }
         if (kind === 'arrow' || kind === 'elbowArrow') {
             ctx.beginPath()
             if (kind === 'elbowArrow') {

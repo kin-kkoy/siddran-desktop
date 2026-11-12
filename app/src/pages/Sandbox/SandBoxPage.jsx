@@ -48,6 +48,7 @@ const isEditable = (el) => {
 // Per-shape keys were dropped — `S` opens the shape picker and the shape is
 // chosen with the mouse/pen instead.
 const TOOL_KEYS = { v: 'pointer', g: 'lasso', p: 'pen', e: 'eraser', t: 'text', h: 'hand', n: 'sticky', f: 'frame' }
+const PAN_HINT = 'PAN · SPACE-DRAG · MIDDLE-DRAG · TWO FINGERS · V TWICE'
 
 // What "copy style" carries (Ctrl+Alt+C / Ctrl+Alt+V) — looks, never content.
 const STYLE_KEYS = ['fill', 'stroke', 'strokeWidth', 'lineStyle', 'dash', 'radius', 'textColor', 'color', 'fontSize',
@@ -673,7 +674,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (e.key === 's' || e.key === 'S') { e.preventDefault(); setShapePickerOpen(o => !o); return }
 
             const t = TOOL_KEYS[e.key.toLowerCase()]
-            if (t) canvas.setTool(t)
+            // V again flips Select ⇄ Pan (the dock has one button for both).
+            if (t === 'pointer' && canvas.tool === 'pointer') canvas.setTool('hand')
+            else if (t) canvas.setTool(t)
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
@@ -886,6 +889,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                 <span>TOOL {canvas.tool.toUpperCase()}</span>
                 <span className={styles.footerDot}>·</span>
                 <span>{items.length} ITEMS</span>
+                <span className={styles.footerDot}>·</span>
+                <span title="Ways to pan the board">{PAN_HINT}</span>
                 {canvas.selectedIds.size > 0 && (
                     <>
                         <span className={styles.footerDot}>·</span>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextHoverId, DOT_REACH_PX } from './hover'
+import { nextHoverId, resolveHover, DOT_REACH_PX } from './hover'
 
 // The connection-dot bug: hovering a shape showed its dots 14 px outside the
 // edge, but moving onto a dot cleared the hover (the hit-test ended at the
@@ -27,5 +27,34 @@ describe('connection-dot hover', () => {
 
   it('a shape directly under the pointer wins', () => {
     expect(nextHoverId({ hitId: 'b', current: shape, world: rightDot })).toBe('b')
+  })
+})
+
+describe('magnetic connection dots', () => {
+  const s2 = { ...shape, id: 'b', x: 600 }
+
+  it('shows the dots when the pointer is near the shape, not only over it', () => {
+    const r = resolveHover({ candidates: [shape, s2], world: { x: 330, y: 100 }, zoom: 1 })
+    expect(r.id).toBe('a')
+  })
+
+  it('pulls to the nearest dot within the catch radius, from outside the body', () => {
+    const r = resolveHover({ candidates: [shape], world: { x: 320, y: 165 }, zoom: 1 })
+    expect(r).toEqual({ id: 'a', side: 'e' })
+  })
+
+  it('does not magnetise from inside the shape (a press there moves it)', () => {
+    const r = resolveHover({ hitId: 'a', candidates: [shape], world: { x: 295, y: 150 }, zoom: 1 })
+    expect(r).toEqual({ id: 'a', side: null })
+  })
+
+  it('catch radius is in screen px — bigger in world units when zoomed out', () => {
+    // dot e at zoom 0.5 sits 28 world units out; 40 world units further is 20 screen px.
+    const r = resolveHover({ candidates: [shape], world: { x: 300 + 28 + 40, y: 150 }, zoom: 0.5 })
+    expect(r.side).toBe('e')
+  })
+
+  it('nothing nearby → no hover', () => {
+    expect(resolveHover({ candidates: [shape], world: { x: 2000, y: 2000 } })).toEqual({ id: null, side: null })
   })
 })

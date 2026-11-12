@@ -5,6 +5,7 @@ import { useKonvaImage } from '../../../hooks/useKonvaImage'
 import { resolveImageUrl } from '../../../utils/imageUpload'
 import { renderShape, isLineKind } from '../shapes/registry'
 import { dashFor } from '../connectors/lineStyle'
+import { taperedArrowPolygon } from '../connectors/heads'
 import { konvaTextProps, fitFontSize, contrastText, STICKY_DEFAULT } from '../text/textStyle'
 
 /**
@@ -119,6 +120,22 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                     listening={false} perfectDrawEnabled={false}
                 />
                 {textNode}
+            </Group>
+        )
+    }
+
+    // ── tapered arrow: a filled polygon between the two stored endpoints ──
+    if (kind === 'taperedArrow') {
+        const baseW = p.baseW || w || 1, baseH = p.baseH || h || 1
+        const pts = p.points || [0, 0, baseW, baseH]
+        const sx = w / baseW, sy = h / baseH
+        // Scale the endpoints, not the polygon, so the arrow keeps its thickness.
+        const poly = taperedArrowPolygon({ x: pts[0] * sx, y: pts[1] * sy }, { x: pts[2] * sx, y: pts[3] * sy }, p.strokeWidth || 2)
+        if (!poly) return null
+        return (
+            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
+                <Line points={poly} closed fill={p.stroke} stroke={p.stroke} strokeWidth={1.5}
+                    lineJoin="round" listening={false} perfectDrawEnabled={false} />
             </Group>
         )
     }

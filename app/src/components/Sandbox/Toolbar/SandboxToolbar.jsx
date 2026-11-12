@@ -2,7 +2,7 @@ import {
     LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
     LuType, LuEraser, LuImagePlus, LuPaintBucket,
     LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
-    LuStickyNote, LuFrame, LuLayoutTemplate,
+    LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
 import styles from './SandboxToolbar.module.css'
@@ -19,6 +19,18 @@ const COLORS = [
     { name: 'green', value: '#52c47a' },
     { name: 'black', value: '#000000' },
 ]
+
+// A post-it: square, folded bottom-right corner, adhesive strip on top — so it
+// doesn't read as a document/file the way a page-with-fold icon does.
+function StickyIcon({ size = 16 }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 4h16v11l-5 5H4z" />
+            <path d="M15 20v-5h5" />
+            <path d="M4 8h16" strokeWidth="3.2" opacity="0.55" />
+        </svg>
+    )
+}
 
 function ToolBtn({ active, title, onClick, disabled, children }) {
     return (
@@ -53,14 +65,18 @@ function SandboxToolbar({
     const isShapeTool = SHAPE_TOOLS.includes(tool) && tool !== 'sticky' && tool !== 'frame'
     return (
         <div className={styles.toolbar}>
-            <ToolBtn active={tool === 'pointer'} title="Select (V)" onClick={() => onToolChange('pointer')}>
-                <LuMousePointer2 size={16} />
+            {/* Select and Pan share one button: V (or a click on the active
+                button) flips between them. Space-drag, middle-drag and two
+                fingers pan from any tool. */}
+            <ToolBtn
+                active={tool === 'pointer' || tool === 'hand'}
+                title={tool === 'hand' ? 'Pan — V or click for Select' : 'Select (V) — press V again to pan'}
+                onClick={() => onToolChange(tool === 'pointer' ? 'hand' : 'pointer')}
+            >
+                {tool === 'hand' ? <LuHand size={16} /> : <LuMousePointer2 size={16} />}
             </ToolBtn>
             <ToolBtn active={tool === 'lasso'} title="Lasso select (G)" onClick={() => onToolChange('lasso')}>
                 <LuLasso size={16} />
-            </ToolBtn>
-            <ToolBtn active={tool === 'hand'} title="Hand · Pan (Space)" onClick={() => onToolChange('hand')}>
-                <LuHand size={16} />
             </ToolBtn>
             <ToolBtn active={tool === 'pen'} title="Pen (P)" onClick={() => onToolChange('pen')}>
                 <LuPenTool size={16} />
@@ -87,7 +103,7 @@ function SandboxToolbar({
                 <LuType size={16} />
             </ToolBtn>
             <ToolBtn active={tool === 'sticky'} title="Sticky note (N) — click to place" onClick={() => onToolChange('sticky')}>
-                <LuStickyNote size={16} />
+                <StickyIcon size={16} />
             </ToolBtn>
             <ToolBtn active={tool === 'frame'} title="Frame (F) — drag to draw" onClick={() => onToolChange('frame')}>
                 <LuFrame size={16} />

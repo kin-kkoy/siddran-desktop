@@ -11,9 +11,11 @@ import { isLineKind } from '../shapes/registry'
 import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon } from '../selection/hitTest'
 import { connectorPoints, connectorHitTest } from '../connectors/geometry'
 import { isFrame, frameHit, marqueeTakesFrame } from '../frames/frames'
-import { nextHoverId } from '../selection/hover'
+import { resolveHover } from '../selection/hover'
 
 const GRID_MINOR = 24
+// A shape that can take connector arrows (not a frame, a line, or a locked item).
+const isConnectable = (it) => it?.type === 'shape' && !isFrame(it) && !isLineKind(it.payload?.kind) && !it.payload?.locked
 const GRID_MAJOR = 120
 const GRAPHIC_TYPES = new Set(['stroke', 'shape', 'image'])
 
@@ -307,10 +309,25 @@ function SandboxCanvas({
                 return
             }
 
-            // pointer tool — select a graphic, or start a marquee.
+            // pointer tool — near a shape's dot (magnetised): start an arrow from it.
+            const api = canvas.overlayApiRef?.current
+            if (canvas.hoverId != null && canvas.hoverSide && api?.beginConnectorFrom) {
+                if (api.beginConnectorFrom(e, canvas.hoverId, canvas.hoverSide)) return
+            }
+
+            // …else select what's under the pointer and let the same press drag it
+            // (no click-then-drag). Connectors stay click-to-select.
             const hit = topHitAt(world)
             if (hit) {
+                const wasSelected = canvas.selectedIds.has(hit.id)
                 latestRef.current.onSelect?.(hit.id, e.shiftKey)
+                if (!e.shiftKey && hit.type !== 'connector' && !hit.payload?.locked && api?.beginMove) {
+                    const all = latestRef.current.items
+                    const gid = hit.payload?.groupId
+                    const ids = wasSelected ? [...canvas.selectedIds]
+                        : gid ? all.filter(i => i.payload?.groupId === gid).map(i => i.id) : [hit.id]
+                    api.beginMove(e, ids)
+                }
             } else {
                 if (!e.shiftKey) latestRef.current.onSelect?.(null, false)
                 marqueeRef.current = { startWorld: world, rect: null, additive: e.shiftKey }
@@ -353,12 +370,18 @@ function SandboxCanvas({
                 const onOverlay = !!(t && t !== el && t.closest?.('[data-sb-handle="true"]') && !t.closest?.('[data-sb-move="true"]'))
                 const { world } = screenPointerWorld(e)
                 const h = onOverlay ? null : topHitAt(world)
-                const current = canvas.hoverId != null ? latestRef.current.items.find(i => i.id === canvas.hoverId) : null
-                const hid = nextHoverId({
-                    hitId: (h && h.type === 'shape' && !isFrame(h)) ? h.id : null,
+                const all = latestRef.current.items
+                const current = canvas.hoverId != null ? all.find(i => i.id === canvas.hoverId) : null
+                // Shapes that take arrows, topmost first — the magnet zone picks among them.
+                const candidates = all.filter(isConnectable).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+                const r = resolveHover({
+                    hitId: (h && isConnectable(h)) ? h.id : null,
+                    // A non-connectable item on top (a card, a stroke) blocks the magnet below it.
+                    candidates: h && !isConnectable(h) ? [] : candidates,
                     current, world, zoom: canvas.viewport.zoom, onOverlay,
                 })
-                if (hid !== canvas.hoverId) canvas.setHoverId(hid)
+                if (r.id !== canvas.hoverId) canvas.setHoverId(r.id)
+                if (!r.keepSide && r.side !== canvas.hoverSide) canvas.setHoverSide(r.side)
             }
 
             // ---- two-finger pan/pinch ----
@@ -418,12 +441,22 @@ function SandboxCanvas({
                 const { world } = screenPointerWorld(e)
                 let x1 = world.x, y1 = world.y
                 if (e.shiftKey) {
-                    // constrain to square / 45° for shapes & lines
                     const s = canvas.activeShapeRef.current
                     const dx = x1 - s.x0, dy = y1 - s.y0
-                    const m = Math.max(Math.abs(dx), Math.abs(dy))
-                    x1 = s.x0 + Math.sign(dx || 1) * m
-                    y1 = s.y0 + Math.sign(dy || 1) * m
+                    if (isLineKind(s.kind) || s.kind === 'taperedArrow') {
+                        // Lines/arrows: snap the DIRECTION to the nearest 45° and keep
+                        // the length — so straight across, straight down, or a clean
+                        // diagonal. (A square constraint only ever gave diagonals.)
+                        const len = Math.hypot(dx, dy)
+                        const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4)
+                        x1 = s.x0 + Math.round(Math.cos(a) * len * 1000) / 1000
+                        y1 = s.y0 + Math.round(Math.sin(a) * len * 1000) / 1000
+                    } else {
+                        // Shapes: a square / circle / regular polygon.
+                        const m = Math.max(Math.abs(dx), Math.abs(dy))
+                        x1 = s.x0 + Math.sign(dx || 1) * m
+                        y1 = s.y0 + Math.sign(dy || 1) * m
+                    }
                 }
                 canvas.activeShapeRef.current.x1 = x1
                 canvas.activeShapeRef.current.y1 = y1
@@ -631,7 +664,7 @@ function SandboxCanvas({
         // Clear the connection-dot hover when the pointer leaves the canvas.
         const onPointerLeave = () => {
             const cv = latestRef.current.canvas
-            if (cv.hoverId != null && !cv.activeConnectorRef?.current) cv.setHoverId(null)
+            if (cv.hoverId != null && !cv.activeConnectorRef?.current) { cv.setHoverId(null); cv.setHoverSide(null) }
         }
 
         // Suppress the OS middle-click autoscroll (fires on mousedown, which
@@ -658,7 +691,8 @@ function SandboxCanvas({
     }, [])
 
     const tool = canvas.tool
-    const cursor = canvas.spacePanning || tool === 'hand'
+    const cursor = (tool === 'pointer' && canvas.hoverSide) ? 'crosshair'
+        : canvas.spacePanning || tool === 'hand'
         ? (lastPanRef.current ? 'grabbing' : 'grab')
         : tool === 'pen' || tool === 'lasso' || SHAPE_TOOLS.includes(tool)
             ? 'crosshair'

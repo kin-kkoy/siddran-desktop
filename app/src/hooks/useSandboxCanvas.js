@@ -72,6 +72,12 @@ export function useSandboxCanvas(initialTool = 'pointer') {
     // Shape currently hovered by the pointer tool — surfaces the 4 connection
     // dots in SelectionOverlay. null when not over a shape.
     const [hoverId, setHoverId] = useState(null)
+    // Which of the hovered shape's dots the pointer is magnetised to (n/e/s/w),
+    // so a press anywhere in that dot's catch radius starts an arrow.
+    const [hoverSide, setHoverSide] = useState(null)
+    // SelectionOverlay publishes imperative gestures here (begin a move / an
+    // arrow from a given press) so the canvas can start them on pointerdown.
+    const overlayApiRef = useRef(null)
 
     // Shape fill/stroke/width, persisted.
     const [shapeStyle, setShapeStyleState] = useState(() => {
@@ -201,6 +207,8 @@ export function useSandboxCanvas(initialTool = 'pointer') {
         activeShapeRef,
         activeConnectorRef,
         hoverId, setHoverId,
+        hoverSide, setHoverSide,
+        overlayApiRef,
         selectedIds, setSelection, selectOnly, toggleSelection, clearSelection,
         marquee, setMarquee,
         lasso, setLasso,

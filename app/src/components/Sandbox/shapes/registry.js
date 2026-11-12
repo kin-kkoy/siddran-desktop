@@ -432,6 +432,7 @@ export const SHAPES = {
     arrow:         { label: 'Arrow',         key: 'a',  group: 'line',  ratio: null, isLine: true,  render: null },
     elbowArrow:    { label: 'Elbow arrow',   key: null, group: 'line',  ratio: null, isLine: true,  render: null },
     divider:       { label: 'Divider',       key: null, group: 'line',  ratio: null, isLine: true,  render: null },
+    taperedArrow:  { label: 'Tapered arrow', key: null, group: 'line',  ratio: null, isLine: true,  render: null },
 }
 
 /** Picker sections, in display order. */

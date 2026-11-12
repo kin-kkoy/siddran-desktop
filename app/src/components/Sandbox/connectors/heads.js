@@ -78,3 +78,27 @@ export function trimPath(points, a, b) {
     pull(n - 2, n - 4, b)
     return pts
 }
+
+/**
+ * The tapered arrow (a filled arrow whose shaft swells from a fine tail to a
+ * broad head) as one closed polygon from `a` (tail) to `b` (tip). `weight` is
+ * the stroke width it is drawn at — the arrow scales with it. Drawn with a
+ * same-colour round-joined stroke of ~1.5 px so the corners come out soft.
+ */
+export function taperedArrowPolygon(a, b, weight = 2) {
+    const dx = b.x - a.x, dy = b.y - a.y
+    const L = Math.hypot(dx, dy)
+    if (L < 1) return null
+    const ux = dx / L, uy = dy / L, nx = -uy, ny = ux
+    const W = Math.max(9, weight * 4.5)          // head half-width
+    const headLen = Math.min(L * 0.4, W * 1.5)
+    const shaft = W * 0.42                        // shaft half-width where it meets the head
+    const tail = Math.max(1, weight * 0.45)       // tail half-width
+    const bx = b.x - ux * headLen, by = b.y - uy * headLen
+    const P = (x, y, k) => [x + nx * k, y + ny * k]
+    return [
+        ...P(a.x, a.y, tail), ...P(bx, by, shaft), ...P(bx, by, W),
+        b.x, b.y,
+        ...P(bx, by, -W), ...P(bx, by, -shaft), ...P(a.x, a.y, -tail),
+    ]
+}

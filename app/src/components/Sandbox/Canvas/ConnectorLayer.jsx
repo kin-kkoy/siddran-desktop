@@ -1,7 +1,7 @@
 import { Layer, Line, Rect, Text, Group, Circle } from 'react-konva'
 import { memo } from 'react'
 import { connectorPoints, labelBox, LABEL_FONT } from '../connectors/geometry'
-import { headGeometry, headInset, pathEnds, trimPath } from '../connectors/heads'
+import { headGeometry, headInset, pathEnds, trimPath, taperedArrowPolygon } from '../connectors/heads'
 import { dashFor } from '../connectors/lineStyle'
 
 // Konva paints to <canvas>, which can't resolve CSS variables — use the concrete
@@ -39,9 +39,30 @@ function Head({ g, stroke, strokeWidth, bg }) {
     )
 }
 
-const CommittedConnector = memo(function CommittedConnector({ pts, stroke, strokeWidth, head, headStart, selected, label, lineStyle, dash, bg }) {
+const CommittedConnector = memo(function CommittedConnector({ pts, stroke, strokeWidth, head, headStart, selected, label, lineStyle, dash, bg, tapered }) {
     const points = pts.split(',').map(Number)
     const box = labelBox(points, label)
+    // Tapered body: one filled arrow from the first point to the last (its own
+    // head, so the head settings don't apply).
+    const taper = tapered && points.length >= 4
+        ? taperedArrowPolygon({ x: points[0], y: points[1] }, { x: points[points.length - 2], y: points[points.length - 1] }, strokeWidth)
+        : null
+    if (taper) {
+        return (
+            <>
+                {selected && <Line points={points} stroke={ACCENT} strokeWidth={strokeWidth + 10} opacity={0.3} lineCap="round" listening={false} perfectDrawEnabled={false} />}
+                <Line points={taper} closed fill={stroke} stroke={stroke} strokeWidth={1.5} lineJoin="round" listening={false} perfectDrawEnabled={false} />
+                {box && (
+                    <Group listening={false}>
+                        <Rect x={box.x} y={box.y} width={box.w} height={box.h} cornerRadius={box.h / 2}
+                            fill={bg} stroke={stroke} strokeWidth={1} opacity={0.95} perfectDrawEnabled={false} />
+                        <Text x={box.x} y={box.y} width={box.w} height={box.h} text={label}
+                            align="center" verticalAlign="middle" fontSize={LABEL_FONT} fill={stroke} perfectDrawEnabled={false} />
+                    </Group>
+                )}
+            </>
+        )
+    }
     const ends = pathEnds(points)
     const gEnd = ends && headGeometry(head, ends.end.tip, ends.end.prev, strokeWidth)
     const gStart = ends && headGeometry(headStart, ends.start.tip, ends.start.prev, strokeWidth)
@@ -99,6 +120,7 @@ const ConnectorLayer = memo(function ConnectorLayer({ connectorItems, byId, sele
                         selected={selectedIds.has(conn.id)}
                         label={typeof p.label === 'string' ? p.label : ''}
                         lineStyle={p.lineStyle}
+                        tapered={p.body === 'tapered'}
                         dash={!!p.dash}
                         bg={bg}
                     />

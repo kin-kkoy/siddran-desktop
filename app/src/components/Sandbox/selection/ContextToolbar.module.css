@@ -6,21 +6,26 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 3px;
-    padding: 3px 6px;
+    gap: 6px;
+    padding: 8px 12px;
     background-color: rgba(18, 18, 30, 0.94);
     border: 1px solid var(--border-default);
-    border-radius: 10px;
+    border-radius: 14px;
     backdrop-filter: blur(12px);
     box-shadow: 0 8px 24px var(--shadow-color);
     pointer-events: auto;
     animation: ctxFadeIn 0.12s ease both;
     white-space: nowrap;
+    max-width: calc(100% - 16px);
 }
 
+/* Animates the separate `translate` property, NOT `transform`: the bar is
+   centred with an inline transform: translate(-50%, …), and an animated
+   transform (fill-mode both) silently replaced it — which is why the bar's
+   LEFT edge, not its middle, sat over the selection. */
 @keyframes ctxFadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; translate: 0 6px; }
+    to   { opacity: 1; translate: 0 0; }
 }
 
 /* ── Compact button ── */
@@ -28,14 +33,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.1s, color 0.1s;
@@ -55,9 +60,9 @@
 /* ── Small divider ── */
 .sep {
     width: 1px;
-    height: 18px;
+    height: 26px;
     background-color: var(--border-default);
-    margin: 0 3px;
+    margin: 0 6px;
     flex-shrink: 0;
 }
 
@@ -66,12 +71,12 @@
     appearance: none;
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
-    border-radius: 5px;
+    border-radius: 8px;
     color: var(--text-secondary);
     font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 2px 6px;
-    height: 26px;
+    font-size: 13px;
+    padding: 2px 10px;
+    height: 38px;
     cursor: pointer;
     outline: none;
     transition: border-color 0.1s, color 0.1s;
@@ -84,8 +89,8 @@
 
 /* ── Colour swatch ── */
 .swatch {
-    width: 18px;
-    height: 18px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     border: 2px solid var(--border-default);
     cursor: pointer;
@@ -102,18 +107,18 @@
 /* ── Align/distribute grid (multi-select) — 4×2 compact buttons ── */
 .alignGrid {
     display: grid;
-    grid-template-columns: repeat(4, 20px);
-    grid-auto-rows: 20px;
-    gap: 1px;
+    grid-template-columns: repeat(4, 26px);
+    grid-auto-rows: 22px;
+    gap: 2px;
     flex-shrink: 0;
 }
 .miniBtn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
+    width: 26px;
+    height: 22px;
+    border-radius: 6px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
@@ -141,29 +146,29 @@
     gap: 4px;
 }
 .radiusSlider {
-    width: 48px;
+    width: 72px;
     height: 4px;
     accent-color: var(--accent-warning);
     cursor: pointer;
 }
 .radiusValue {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 13px;
     color: var(--text-muted);
-    min-width: 18px;
+    min-width: 22px;
     text-align: right;
 }
 
 /* Arrow label — a small inline field in the connector bar. */
 .labelInput {
-    width: 96px;
-    height: 26px;
-    padding: 0 8px;
-    font-size: 12px;
+    width: 130px;
+    height: 38px;
+    padding: 0 10px;
+    font-size: 14px;
     color: var(--text-primary);
     background: var(--bg-primary);
     border: 1px solid var(--border-default);
-    border-radius: 6px;
+    border-radius: 8px;
     outline: none;
 }
 .labelInput:focus { border-color: var(--accent-warning); }
@@ -171,12 +176,14 @@
 /* One line of controls; the bar stacks a text row above the style row. */
 .row {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
 }
 .row + .row {
     border-top: 1px solid var(--border-default);
-    padding-top: 3px;
+    padding-top: 6px;
 }
 
 /* ── Colour menus ── */
@@ -185,7 +192,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
+    width: 40px;
     flex-shrink: 0;
 }
 .menu {
@@ -205,12 +212,12 @@
 }
 .paletteGrid {
     display: grid;
-    grid-template-columns: repeat(8, 20px);
-    gap: 4px;
+    grid-template-columns: repeat(8, 26px);
+    gap: 6px;
 }
 .paletteCell, .paletteCellActive, .paletteNone {
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
     border-radius: 5px;
     border: 1px solid rgba(255, 255, 255, 0.18);
     cursor: pointer;
@@ -224,8 +231,8 @@
 .customColor {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    font-size: 11px;
+    gap: 8px;
+    font-size: 13px;
     color: var(--text-secondary);
 }
 .customColor input {
@@ -243,8 +250,34 @@
     gap: 1px;
 }
 .iconBar {
-    width: 14px;
-    height: 3px;
+    width: 18px;
+    height: 4px;
     border-radius: 1px;
     border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.alphaSlider {
+    flex: 1;
+    min-width: 90px;
+    height: 10px;
+    border-radius: 5px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: #555;
+    cursor: pointer;
+}
+.alphaSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--accent-warning);
+}
+.alphaValue {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 36px;
+    text-align: right;
 }

@@ -66,3 +66,31 @@ describe('line style', () => {
     expect(dashFor({ lineStyle: 'dashed', strokeWidth: 2 })).toEqual([8, 6])
   })
 })
+
+describe('connector bend', () => {
+  const a = { x: 0, y: 0 }, b = { x: 200, y: 100 }
+  const mid = { x: 100, y: 50 }
+  const passes = (pts, M) => { for (let i = 0; i < pts.length; i += 2) if (Math.abs(pts[i] - M.x) < 0.6 && Math.abs(pts[i + 1] - M.y) < 0.6) return true; return false }
+
+  it('a straight line bends through the handle', () => {
+    const pts = routeConnector(a, b, 'straight', { bend: { dx: 0, dy: -60 } })
+    expect(pts).toEqual([0, 0, 100, -10, 200, 100])
+  })
+
+  it('a curve passes through the handle', () => {
+    const M = { x: mid.x + 30, y: mid.y - 40 }
+    const pts = routeConnector(a, b, 'curved', { fromSide: 'e', toSide: 'w', bend: { dx: 30, dy: -40 } })
+    expect(passes(pts, M)).toBe(true)
+  })
+
+  it('an elbow moves its middle run to the handle and stays orthogonal', () => {
+    const pts = routeConnector(a, b, 'elbow', { fromSide: 's', toSide: 'n', bend: { dx: 0, dy: 20 } })
+    const ys = []; for (let i = 1; i < pts.length; i += 2) ys.push(pts[i])
+    expect(ys).toContain(70)
+    for (let i = 2; i < pts.length; i += 2) expect(pts[i] === pts[i - 2] || pts[i + 1] === pts[i - 1]).toBe(true)
+  })
+
+  it('ignores a malformed bend', () => {
+    expect(routeConnector(a, b, 'straight', { bend: { dx: 'x' } })).toEqual([0, 0, 200, 100])
+  })
+})

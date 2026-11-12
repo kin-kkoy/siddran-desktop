@@ -79,7 +79,7 @@ export function cssTextStyle(p, size) {
 
 /** Relative luminance → readable text colour on a fill (WCAG-ish). */
 export function contrastText(hex) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+    const m = /^#?([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(hex || '')
     if (!m) return '#1f2430'
     const n = parseInt(m[1], 16)
     const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {

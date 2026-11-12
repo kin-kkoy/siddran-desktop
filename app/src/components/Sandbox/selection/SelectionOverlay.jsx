@@ -6,7 +6,7 @@ import {
 } from './itemBounds'
 import { computeSnap, unionAABB } from './snapping'
 import { itemHitTest } from './hitTest'
-import { facingSide, connectorPoints, SIDES } from '../connectors/geometry'
+import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
 import { isLineKind } from '../shapes/registry'
 
@@ -122,10 +122,11 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         lastMoveRef.current = null
         window.removeEventListener('pointermove', onWindowMove)
         window.removeEventListener('pointerup', onWindowUp)
+        const wasPending = dragRef.current.pending
         dragRef.current = null
         setGuides([])
-        setGesturing(false)
-        endTransaction()
+        // A press that never moved opened nothing (see applyMove) — nothing to close.
+        if (!wasPending) { setGesturing(false); endTransaction() }
     }
 
     const onWindowUp = () => { flushMove(); endGesture() }
@@ -146,7 +147,22 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     const applyMove = (e) => {
         const d = dragRef.current
         if (!d) return
+        // A gesture only really starts once the pointer has moved a few px: a
+        // plain click (or the first half of a double-click) must not open an undo
+        // step or put up the full-screen drag shield, which would swallow the
+        // dblclick that opens text editing.
+        if (d.pending) {
+            if (Math.hypot(e.clientX - d.startClient.x, e.clientY - d.startClient.y) < 3) return
+            d.pending = false
+            beginTransaction()
+            setGesturing(true)
+        }
         const p = worldFromClient(e)
+
+        if (d.mode === 'bend') {
+            updateItem(d.connId, { payload: { ...d.payload, bend: { dx: Math.round(p.x - d.mid.x), dy: Math.round(p.y - d.mid.y) } } })
+            return
+        }
 
         if (d.mode === 'move') {
             let dx = p.x - d.startWorld.x
@@ -199,35 +215,56 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         }
     }
 
-    const snapshot = () => boxItems.map(it => ({ id: it.id, box: getItemBounds(it) }))
-
-    const startGesture = (e, init) => {
+    const startGesture = (e, init, list = boxItems) => {
         e.preventDefault()
         e.stopPropagation()
-        beginTransaction()
         const riders = (init.riders || []).map(it => ({ id: it.id, box: getItemBounds(it) }))
-        dragRef.current = { ...init, snap: [...snapshot(), ...riders], startWorld: worldFromClient(e) }
-        setGesturing(true)
+        dragRef.current = {
+            ...init,
+            snap: [...list.map(it => ({ id: it.id, box: getItemBounds(it) })), ...riders],
+            startWorld: worldFromClient(e),
+            startClient: { x: e.clientX, y: e.clientY },
+            pending: true,
+        }
         window.addEventListener('pointermove', onWindowMove)
         window.addEventListener('pointerup', onWindowUp)
     }
 
-    const onMoveDown = (e) => {
-        const selIds = new Set(boxItems.map(it => it.id))
+    // Move `list` (and, for frames, what sits on them).
+    const startMove = (e, list) => {
+        const moving = list.filter(it => it.type !== 'connector' && !it.payload?.locked)
+        if (!moving.length) return false
+        const selIds = new Set(moving.map(it => it.id))
         // A frame carries what sits on it. Decided now, at grab time, from where
         // things are — not stored — so there is no membership to keep in sync.
         const riders = []
-        for (const f of boxItems.filter(isFrame)) {
+        for (const f of moving.filter(isFrame)) {
             for (const c of frameChildren(f, items || [])) {
                 if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) }
             }
         }
         startGesture(e, {
             mode: 'move',
-            baseAABB: unionAABB(boxItems),
+            baseAABB: unionAABB(moving),
             others: (items || []).filter(it => !selIds.has(it.id)),
             riders,
-        })
+        }, moving)
+        return true
+    }
+    const onMoveDown = (e) => { startMove(e, boxItems) }
+
+    // Drag the middle of an arrow to bend it. Stored as an offset from the
+    // midpoint of its two ends, so it follows the shapes it joins.
+    const onBendDown = (conn, ends) => (e) => {
+        startGesture(e, {
+            mode: 'bend', connId: conn.id, payload: conn.payload || {},
+            mid: { x: (ends.from.x + ends.to.x) / 2, y: (ends.from.y + ends.to.y) / 2 },
+        }, [])
+    }
+    const onBendReset = (conn) => (e) => {
+        e.stopPropagation()
+        const { bend: _b, ...rest } = conn.payload || {}
+        beginTransaction(); updateItem(conn.id, { payload: rest }); endTransaction()
     }
 
     // ---- connector drag — unified for CREATE (drag from a shape's dot) and EDIT
@@ -310,17 +347,33 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         window.addEventListener('pointerup', onConnectorUp)
     }
 
-    // CREATE: drag out from one of a shape's 4 connection dots.
-    const onConnectorDotDown = (side) => (e) => {
-        if (!dotItem) return
+    // CREATE: drag out from one of a shape's 4 connection dots (or from anywhere
+    // in a dot's magnet radius — the canvas calls this through overlayApiRef).
+    const startConnectorFrom = (e, item, side) => {
+        if (!connectable(item) || item.payload?.locked) return false
         e.preventDefault()
         e.stopPropagation()
-        const fromPoint = getOrientedAnchors(getItemBounds(dotItem))[side]
+        const fromPoint = getOrientedAnchors(getItemBounds(item))[side]
         beginConnectorDrag({
-            mode: 'create', fromId: dotItem.id, fromSide: side, excludeId: dotItem.id,
+            mode: 'create', fromId: item.id, fromSide: side, excludeId: item.id,
             fixedPoint: fromPoint, movingPoint: fromPoint, headIsMoving: true,
             targetId: null, targetSide: null, routing: 'elbow',
         })
+        return true
+    }
+    const onConnectorDotDown = (side) => (e) => { if (dotItem) startConnectorFrom(e, dotItem, side) }
+
+    // Gestures the canvas starts from its own pointerdown: press-and-drag an
+    // unselected item, or begin an arrow from a magnetised dot. Republished every
+    // render so they always close over the current items.
+    if (canvas.overlayApiRef) {
+        canvas.overlayApiRef.current = {
+            beginMove: (e, ids) => {
+                const set = new Set(ids)
+                return startMove(e, (items || []).filter(it => set.has(it.id)))
+            },
+            beginConnectorFrom: (e, id, side) => startConnectorFrom(e, (items || []).find(it => it.id === id), side),
+        }
     }
 
     // EDIT: drag an endpoint of the selected connector to re-route or detach it.
@@ -451,7 +504,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                         const dx = base.x - c.x, dy = base.y - c.y
                         const len = Math.hypot(dx, dy) || 1
                         const cx = base.x + (dx / len) * DOT_OUT, cy = base.y + (dy / len) * DOT_OUT
-                        const hot = hotDot === side
+                        const hot = hotDot === side || (canvas.hoverId === dotItem.id && canvas.hoverSide === side)
                         return (
                             <g key={`dot-${side}`} data-sb-handle="true"
                                 style={{ pointerEvents: 'auto', cursor: 'crosshair' }}
@@ -461,6 +514,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                                 <title>Drag to connect · click for a connected box</title>
                                 {/* invisible, larger hit target */}
                                 <circle cx={cx} cy={cy} r={DOT_HIT} fill="transparent" />
+                                {/* magnet ring: the pointer is "caught" by this dot */}
+                                {hot && <circle cx={cx} cy={cy} r={DOT_HIT} fill="rgba(240,184,64,0.18)" stroke="var(--accent-warning)" strokeWidth={1} />}
                                 <circle cx={cx} cy={cy} r={hot ? DOT_R + 2 : DOT_R}
                                     fill="var(--accent-warning)" stroke="var(--bg-surface)" strokeWidth={1.5} />
                             </g>
@@ -497,6 +552,26 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                             onPointerDown={onEndpointDown(which, connEnds, selConnector)} />
                     )
                 })}
+
+                {/* bend handle — the middle of the selected arrow; drag to bend,
+                    double-click to straighten back to the automatic route */}
+                {connEnds && selConnector && (() => {
+                    const pts = connectorPoints(selConnector, new Map((items || []).map(i => [i.id, i])))
+                    const mid = pts && connectorMidpoint(pts)
+                    if (!mid) return null
+                    const m = screenOf(mid)
+                    const bent = !!selConnector.payload?.bend
+                    return (
+                        <g style={{ pointerEvents: 'auto', cursor: 'move' }}
+                            onPointerDown={onBendDown(selConnector, connEnds)}
+                            onDoubleClick={bent ? onBendReset(selConnector) : undefined}>
+                            <title>{bent ? 'Drag to bend · double-click to reset' : 'Drag to bend this arrow'}</title>
+                            <circle cx={m.x} cy={m.y} r={12} fill="transparent" />
+                            <circle cx={m.x} cy={m.y} r={6} fill={bent ? 'var(--accent-warning)' : 'var(--bg-surface)'}
+                                stroke="var(--accent-warning)" strokeWidth={2} />
+                        </g>
+                    )
+                })()}
 
                 {marquee && (
                     <rect x={marquee.left} y={marquee.top} width={marquee.w} height={marquee.h}

@@ -24,7 +24,7 @@
 import { renderShape, isLineKind } from '../components/Sandbox/shapes/registry'
 import { connectorPoints, labelBox, LABEL_FONT } from '../components/Sandbox/connectors/geometry'
 import { diagramBounds } from './diagramBlock'
-import { headGeometry, headInset, pathEnds, trimPath } from '../components/Sandbox/connectors/heads'
+import { headGeometry, headInset, pathEnds, trimPath, taperedArrowPolygon } from '../components/Sandbox/connectors/heads'
 import { svgDashFor } from '../components/Sandbox/connectors/lineStyle'
 import { fontCss, contrastText, STICKY_DEFAULT } from '../components/Sandbox/text/textStyle'
 
@@ -213,6 +213,13 @@ function shapeElement(item) {
   if (p.kind === 'ellipse') {
     return el('ellipse', { ...common, cx: w / 2, cy: h / 2, rx: w / 2, ry: h / 2 })
   }
+  if (p.kind === 'taperedArrow') {
+    const pts = p.points || [0, 0, w, h]
+    const sx = w / (p.baseW || w || 1), sy = h / (p.baseH || h || 1)
+    const poly = taperedArrowPolygon({ x: pts[0] * sx, y: pts[1] * sy }, { x: pts[2] * sx, y: pts[3] * sy }, p.strokeWidth || 2)
+    if (!poly) return null
+    return el('polygon', { points: polyPoints(poly), fill: p.stroke, stroke: p.stroke, 'stroke-width': 1.5, 'stroke-linejoin': 'round' })
+  }
   if (isLineKind(p.kind)) {
     // A bare line/arrow drawn as a shape (not a connector) is a diagonal of its
     // box — the same thing the Konva fast-path draws.
@@ -259,6 +266,12 @@ function textElement(item) {
   return text
 }
 
+const polyPoints = (flat) => {
+  const out = []
+  for (let i = 0; i < flat.length; i += 2) out.push(`${fmt(flat[i])},${fmt(flat[i + 1])}`)
+  return out.join(' ')
+}
+
 function headElement(g, stroke, strokeWidth) {
   if (!g) return null
   // Hollow heads take the page colour so the line doesn't show through.
@@ -284,6 +297,10 @@ function connectorElement(item, byId) {
   const p = item.payload
   const stroke = p.stroke || '#e2ddf5'
   const sw = p.strokeWidth || 2
+  if (p.body === 'tapered') {
+    const poly = taperedArrowPolygon({ x: pts[0], y: pts[1] }, { x: pts[pts.length - 2], y: pts[pts.length - 1] }, sw)
+    if (poly) return el('polygon', { points: polyPoints(poly), fill: stroke, stroke, 'stroke-width': 1.5, 'stroke-linejoin': 'round' })
+  }
   const head = p.head || 'arrow'
   const headStart = p.headStart || 'none'
   const ends = pathEnds(pts)

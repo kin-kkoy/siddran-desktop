@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { strokeOutline, drawStrokePath } from './strokeOutline'
 import { renderShape, isLineKind, SHAPES } from '../shapes/registry'
 import { routeConnector } from '../connectors/geometry'
+import { taperedArrowPolygon } from '../connectors/heads'
 
 /**
  * Top layer holding only the in-progress previews (active stroke + active
@@ -23,6 +24,11 @@ function ActiveShapePreview({ shape }) {
     if (kind === 'ellipse') {
         return <Ellipse x={minX + w / 2} y={minY + h / 2} radiusX={w / 2} radiusY={h / 2}
             fill={style.fill !== 'transparent' ? style.fill : undefined} {...common} />
+    }
+
+    if (kind === 'taperedArrow') {
+        const poly = taperedArrowPolygon({ x: x0, y: y0 }, { x: x1, y: y1 }, style.strokeWidth || 2)
+        return poly ? <Line points={poly} closed fill={style.stroke} stroke={style.stroke} strokeWidth={1.5} lineJoin="round" listening={false} perfectDrawEnabled={false} /> : null
     }
 
     // ── line-type: line, arrow, elbowArrow, divider ──
