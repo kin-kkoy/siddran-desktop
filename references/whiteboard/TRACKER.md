@@ -141,6 +141,11 @@ way to build the same thing. Keep the text mode for AI and paste.
       boxes. Stickies read as sticky notes.
 - [ ] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
       `lineStyle` and `routing: "curved"`.
+- [ ] Also from section 3: a connector's `avoid` (go around boxes) and
+      `body: "tapered"`, and a shape's `flowDrop` (the node editor's lowered
+      level). The CLI only needs to keep them when round-tripping; it doesn't
+      have to lay them out. Layout stays CLI-mirror only: the families and
+      lowering are desktop-only (user's decision).
 - [ ] Keep the parity tests between `flowText.js` and `diagram.rs` green.
 
 ## Section 5 — Format shell + shared record model (prerequisite for 6–11)
@@ -184,6 +189,23 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 - [ ] **11 · Engage activities + Talktrack, solo versions (decided):**
       self-quizzes, flashcards, polls and votes; screen and voice recording of
       the board, saved as video in the Bag (§13.12–13.13).
+
+## Deferred (do near the end, around section 11)
+
+- [ ] **Connection outlines on the board** (agreed 2026-11-13; the node editor
+      already dims). Select a box (or several) and its links, plus the boxes
+      at their other ends, get a thick, semi-transparent cyan/teal glow:
+      just outside each box's edge, and as a halo under each link. Select a
+      link and its two end boxes get it. Rules:
+      - No dimming and no toggle.
+      - The glow keeps a constant width on screen at any zoom.
+      - Deeper teal on a light theme.
+      - Hidden while dragging.
+      - Nothing shows when the selection has no connections.
+      - The clicked item keeps its normal selection handles.
+      Build it as ONE overlay drawn from item bounds and connector points, not
+      by touching each layer. Share the "what's connected" logic with
+      NodeEditor's `focus`.
 
 ## Not planned (user decision, 2026-11-12)
 
