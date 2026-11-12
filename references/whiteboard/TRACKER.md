@@ -58,6 +58,10 @@ done, so the next session knows where things stand.
      as a video in the Bag.
    - No multi-user server.
 
+5. **Where a widget's own records live (section 5): inside the board file**
+   (decided 2026-11-13). One file: the CLI carries it, undo works as for
+   everything else, and a copied board keeps its data. No sibling file.
+
 **Check-ins:** the user reviews by hand after **section 2** and after
 **section 5**. Stop at those points and ask them to try it. Other sections can
 run straight on, and the user reviews them at the end.
@@ -167,8 +171,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 
 - [ ] Window chrome on the canvas: a title bar, resize, and focus mode
       (fullscreen) as an overlay.
-- [ ] Shared dataset model. Records and fields live in the board file (or a
-      sibling file; decide with the user). Table, Timeline, Kanban and Matrix
+- [ ] Shared dataset model. Records and fields live in the board file
+      (decided: inside the board, not a sibling file). Table, Timeline, Kanban and Matrix
       are views of one dataset.
 - [ ] Undo, merge (`mergeRows` is per item; a dataset may need per-record
       merging) and CLI round-trip.
