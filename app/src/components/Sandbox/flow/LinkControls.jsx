@@ -23,7 +23,7 @@ function Btn({ active, title, onClick, children, w = 34 }) {
     <button
       type="button" title={title} aria-label={title} aria-pressed={active || undefined} onClick={onClick}
       style={{
-        width: w, height: 30, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 6, fontSize: 15,
+        width: w, height: 30, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 6, fontSize: w > 40 ? 12.5 : 15, fontFamily: fontCss(),
         border: `1px solid ${active ? 'var(--accent-warning)' : 'var(--border-default)'}`,
         background: active ? 'color-mix(in srgb, var(--accent-warning) 16%, transparent)' : 'var(--bg-surface)',
         color: active ? 'var(--accent-warning)' : 'var(--text-secondary)',
@@ -51,6 +51,13 @@ function LinkControls({ look, onPatch }) {
             onClick={() => onPatch(r.v === 'straight' ? { routing: r.v } : { routing: r.v, body: null })}>{r.label}</Btn>
         ))}
       </div>
+      {look.routing !== 'elbow' && !tapered && (
+        <div style={s.row}>
+          <span style={s.label}>Boxes</span>
+          <Btn w={92} active={!look.avoid} title="Go straight to the other end, even through boxes" onClick={() => onPatch({ avoid: null })}>Go direct</Btn>
+          <Btn w={92} active={look.avoid} title="Take the shortest way round any box in the way" onClick={() => onPatch({ avoid: true })}>Go around</Btn>
+        </div>
+      )}
       <div style={s.row}>
         <span style={s.label}>Start</span>
         <HeadSelect value={look.headStart} title="Start of line" onChange={(v) => onPatch({ headStart: v })} />

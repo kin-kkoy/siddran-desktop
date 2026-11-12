@@ -375,3 +375,22 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   - Verified headless: board vs preview with five styled links, the All
     links panel, and the camera (a new root at the edge pans the view;
     moving a family that stays in view doesn't).
+- 2026-11-12 · session 3 · fourth feedback round (the user's last for section 3):
+  - **Go around boxes** for straight and curved links (`connectors/avoid.js`,
+    tested). It is optional `payload.avoid` on a connector, off by default
+    (= straight through, as before). When on and the direct path would run
+    through a box (its own two included), the link takes the shortest way
+    round instead: a visibility graph over the corners of the boxes grown by
+    14 px, searched with A*, leaving and arriving square to its sides. Curved
+    links take the same path with rounded corners. A box holding either end
+    (a frame) is ignored. It lives in `routeConnector`, so the board, the
+    editor preview and anything else that routes connectors agree. Toggle:
+    Go direct / Go around in the editor's link panel (and All links), and a
+    button on the floating bar's connector row (straight/curved only).
+  - **Selection focus in the node editor:** select a node and it, its links
+    and the nodes at their other ends stay bright while everything else dims
+    (opacity 0.22). Select a link: it and its two ends. Nothing selected:
+    nothing dims. Editor only; the board is unchanged.
+  - Verified headless: a board link set to go around clears the box in its
+    way, the editor draws it the same, and dimming works for a new root and
+    for a Tab-added child.

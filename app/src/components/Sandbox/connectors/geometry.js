@@ -7,6 +7,7 @@
  * All coordinates are WORLD space. `byId` is a Map<id, item>.
  */
 import { getItemBounds, getOrientedAnchors, rotatePoint } from '../selection/itemBounds'
+import { aroundBoxes } from './avoid'
 
 export const SIDES = ['n', 'e', 's', 'w']
 
@@ -74,6 +75,10 @@ export function nearestSide(item, worldPt) {
  * or both ends facing the same way): then the line clears the two boxes it joins
  * AND anything else in the band it travels through. `obstacles` is a function,
  * so the other boxes are only gathered for the few links that need them.
+ *
+ * `ends.avoid` (a link's "go around boxes"): a straight or curved link whose
+ * direct path would run through a box — its own two included — takes the
+ * shortest way round instead (connectors/avoid.js). Off, it goes direct.
  */
 export function routeConnector(a, b, routing = 'elbow', ends = {}) {
     // A user bend: the path is pulled through M = midpoint(a, b) + bend. Stored
@@ -85,8 +90,12 @@ export function routeConnector(a, b, routing = 'elbow', ends = {}) {
         if (routing === 'curved') return curved(a, b, ends.fromSide, ends.toSide, M)
         return flat(simplify(elbowThrough(a, b, ends.fromSide, ends.toSide, M)))
     }
-    if (routing === 'straight') return [a.x, a.y, b.x, b.y]
-    if (routing === 'curved') return curved(a, b, ends.fromSide, ends.toSide)
+    if (routing === 'straight' || routing === 'curved') {
+        const direct = routing === 'straight' ? [a.x, a.y, b.x, b.y] : curved(a, b, ends.fromSide, ends.toSide)
+        if (!ends.avoid) return direct
+        const boxes = [...(ends.obstacles?.() || []), ends.fromBox, ends.toBox].filter(Boolean)
+        return aroundBoxes(direct, a, b, ends.fromSide, ends.toSide, boxes, routing === 'curved') || direct
+    }
     const da = DIRS[ends.fromSide], db = DIRS[ends.toSide]
     if (!da || !db) return dogLeg(a, b)
     return flat(simplify(orthogonal(a, da, b, db, ends.fromBox, ends.toBox, ends.obstacles)))
@@ -273,6 +282,7 @@ export function connectorPoints(conn, byId) {
         fromBox: boxOf(p.from, byId),
         toBox: boxOf(p.to, byId),
         bend: p.bend,
+        avoid: !!p.avoid,
         obstacles: () => {
             const out = []
             for (const it of byId.values()) {

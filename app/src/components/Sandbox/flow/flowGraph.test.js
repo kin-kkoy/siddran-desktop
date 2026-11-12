@@ -349,7 +349,7 @@ describe('link looks', () => {
     expect(g.edges.map((e) => linkLook(e, '#fff').routing)).toEqual(['straight', 'straight'])
     g = styleLinks(g, 1, { head: 'none', lineStyle: 'dotted', headStart: 'circle', stroke: '#ff0000', strokeWidth: 4 })
     expect(g.edges[1]).toMatchObject({ head: false, dashed: true })
-    expect(linkLook(g.edges[1], '#fff')).toEqual({ routing: 'straight', head: 'none', headStart: 'circle', stroke: '#ff0000', strokeWidth: 4, lineStyle: 'dotted', body: null })
+    expect(linkLook(g.edges[1], '#fff')).toEqual({ routing: 'straight', head: 'none', headStart: 'circle', stroke: '#ff0000', strokeWidth: 4, lineStyle: 'dotted', body: null, avoid: false })
     expect(linkLook(g.edges[0], '#fff')).toMatchObject({ head: 'arrow', lineStyle: 'solid', stroke: '#fff' })
     g = styleLinks(g, 0, { body: 'tapered', routing: 'curved' })
     expect(linkLook(g.edges[0], '#fff')).toMatchObject({ body: 'tapered', routing: 'straight' })
@@ -373,6 +373,17 @@ describe('link looks', () => {
     const plan = planDiagram(g, { items, origin, scope: { shapeIds: shapes.map((x) => x.id), connectorIds: connectors.map((x) => x.id) }, newId: ids() })
     const p = plan.update.find((u) => u.id === connectors[0].id).patch.payload
     expect(p).toMatchObject({ routing: 'straight', strokeWidth: 3, lineStyle: 'dashed', dash: true })
+  })
+
+  it('carries "go around boxes" to the board and back, off by default', () => {
+    expect(linkLook(fan().edges[0], '#fff').avoid).toBe(false)
+    const g = styleLinks(styleLinks(fan(), 'all', { routing: 'curved' }), 0, { avoid: true })
+    const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+    const links = plan.add.filter((i) => i.type === 'connector')
+    expect(links[0].payload.avoid).toBe(true)
+    expect(links[1].payload.avoid).toBeUndefined()
+    expect(itemsToGraph(plan.add).graph.edges.map((e) => linkLook(e, '#fff').avoid)).toEqual([true, false])
+    expect(linkLook(styleLinks(g, 0, { avoid: null }).edges[0], '#fff').avoid).toBe(false)
   })
 
   it('keeps a link\'s look through a Text-tab edit', () => {

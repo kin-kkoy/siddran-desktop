@@ -100,7 +100,7 @@ export function reverseEdge(g, i) {
 // a head at the start, the route, colour, width, dotted vs dashed, tapered —
 // rides along in an optional `look`, kept by the editor and the board.
 
-const LOOK_KEYS = ['routing', 'head', 'headStart', 'stroke', 'strokeWidth', 'lineStyle', 'body']
+const LOOK_KEYS = ['routing', 'head', 'headStart', 'stroke', 'strokeWidth', 'lineStyle', 'body', 'avoid']
 
 /** A board connector's payload → the look fields it sets. */
 function lookOf(p) {
@@ -120,12 +120,13 @@ export function linkLook(e, stroke) {
     strokeWidth: k.strokeWidth || 2,
     lineStyle: e.dashed ? (k.lineStyle === 'dotted' ? 'dotted' : 'dashed') : 'solid',
     body: k.body === 'tapered' ? 'tapered' : null,
+    avoid: !!k.avoid,
   }
 }
 
 /**
  * Restyle link `which` (its index) or every link ('all'). `patch` holds any of
- * routing, head, headStart, stroke, strokeWidth, lineStyle, body (null clears).
+ * routing, head, headStart, stroke, strokeWidth, lineStyle, body, avoid (null clears).
  */
 export function styleLinks(g, which, patch) {
   return {
@@ -420,6 +421,7 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
       Object.assign(p, { routing: L.routing, head: L.head, stroke: L.stroke, strokeWidth: L.strokeWidth })
       if (L.headStart !== 'none') p.headStart = L.headStart; else delete p.headStart
       if (L.body) p.body = L.body; else delete p.body
+      if (L.avoid) p.avoid = true; else delete p.avoid
       const was = ['dashed', 'dotted'].includes(p.lineStyle) ? p.lineStyle : (!p.lineStyle && p.dash ? 'dashed' : 'solid')
       // `dash` kept in step, as the floating bar does, for siddran-cli and older builds.
       if (L.lineStyle !== was) { p.lineStyle = L.lineStyle; p.dash = L.lineStyle !== 'solid' }
@@ -431,7 +433,7 @@ export function planDiagram(g, { items = [], scope = null, origin, style = DEFAU
           ...ends, routing: L.routing, head: L.head, stroke: L.stroke, strokeWidth: L.strokeWidth,
           ...(e.label ? { label: e.label } : {}), ...(e.dashed ? { dash: true } : {}), ...(bend ? { bend } : {}),
           ...(L.lineStyle === 'dotted' ? { lineStyle: 'dotted' } : {}),
-          ...(L.headStart !== 'none' ? { headStart: L.headStart } : {}), ...(L.body ? { body: L.body } : {}),
+          ...(L.headStart !== 'none' ? { headStart: L.headStart } : {}), ...(L.body ? { body: L.body } : {}), ...(L.avoid ? { avoid: true } : {}),
         },
       })
     }

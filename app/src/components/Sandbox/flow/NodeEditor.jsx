@@ -36,6 +36,7 @@ const PAD = 48
 const DUR = 200             // ms a re-flow takes to glide into place
 const ZMIN = 0.2, ZMAX = 2.5
 const HANDLE_R = 9
+const DIMMED = 0.22       // what the selection doesn't touch
 
 const anchor = (n, side) => ({
   n: { x: n.x + n.w / 2, y: n.y }, s: { x: n.x + n.w / 2, y: n.y + n.h },
@@ -220,6 +221,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     const pts = routeConnector(anchor(a, sd[0]), anchor(b, sd[1]), L.routing, {
       fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b,
       bend: L.routing === 'elbow' ? laneBend(a, b, sd, laid.turns[i], graph.dir) : null,
+      avoid: L.avoid,
       // Round the other boxes, as the board routes it.
       obstacles: () => shown.filter((n) => n !== a && n !== b),
     })
@@ -235,6 +237,22 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
 
   const selNode = selected?.type === 'node' ? graph.nodes.find((n) => n.key === selected.key) : null
   const selEdge = selected?.type === 'edge' ? graph.edges[selected.i] : null
+
+  // What the selection touches stays at full strength; the rest dims. A node:
+  // itself, every link on it, and the node at each link's other end. A link:
+  // itself and its two ends. Nothing selected: nothing dims.
+  const focus = useMemo(() => {
+    if (selNode) {
+      const links = new Set(), nodes = new Set([selNode.key])
+      graph.edges.forEach((e, i) => {
+        if (e.from === selNode.key || e.to === selNode.key) { links.add(i); nodes.add(e.from); nodes.add(e.to) }
+      })
+      return { nodes, links }
+    }
+    if (selEdge) return { nodes: new Set([selEdge.from, selEdge.to]), links: new Set([selected.i]) }
+    return null
+  }, [selNode, selEdge, selected, graph.edges])
+  const dim = (on) => ({ opacity: focus && !on ? DIMMED : 1, transition: 'opacity 140ms ease' })
 
   // Focus starts on the drawing, so its keys (and Esc / Ctrl+Enter) work at once.
   useEffect(() => { svgRef.current?.focus() }, [])
@@ -405,7 +423,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             const col = L.stroke
             return (
               <g key={`e${i}`} onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i }) }}
-                onDoubleClick={() => select({ type: 'edge', i }, true)} style={{ cursor: 'pointer' }}>
+                onDoubleClick={() => select({ type: 'edge', i }, true)} style={{ cursor: 'pointer', ...dim(focus?.links.has(i)) }}>
                 <polyline points={pairs(pts)} fill="none" stroke="transparent" strokeWidth={14 / cam.z} />
                 {/* selected: a soft accent halo under the line, so its own colour still shows */}
                 {on && <polyline points={pairs(pts)} fill="none" stroke={accent} strokeOpacity={0.35} strokeWidth={L.strokeWidth + 6} strokeLinejoin="round" strokeLinecap="round" />}
@@ -443,7 +461,7 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
               <g key={n.key} transform={`translate(${n.x} ${n.y})`}
                 onPointerEnter={() => setHover(n.key)} onPointerLeave={() => setHover((k) => (k === n.key ? null : k))}
                 onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'node', key: n.key }) }}
-                onDoubleClick={() => select({ type: 'node', key: n.key }, true)} style={{ cursor: 'pointer' }}>
+                onDoubleClick={() => select({ type: 'node', key: n.key }, true)} style={{ cursor: 'pointer', ...dim(focus?.nodes.has(n.key) || target) }}>
                 {/* a margin round the box, so the handle stays reachable */}
                 <rect x={-6} y={-6} width={n.w + 12 + (out === 'e' ? 22 : 0)} height={n.h + 12 + (out === 's' ? 22 : 0)} fill="transparent" />
                 <path d={shapeOutline(n.kind, n.w, n.h, radius)} fill={target ? 'color-mix(in srgb, var(--accent-warning) 18%, transparent)' : look.fill}

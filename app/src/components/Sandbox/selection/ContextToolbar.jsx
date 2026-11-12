@@ -203,6 +203,17 @@ function ContextToolbar({
                             onClick={() => setPayload(r.v === 'straight' ? { routing: r.v } : { routing: r.v, body: null })} title={r.title} aria-label={r.title}
                             aria-pressed={routing === r.v}>{r.label}</button>
                     ))}
+                    {routing !== 'elbow' && cp.body !== 'tapered' && (
+                        // Off: straight through anything in the way. On: the shortest way round.
+                        <button className={cp.avoid ? styles.btnActive : styles.btn} aria-pressed={!!cp.avoid}
+                            onClick={() => setPayload({ avoid: cp.avoid ? undefined : true })}
+                            title={cp.avoid ? 'Going around boxes (click to go direct)' : 'Going direct (click to go around boxes)'} aria-label="Go around boxes">
+                            <svg width="20" height="18" viewBox="0 0 20 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                                <rect x="7" y="7" width="6" height="6" rx="1" />
+                                <path d="M2 10 V4.5 Q2 3 3.5 3 H16.5 Q18 3 18 4.5 V10" />
+                            </svg>
+                        </button>
+                    )}
                     <div className={styles.sep} />
                     <select className={styles.fontSelect} value={headStart} title="Start of line" aria-label="Start of line"
                         onChange={(e) => setPayload({ headStart: e.target.value })}>
