@@ -4,9 +4,10 @@
     position: absolute;
     z-index: 10;
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 5px;
+    /* One row: the text group and the style group sit side by side. */
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
     padding: 7px 11px;
     background-color: rgb(18, 18, 30);
     border: 1px solid var(--border-default);
@@ -91,6 +92,15 @@
     color: var(--text-primary);
 }
 
+/* Font size between the − / + stepper: just wide enough for the number. */
+.sizeSelect {
+    composes: fontSelect;
+    padding: 2px 4px;
+    min-width: 34px;
+    text-align: center;
+    text-align-last: center;
+}
+
 /* ── Colour swatch ── */
 .swatch {
     width: 23px;
@@ -163,6 +173,20 @@
     text-align: right;
 }
 
+/* Thickness stepper: narrow − / + with the number centred between them, so
+   the three read as one control. */
+.stepBtn {
+    composes: btn;
+    width: 24px;
+}
+.stepValue {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    min-width: 14px;
+    text-align: center;
+}
+
 /* Arrow label — a small inline field in the connector bar. */
 .labelInput {
     width: 120px;
@@ -185,8 +209,9 @@
     gap: 3px;
 }
 .row + .row {
-    border-top: 1px solid var(--border-default);
-    padding-top: 6px;
+    border-left: 1px solid var(--border-default);
+    margin-left: 5px;
+    padding-left: 5px;
 }
 
 /* ── Colour menus ── */
@@ -231,21 +256,6 @@
 .paletteNone {
     background: linear-gradient(135deg, transparent 44%, #e05c5c 44%, #e05c5c 56%, transparent 56%), var(--bg-primary);
 }
-.customColor {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-.customColor input {
-    width: 36px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
-}
 .iconSwatch {
     display: inline-flex;
     flex-direction: column;
@@ -259,28 +269,3 @@
     border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
-.alphaSlider {
-    flex: 1;
-    min-width: 90px;
-    height: 10px;
-    border-radius: 5px;
-    appearance: none;
-    -webkit-appearance: none;
-    background-color: #555;
-    cursor: pointer;
-}
-.alphaSlider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid var(--accent-warning);
-}
-.alphaValue {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text-muted);
-    min-width: 36px;
-    text-align: right;
-}

@@ -1,24 +1,17 @@
 import {
-    LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
-    LuType, LuEraser, LuImagePlus, LuPaintBucket,
+    LuMousePointer2, LuHand, LuShapes,
+    LuType, LuImagePlus, LuPaintBucket,
     LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWaypoints,
     LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
 import styles from './SandboxToolbar.module.css'
-import ColorPalette from './ColorPalette'
 import ShapePicker from './ShapePicker'
 import InsertMenu from './InsertMenu'
+import ColorMenu from './ColorMenu'
+import { INK_TOOL_META } from '../ink/inkToolMeta'
 import { SHAPE_TOOLS } from '../shapes/registry'
-
-const COLORS = [
-    { name: 'cream', value: '#e2ddf5' },
-    { name: 'gold', value: '#f0b840' },
-    { name: 'blue', value: '#5a9cf0' },
-    { name: 'red', value: '#e05c5c' },
-    { name: 'green', value: '#52c47a' },
-    { name: 'black', value: '#000000' },
-]
+import { isInkTool, SHAPE_COLORS } from '../ink/presets'
 
 // A post-it: square, folded bottom-right corner, adhesive strip on top — so it
 // doesn't read as a document/file the way a page-with-fold icon does.
@@ -47,22 +40,27 @@ function ToolBtn({ active, title, onClick, disabled, children }) {
 }
 
 function SandboxToolbar({
-    tool, onToolChange,
-    color, onColorChange,
-    paletteOpen, onTogglePalette, onClosePalette,
+    tool, onToolChange, lastInkTool = 'pen',
+    shapeStyle, onShapeStyleChange,
+    paintColor, onPaintColorChange, paintMenuOpen, onBucketClick, onClosePaintMenu,
     shapePickerOpen, onToggleShapePicker, onCloseShapePicker,
     insertMenuOpen, onToggleInsertMenu, onCloseInsertMenu,
-    fillOn, onToggleFill,
     onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf,
     onUndo, onRedo, canUndo, canRedo,
     snapEnabled, onToggleSnap, onExport,
     onOpenFlowText,
     onOpenTemplates,
 }) {
-    const swatchRef = useRef(null)
+    const fillRef = useRef(null)
     const shapeRef = useRef(null)
     const insertRef = useRef(null)
     const isShapeTool = SHAPE_TOOLS.includes(tool) && tool !== 'sticky' && tool !== 'frame'
+    // One button for all the ink tools: it shows the current (or last) one and
+    // opens the drawing flyout beside the dock; pressed again, back to Select.
+    const inking = isInkTool(tool)
+    const ink = INK_TOOL_META[inking ? tool : lastInkTool] || INK_TOOL_META.pen
+    const InkIcon = ink.Icon
+    const paintNone = !paintColor || paintColor === 'transparent'
     return (
         <div className={styles.toolbar}>
             {/* Select and Pan share one button: V (or a click on the active
@@ -75,14 +73,9 @@ function SandboxToolbar({
             >
                 {tool === 'hand' ? <LuHand size={21} /> : <LuMousePointer2 size={21} />}
             </ToolBtn>
-            <ToolBtn active={tool === 'lasso'} title="Lasso select (G)" onClick={() => onToolChange('lasso')}>
-                <LuLasso size={21} />
-            </ToolBtn>
-            <ToolBtn active={tool === 'pen'} title="Pen (P)" onClick={() => onToolChange('pen')}>
-                <LuPenTool size={21} />
-            </ToolBtn>
-            <ToolBtn active={tool === 'eraser'} title="Eraser (E)" onClick={() => onToolChange('eraser')}>
-                <LuEraser size={21} />
+            <ToolBtn active={inking} title={inking ? 'Drawing tools — click for Select' : 'Drawing tools: pen, highlighter, smart drawing, erasers, lasso (P)'}
+                onClick={() => onToolChange(inking ? 'pointer' : lastInkTool)}>
+                <InkIcon size={21} />
             </ToolBtn>
 
             <div className={styles.divider} />
@@ -98,6 +91,8 @@ function SandboxToolbar({
                 anchorRef={shapeRef}
                 onPick={onToolChange}
                 onClose={onCloseShapePicker}
+                shapeStyle={shapeStyle}
+                onShapeStyleChange={onShapeStyleChange}
             />
             <ToolBtn active={tool === 'text'} title="Text (T)" onClick={() => onToolChange('text')}>
                 <LuType size={21} />
@@ -135,25 +130,28 @@ function SandboxToolbar({
 
             <div className={styles.divider} />
 
-            <button
-                ref={swatchRef}
-                className={paletteOpen ? `${styles.swatchCurrent} ${styles.swatchCurrentOpen}` : styles.swatchCurrent}
-                style={{ backgroundColor: color }}
-                onClick={onTogglePalette}
-                title="Stroke colour"
-                aria-label="Stroke colour"
+            {/* Paint bucket: a tool. Pick a colour, then click shapes, stickies,
+                lines or ink to paint them. Esc or another tool puts it away. */}
+            <span ref={fillRef}>
+                <ToolBtn active={tool === 'fill'}
+                    title={tool === 'fill' ? 'Paint bucket — click things to paint them; click here for colours, Esc to stop' : 'Paint bucket — pick a colour, then click a shape to fill it'}
+                    onClick={onBucketClick}>
+                    <span className={styles.iconSwatch}>
+                        <LuPaintBucket size={19} />
+                        <span className={paintNone ? styles.iconBarNone : styles.iconBar} style={paintNone ? undefined : { backgroundColor: paintColor }} />
+                    </span>
+                </ToolBtn>
+            </span>
+            <ColorMenu
+                open={paintMenuOpen}
+                anchorRef={fillRef}
+                onClose={onClosePaintMenu}
+                title="Paint with"
+                colors={SHAPE_COLORS}
+                value={paintColor}
+                onPick={onPaintColorChange}
+                allowNone
             />
-            <ColorPalette
-                open={paletteOpen}
-                colors={COLORS}
-                current={color}
-                anchorRef={swatchRef}
-                onPick={onColorChange}
-                onClose={onClosePalette}
-            />
-            <ToolBtn active={fillOn} title="Fill shapes with color" onClick={onToggleFill}>
-                <LuPaintBucket size={20} />
-            </ToolBtn>
 
             <div className={styles.divider} />
 

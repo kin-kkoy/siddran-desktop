@@ -33,7 +33,8 @@ function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selecte
                 <div className={styles.header}>
                     <span className={styles.label}>NOTE GONE</span>
                     <span className={styles.title} />
-                    <button className={styles.iconBtn} onClick={() => onRemove(item.id)} title="Remove attachment" aria-label="Remove">×</button>
+                    {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+                    {!selected && <button className={styles.iconBtn} onClick={() => onRemove(item.id)} title="Remove attachment" aria-label="Remove">×</button>}
                 </div>
                 <div className={styles.deletedNote}>The referenced note was deleted.</div>
             </div>
@@ -54,7 +55,8 @@ function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selecte
                 >
                     <LuExternalLink size={13} />
                 </button>
-                <button className={styles.iconBtn} onClick={() => onRemove(item.id)} title="Detach (note is not deleted)" aria-label="Detach note">×</button>
+                {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+                {!selected && <button className={styles.iconBtn} onClick={() => onRemove(item.id)} title="Detach (note is not deleted)" aria-label="Detach note">×</button>}
             </div>
             <div className={styles.page} data-sb-noedit="true" data-sb-scroll="true">
                 {html

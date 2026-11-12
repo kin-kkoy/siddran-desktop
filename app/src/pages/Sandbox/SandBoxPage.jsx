@@ -8,7 +8,7 @@ import { useSandboxCanvas } from '../../hooks/useSandboxCanvas'
 import { useSandboxHistory } from '../../hooks/useSandboxHistory'
 import SandboxCanvas from '../../components/Sandbox/Canvas/SandboxCanvas'
 import SandboxToolbar from '../../components/Sandbox/Toolbar/SandboxToolbar'
-import BrushSettings from '../../components/Sandbox/Toolbar/BrushSettings'
+import DrawFlyout from '../../components/Sandbox/Toolbar/DrawFlyout'
 import AttachedNoteCard from '../../components/Sandbox/Cards/AttachedNoteCard'
 import AttachedTaskCard from '../../components/Sandbox/Cards/AttachedTaskCard'
 import TextBoxCard from '../../components/Sandbox/Cards/TextBoxCard'
@@ -31,6 +31,12 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
+import { isInkTool } from '../../components/Sandbox/ink/presets'
+import { paintPayload } from '../../components/Sandbox/ink/paint'
+import { eraseFromStroke } from '../../components/Sandbox/ink/precisionErase'
+import { recognizeStroke, shapeFromRecognition } from '../../components/Sandbox/ink/recognize'
+import { highlighterZ } from '../../components/Sandbox/ink/highlighterZ'
+import { strokeOutline } from '../../components/Sandbox/Canvas/strokeOutline'
 import { useFlowActions } from '../../hooks/useFlowActions'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useApi } from '../../contexts/ApiContext'
@@ -48,6 +54,9 @@ const isEditable = (el) => {
 // Per-shape keys were dropped — `S` opens the shape picker and the shape is
 // chosen with the mouse/pen instead.
 const TOOL_KEYS = { v: 'pointer', g: 'lasso', p: 'pen', e: 'eraser', t: 'text', h: 'hand', n: 'sticky', f: 'frame' }
+// Pressing a tool's key while on that tool flips to its sibling (spec §10.1:
+// "P again"); pressing it on the sibling comes back.
+const TOOL_TOGGLES = { pointer: 'hand', pen: 'highlighter', eraser: 'precisionEraser' }
 const PAN_HINT = 'PAN · SPACE-DRAG · MIDDLE-DRAG · TWO FINGERS · V TWICE'
 
 // What "copy style" carries (Ctrl+Alt+C / Ctrl+Alt+V) — looks, never content.
@@ -118,13 +127,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const [notePickerOpen, setNotePickerOpen] = useState(false)
     const [taskPickerOpen, setTaskPickerOpen] = useState(false)
     const [titleDraft, setTitleDraft] = useState(sandbox?.title ?? '')
-    // Colour palette starts collapsed to a single swatch; opening it tucks the
-    // brush box away, and picking a colour brings the brush box back.
-    const [paletteOpen, setPaletteOpen] = useState(false)
-    const [brushCollapsed, setBrushCollapsed] = useState(false)
     const [shortcutsOpen, setShortcutsOpen] = useState(false)
-    const [shapePickerOpen, setShapePickerOpen] = useState(false)
-    const [insertMenuOpen, setInsertMenuOpen] = useState(false)
+    // The dock's menus — shapes, media, paint bucket — and the drawing flyout
+    // share one slot: opening one closes the others (the flyout hides while a
+    // menu is up).
+    const [openMenu, setOpenMenu] = useState(null)   // 'shapes' | 'insert' | 'paint' | null
     const [editingShapeId, setEditingShapeId] = useState(null)
     const [flowTextOpen, setFlowTextOpen] = useState(false)
     const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -154,16 +161,91 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const cardItems = useMemo(() => sortByZ(items.filter(i => CARD_TYPES.has(i.type))), [items])
     const selectedItems = useMemo(() => items.filter(i => canvas.selectedIds.has(i.id)), [items, canvas.selectedIds])
 
-    // Fill-bucket "on" state reflects the SELECTED shape(s) if any are selected
-    // (so it lights up when a filled shape is picked), else the default style.
-    const fillOn = useMemo(() => {
-        const shapes = selectedItems.filter(i => i.type === 'shape')
-        if (shapes.length) return shapes.some(s => s.payload?.fill && s.payload.fill !== 'transparent')
-        return canvas.shapeStyle.fill !== 'transparent'
-    }, [selectedItems, canvas.shapeStyle.fill])
-
     // ---- commits ----
-    const onStrokeCommit = useCallback((partial) => { act.addItem({ ...partial, z_index: nextZ() }); bump() }, [act, nextZ, bump])
+    const onStrokeCommit = useCallback((partial) => {
+        // A highlight slides beneath the ink it crosses (ink/highlighterZ.js).
+        const z = partial.payload?.highlighter
+            ? highlighterZ({ x: partial.x, y: partial.y, w: partial.w, h: partial.h }, items, nextZ())
+            : nextZ()
+        const created = act.addItem({ ...partial, z_index: z })
+        bump()
+        return created
+    }, [act, items, nextZ, bump])
+
+    // Smart drawing: the ink lands first (one undo step), then — if it reads as a
+    // shape — it is swapped for the clean shape (a second step). So Ctrl+Z
+    // after a recognition gives back exactly the ink you drew (spec R10.9).
+    const onSmartStroke = useCallback((partial) => {
+        const ink = onStrokeCommit(partial)
+        const p = partial.payload
+        const rec = recognizeStroke(p.points, { minSize: 16 / (canvas.viewport.zoom || 1) })
+        if (!rec) { toast.success('Kept as drawing — not a shape I recognise'); return }
+        const width = Math.max(2, Math.min(8, Math.round((p.options?.size ?? 6) / 2)))
+        const shape = shapeFromRecognition(rec, { stroke: p.color, strokeWidth: width, fill: 'transparent' },
+            { points: p.points, options: p.options, color: p.color })
+        beginTransaction()
+        act.removeItem(ink.id)
+        act.addItem({ ...shape, z_index: ink.z_index })
+        endTransaction()
+        bump()
+    }, [onStrokeCommit, canvas.viewport.zoom, act, beginTransaction, endTransaction, bump])
+
+    // "Back to drawing": a recognised shape becomes its ink again, fitted to
+    // wherever the shape is now.
+    const revertToInk = useCallback((id) => {
+        const it = items.find(i => i.id === id)
+        const src = it?.payload?.sourceInk
+        if (!src?.points?.length || it.payload?.locked) return
+        const flat = strokeOutline(src.points, { ...src.options, last: true })
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (let i = 0; i < flat.length; i += 2) {
+            minX = Math.min(minX, flat[i]); maxX = Math.max(maxX, flat[i])
+            minY = Math.min(minY, flat[i + 1]); maxY = Math.max(maxY, flat[i + 1])
+        }
+        const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY)
+        // Grow the shape's box by the ink's own thickness so the line sits where the outline was.
+        const pad = (src.options?.size ?? 6) / 2
+        beginTransaction()
+        act.removeItem(id)
+        act.addItem({
+            type: 'stroke', x: it.x - pad, y: it.y - pad, w: Math.max(1, it.w + pad * 2), h: Math.max(1, it.h + pad * 2), rotation: it.rotation || 0, z_index: it.z_index,
+            payload: {
+                flatOutline: flat.map((v, i) => v - (i % 2 === 0 ? minX : minY)), points: src.points,
+                color: src.color, options: src.options, baseW: bw, baseH: bh,
+                ...(it.payload.groupId ? { groupId: it.payload.groupId } : null),
+            },
+        })
+        endTransaction()
+        canvas.clearSelection()
+        bump()
+    }, [items, act, beginTransaction, endTransaction, canvas, bump])
+
+    // Precision eraser. Several cuts can land between two renders, so the
+    // gesture keeps its own view of which strokes it has already replaced.
+    const precisionRef = useRef(null)
+    const itemsRef = useRef(items)
+    itemsRef.current = items
+    const onPrecisionErase = useCallback((c, r) => {
+        const live = precisionRef.current ?? (precisionRef.current = { removed: new Set(), added: new Map() })
+        const byId = new Map()
+        for (const it of itemsRef.current) if (it.type === 'stroke' && !live.removed.has(it.id)) byId.set(it.id, it)
+        for (const [id, it] of live.added) if (!live.removed.has(id)) byId.set(id, it)
+        let changed = false
+        for (const it of byId.values()) {
+            const pieces = eraseFromStroke(it, c, r)
+            if (!pieces) continue
+            act.removeItem(it.id)
+            live.removed.add(it.id)
+            live.added.delete(it.id)
+            for (const piece of pieces) {
+                const created = act.addItem(piece)
+                live.added.set(created.id, created)
+            }
+            changed = true
+        }
+        if (changed) bump()
+    }, [act, bump])
+    const onPrecisionEraseEnd = useCallback(() => { precisionRef.current = null }, [])
     const onShapeCommit = useCallback((partial) => {
         const kind = partial.payload?.kind
         if (kind === 'frame') {
@@ -499,26 +581,22 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         bump()
     }, [act, nextZ, centerWorld, bump])
 
-    // ---- color ----
-    const onColorChange = useCallback((value) => {
-        canvas.setStrokeColor(value)
-        canvas.setShapeStyle(prev => ({ ...prev, stroke: value, fill: prev.fill !== 'transparent' ? value : 'transparent' }))
-        setPaletteOpen(false)
-        setBrushCollapsed(false)   // picking a colour restores the brush box
-    }, [canvas])
-
-    const onTogglePalette = useCallback(() => {
-        setPaletteOpen(open => {
-            const next = !open
-            setBrushCollapsed(next)   // open → tuck brush box away; close → restore it
-            return next
-        })
-    }, [])
-    const closePalette = useCallback(() => { setPaletteOpen(false); setBrushCollapsed(false) }, [])
-    const onToggleShapePicker = useCallback(() => { setShapePickerOpen(v => !v) }, [])
-    const closeShapePicker = useCallback(() => { setShapePickerOpen(false) }, [])
-    const onToggleInsertMenu = useCallback(() => { setInsertMenuOpen(v => !v) }, [])
-    const closeInsertMenu = useCallback(() => { setInsertMenuOpen(false) }, [])
+    const toggleMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : m)), [])
+    const closeMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : cur)), [])
+    const onToggleShapePicker = useCallback(() => toggleMenu('shapes'), [toggleMenu])
+    const closeShapePicker = useCallback(() => closeMenu('shapes'), [closeMenu])
+    const onToggleInsertMenu = useCallback(() => toggleMenu('insert'), [toggleMenu])
+    const closeInsertMenu = useCallback(() => closeMenu('insert'), [closeMenu])
+    const closePaintMenu = useCallback(() => closeMenu('paint'), [closeMenu])
+    // Choosing a tool from the dock closes whatever menu was open.
+    const chooseTool = useCallback((t) => { setOpenMenu(null); canvas.setTool(t) }, [canvas])
+    // The bucket is a tool: it opens its colours; then click things to paint
+    // them. While it's the tool, the bucket button re-opens the colours.
+    const onBucketClick = useCallback(() => {
+        if (canvas.tool !== 'fill') { canvas.setTool('fill'); setOpenMenu('paint') }
+        else toggleMenu('paint')
+    }, [canvas, toggleMenu])
+    const onPaintColorChange = useCallback((c) => { canvas.setPaintColor(c); setOpenMenu(null) }, [canvas])
 
     // ---- shape text editing (Wave 3) ----
     const onShapeDoubleClick = useCallback((id) => {
@@ -542,20 +620,14 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         act.updateItem(id, { payload: { ...item.payload, ...patch } })
         bump()
     }, [items, act, bump])
-    const onToggleFill = useCallback(() => {
-        // Default style for future shapes.
-        canvas.setShapeStyle(prev => ({ ...prev, fill: prev.fill === 'transparent' ? canvas.strokeColor : 'transparent' }))
-        // If shapes are selected, toggle their fill too (current colour ⇄ transparent).
-        const selectedShapes = items.filter(i => i.type === 'shape' && canvas.selectedIds.has(i.id))
-        if (selectedShapes.length === 0) return
-        beginTransaction()
-        selectedShapes.forEach(s => {
-            const filled = s.payload?.fill && s.payload.fill !== 'transparent'
-            act.updateItem(s.id, { payload: { ...s.payload, fill: filled ? 'transparent' : canvas.strokeColor } })
-        })
-        endTransaction()
+    // Paint bucket: recolour what was clicked (ink/paint.js decides how).
+    const onPaint = useCallback((id) => {
+        const it = items.find(i => i.id === id)
+        const payload = paintPayload(it, canvas.paintColor)
+        if (!payload) return
+        act.updateItem(id, { payload })
         bump()
-    }, [canvas, items, act, beginTransaction, endTransaction, bump])
+    }, [items, canvas.paintColor, act, bump])
 
     // ---- keyboard-driven actions ----
     const selectAll = useCallback(() => { canvas.setSelection(new Set(items.map(i => i.id))) }, [canvas, items])
@@ -654,7 +726,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setFlowTextOpen(true); return }
 
             if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return }
-            if (e.key === 'Escape') { setShortcutsOpen(false); canvas.clearSelection(); if (canvas.tool !== 'pointer') canvas.setTool('pointer'); return }
+            if (e.key === 'Escape') { setShortcutsOpen(false); setOpenMenu(null); canvas.clearSelection(); if (canvas.tool !== 'pointer') canvas.setTool('pointer'); return }
             if (e.key === ']') { e.preventDefault(); onZOrder('front'); return }
             if (e.key === '[') { e.preventDefault(); onZOrder('back'); return }
             if (e.key === '?') { e.preventDefault(); setShortcutsOpen(o => !o); return }
@@ -671,17 +743,18 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             }
 
             // `S` opens the shape picker (then pick a shape with the mouse/pen).
-            if (e.key === 's' || e.key === 'S') { e.preventDefault(); setShapePickerOpen(o => !o); return }
+            if (e.key === 's' || e.key === 'S') { e.preventDefault(); toggleMenu('shapes'); return }
 
             const t = TOOL_KEYS[e.key.toLowerCase()]
-            // V again flips Select ⇄ Pan (the dock has one button for both).
-            if (t === 'pointer' && canvas.tool === 'pointer') canvas.setTool('hand')
-            else if (t) canvas.setTool(t)
+            // A tool's key again flips to its sibling: V Select ⇄ Pan,
+            // P Pen ⇄ Highlighter, E Eraser ⇄ Precision eraser.
+            if (!t) return
+            canvas.setTool(canvas.tool === t && TOOL_TOGGLES[t] ? TOOL_TOGGLES[t] : t)
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
-        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText])
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleMenu])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -750,20 +823,21 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             <div className={styles.canvasShell}>
                 <SandboxToolbar
                     tool={canvas.tool}
-                    onToolChange={canvas.setTool}
-                    color={canvas.strokeColor}
-                    onColorChange={onColorChange}
-                    paletteOpen={paletteOpen}
-                    onTogglePalette={onTogglePalette}
-                    onClosePalette={closePalette}
-                    shapePickerOpen={shapePickerOpen}
+                    onToolChange={chooseTool}
+                    lastInkTool={canvas.lastInkTool}
+                    shapeStyle={canvas.shapeStyle}
+                    onShapeStyleChange={canvas.setShapeStyle}
+                    paintColor={canvas.paintColor}
+                    onPaintColorChange={onPaintColorChange}
+                    paintMenuOpen={openMenu === 'paint'}
+                    onBucketClick={onBucketClick}
+                    onClosePaintMenu={closePaintMenu}
+                    shapePickerOpen={openMenu === 'shapes'}
                     onToggleShapePicker={onToggleShapePicker}
                     onCloseShapePicker={closeShapePicker}
-                    insertMenuOpen={insertMenuOpen}
+                    insertMenuOpen={openMenu === 'insert'}
                     onToggleInsertMenu={onToggleInsertMenu}
                     onCloseInsertMenu={closeInsertMenu}
-                    fillOn={fillOn}
-                    onToggleFill={onToggleFill}
                     onAttachNoteClick={() => setNotePickerOpen(true)}
                     onAttachTaskClick={() => setTaskPickerOpen(true)}
                     onPickImage={onPickImageClick}
@@ -779,13 +853,13 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onOpenTemplates={() => setTemplatesOpen(true)}
                 />
 
-                {canvas.tool === 'pen' && (
-                    <BrushSettings
-                        brush={canvas.brush}
-                        onChange={canvas.setBrush}
-                        onReset={canvas.resetBrush}
-                        collapsed={brushCollapsed}
-                        onCollapsedChange={setBrushCollapsed}
+                {isInkTool(canvas.tool) && !openMenu && (
+                    <DrawFlyout
+                        tool={canvas.tool}
+                        onToolChange={canvas.setTool}
+                        ink={canvas.ink}
+                        onSelectPreset={canvas.selectPreset}
+                        onPresetChange={canvas.updatePreset}
                     />
                 )}
 
@@ -804,6 +878,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onSelect={onSelect}
                     onMarqueeSelect={onMarqueeSelect}
                     onErase={onErase}
+                    onPrecisionErase={onPrecisionErase}
+                    onPrecisionEraseEnd={onPrecisionEraseEnd}
+                    onSmartStroke={onSmartStroke}
+                    onPaint={onPaint}
                     onPlaceText={onPlaceText}
                     onImageDrop={onImageDrop}
                     beginTransaction={beginTransaction}
@@ -839,6 +917,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onFrameSelection={frameSelection}
                             onExportFrame={onExportFrame}
                             onEditText={onEditText}
+                            onRevertInk={revertToInk}
                             beginTransaction={beginTransaction}
                             endTransaction={endTransaction}
                             editingShapeId={editingShapeId}

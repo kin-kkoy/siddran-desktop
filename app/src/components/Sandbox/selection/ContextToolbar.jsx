@@ -9,7 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuAArrowDown, LuAArrowUp,
+    LuPencil,
 } from 'react-icons/lu'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -19,15 +19,17 @@ import { LINE_STYLES, lineStyleOf } from '../connectors/lineStyle'
 import { SHAPES, SHAPE_GROUPS, shapesInGroup, isLineKind } from '../shapes/registry'
 import { FONT_FAMILIES, FONT_SIZES, TEXT_PRESETS, stepFontSize, STICKY_COLORS } from '../text/textStyle'
 import { isFrame, FRAME_FILLS } from '../frames/frames'
+import { CustomColor } from '../Toolbar/ColorMenu'
 
 /**
  * Floating contextual action bar — sits above the current selection and follows
  * pan/zoom (positioned via screenFromWorld inside the canvas container). It is
  * the home for selection-dependent actions so the dock stays slim:
- *   • text row — for shapes AND text cards: style preset, font, size, B/I/U/S,
+ *   • text group — for shapes AND text cards: style preset, font, size, B/I/U/S,
  *     alignment (horizontal; vertical for shapes), colour
- *   • style row — shape fill/border/width/line style/corners/kind, sticky and
+ *   • style group — shape fill/border/width/line style/corners/kind, sticky and
  *     frame colours, flowchart actions, arrange, align, group, lock, duplicate
+ *   The groups sit side by side in ONE row (the user's call — no wrapping).
  *   • a single connector gets its own bar: colour, width, routing, both ends,
  *     line style, reverse, label
  *
@@ -74,9 +76,9 @@ const LINE_GLYPH = { solid: '━', dashed: '┅', dotted: '┈' }
 const HEAD_GLYPH = { none: '—', arrow: '▶', open: '›', triangle: '▷', circle: '●', diamond: '◇', bar: '┃' }
 
 const GAP = 64  // px between the selection top and the bar, in screen space
-// The bar is up to two rows tall. Placed above a selection near the top of the
-// view it would be cut off by the canvas edge, so it pins just inside instead.
-const BAR_ROOM = 150
+// The bar is one row tall. Placed above a selection near the top of the view
+// it would be cut off by the canvas edge, so it pins just inside instead.
+const BAR_ROOM = 90
 
 // Where the bar's centre-bottom (or, pinned, centre-top) goes. The actual
 // centring happens after layout in whole pixels (see the layout effect) — a
@@ -88,31 +90,6 @@ function barPosition(x, anchorY) {
 }
 
 const CONVERTIBLE = SHAPE_GROUPS.filter(g => g.id !== 'line').flatMap(g => shapesInGroup(g.id))
-
-// '#rrggbb' or '#rrggbbaa' → { hex: '#rrggbb', alpha: 0–100 }
-function splitColor(v) {
-    const m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(v || '')
-    if (!m) return { hex: '#ffffff', alpha: 100 }
-    return { hex: `#${m[1]}`, alpha: m[2] ? Math.round(parseInt(m[2], 16) / 2.55) : 100 }
-}
-const joinColor = (hex, alpha) => (alpha >= 100 ? hex : `${hex}${Math.round(alpha * 2.55).toString(16).padStart(2, '0')}`)
-
-/** Any colour, with transparency: a native picker plus an opacity slider. */
-function CustomColor({ value, onPick }) {
-    const { hex, alpha } = splitColor(value)
-    return (
-        <div className={styles.customColor}>
-            <span>Custom</span>
-            <input type="color" value={hex} aria-label="Custom colour"
-                onChange={(e) => onPick(joinColor(e.target.value, alpha))} />
-            <input type="range" min={5} max={100} step={5} value={alpha} className={styles.alphaSlider}
-                aria-label="Opacity" title={`Opacity ${alpha}%`}
-                style={{ backgroundImage: `linear-gradient(90deg, transparent, ${hex})` }}
-                onChange={(e) => onPick(joinColor(hex, Number(e.target.value)))} />
-            <span className={styles.alphaValue}>{alpha}%</span>
-        </div>
-    )
-}
 
 /** A colour swatch that opens a small palette under itself. */
 function SwatchMenu({ id, open, setOpen, value, colors, title, onPick, allowNone = false, icon = null }) {
@@ -169,6 +146,7 @@ function ContextToolbar({
     onFrameSelection,
     onExportFrame,
     onEditText,
+    onRevertInk,        // (id) — a smart-drawn shape back to the ink it came from
     beginTransaction,
     endTransaction,
     editingShapeId,
@@ -222,10 +200,10 @@ function ContextToolbar({
                     <SwatchMenu id="cstroke" open={openMenu} setOpen={setOpenMenu} value={stroke} colors={PALETTE}
                         title="Line colour" onPick={(c) => setPayload({ stroke: c })} />
                     <div className={styles.sep} />
-                    <button className={styles.btn} onClick={() => setPayload({ strokeWidth: Math.max(1, width - 1) })}
+                    <button className={styles.stepBtn} onClick={() => setPayload({ strokeWidth: Math.max(1, width - 1) })}
                         title="Thinner" aria-label="Thinner">−</button>
-                    <span className={styles.radiusValue}>{width}</span>
-                    <button className={styles.btn} onClick={() => setPayload({ strokeWidth: Math.min(12, width + 1) })}
+                    <span className={styles.stepValue}>{width}</span>
+                    <button className={styles.stepBtn} onClick={() => setPayload({ strokeWidth: Math.min(12, width + 1) })}
                         title="Thicker" aria-label="Thicker">+</button>
                     <div className={styles.sep} />
                     {ROUTINGS.map(r => (
@@ -355,14 +333,14 @@ function ContextToolbar({
                         onChange={(e) => patchText({ fontFamily: e.target.value })}>
                         {Object.entries(FONT_FAMILIES).map(([k, f]) => <option key={k} value={k}>{f.label}</option>)}
                     </select>
-                    <button className={styles.btn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, -1) })}
-                        title="Smaller text (Ctrl+Shift+<)" aria-label="Smaller text"><LuAArrowDown size={22} /></button>
-                    <select className={styles.fontSelect} value={fontSize} title="Font size" aria-label="Font size"
+                    <button className={styles.stepBtn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, -1) })}
+                        title="Smaller text (Ctrl+Shift+<)" aria-label="Smaller text">−</button>
+                    <select className={styles.sizeSelect} value={fontSize} title="Font size" aria-label="Font size"
                         onChange={(e) => patchText({ fontSize: Number(e.target.value) })}>
                         {[...new Set([...FONT_SIZES, fontSize])].sort((a, b) => a - b).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <button className={styles.btn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, 1) })}
-                        title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text"><LuAArrowUp size={22} /></button>
+                    <button className={styles.stepBtn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, 1) })}
+                        title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">+</button>
                     <div className={styles.sep} />
                     <button className={ref.bold ? styles.btnActive : styles.btn} onClick={() => toggle('bold')} title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed={!!ref.bold}><LuBold size={18} /></button>
                     <button className={ref.italic ? styles.btnActive : styles.btn} onClick={() => toggle('italic')} title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed={!!ref.italic}><LuItalic size={18} /></button>
@@ -405,10 +383,10 @@ function ContextToolbar({
                             title="Fill" icon={<LuPaintBucket size={18} />} onPick={(c) => patchItems(filledShapes, { fill: c })} />
                         <SwatchMenu id="border" open={openMenu} setOpen={setOpenMenu} value={sref.stroke} colors={PALETTE} allowNone
                             title="Border colour" onPick={(c) => patchItems(filledShapes, { stroke: c })} />
-                        <button className={styles.btn} onClick={() => patchItems(filledShapes, { strokeWidth: Math.max(0, borderWidth - 1) })}
+                        <button className={styles.stepBtn} onClick={() => patchItems(filledShapes, { strokeWidth: Math.max(0, borderWidth - 1) })}
                             title="Thinner border" aria-label="Thinner border">−</button>
-                        <span className={styles.radiusValue}>{borderWidth}</span>
-                        <button className={styles.btn} onClick={() => patchItems(filledShapes, { strokeWidth: Math.min(24, borderWidth + 1) })}
+                        <span className={styles.stepValue}>{borderWidth}</span>
+                        <button className={styles.stepBtn} onClick={() => patchItems(filledShapes, { strokeWidth: Math.min(24, borderWidth + 1) })}
                             title="Thicker border" aria-label="Thicker border">+</button>
                         <button className={shapeStyle !== 'solid' ? styles.btnActive : styles.btn}
                             onClick={() => patchItems(filledShapes, { lineStyle: nextShapeStyle })}
@@ -442,6 +420,11 @@ function ContextToolbar({
                     <>
                         <SwatchMenu id="lstroke" open={openMenu} setOpen={setOpenMenu} value={sref.stroke} colors={PALETTE}
                             title="Line colour" onPick={(c) => patchItems(lineShapes, { stroke: c })} />
+                        <button className={styles.stepBtn} onClick={() => patchItems(lineShapes, { strokeWidth: Math.max(1, (sref.strokeWidth ?? 2) - 1) })}
+                            title="Thinner" aria-label="Thinner">−</button>
+                        <span className={styles.stepValue} title="Thickness">{sref.strokeWidth ?? 2}</span>
+                        <button className={styles.stepBtn} onClick={() => patchItems(lineShapes, { strokeWidth: Math.min(24, (sref.strokeWidth ?? 2) + 1) })}
+                            title="Thicker" aria-label="Thicker">+</button>
                         <button className={shapeStyle !== 'solid' ? styles.btnActive : styles.btn}
                             onClick={() => patchItems(lineShapes, { lineStyle: nextShapeStyle })}
                             title={`Line: ${shapeStyle}`} aria-label="Line style">{LINE_GLYPH[shapeStyle]}</button>
@@ -497,6 +480,17 @@ function ContextToolbar({
                         <button className={styles.btn} onClick={() => flow.copyAsText()}
                             title="Copy as text — paste into a note or an AI chat" aria-label="Copy as text">
                             <LuClipboardCopy size={18} />
+                        </button>
+                        <div className={styles.sep} />
+                    </>
+                )}
+
+                {/* Smart drawing kept the ink: offer it back */}
+                {onRevertInk && selectedCount === 1 && selectedItems[0]?.payload?.sourceInk && !locked && (
+                    <>
+                        <button className={styles.btn} onClick={() => onRevertInk(selectedItems[0].id)}
+                            title="Back to drawing — the ink this shape was recognised from" aria-label="Back to drawing">
+                            <LuPencil size={18} />
                         </button>
                         <div className={styles.sep} />
                     </>

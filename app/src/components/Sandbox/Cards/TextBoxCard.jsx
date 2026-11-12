@@ -76,7 +76,8 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
             onPointerUp={onPointerUp}
             onDoubleClick={(e) => { e.stopPropagation(); setEditing(true) }}
         >
-            <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Delete text">×</button>
+            {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+            {!selected && <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Delete text">×</button>}
             {editing ? (
                 <textarea
                     ref={taRef}

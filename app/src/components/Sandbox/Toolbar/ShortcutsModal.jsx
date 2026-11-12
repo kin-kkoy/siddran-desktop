@@ -8,7 +8,8 @@ const GROUPS = [
     {
         title: 'Tools',
         rows: [
-            ['Select', ['V']], ['Pan tool (toggle)', ['V', 'V']], ['Pen', ['P']], ['Eraser', ['E']],
+            ['Select', ['V']], ['Pan tool (toggle)', ['V', 'V']], ['Pen', ['P']], ['Highlighter', ['P', 'P']],
+            ['Eraser (whole strokes)', ['E']], ['Precision eraser', ['E', 'E']],
             ['Lasso select', ['G']], ['Shapes', ['S']], ['Text', ['T']],
             ['Sticky note', ['N']], ['Frame', ['F']],
         ],

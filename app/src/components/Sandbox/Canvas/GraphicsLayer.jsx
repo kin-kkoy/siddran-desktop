@@ -138,6 +138,23 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
         )
     }
 
+    // ── fast-path: ellipse (native Konva <Ellipse>; the registry has no path
+    // for it). Lost once in the sticky rework (816e3ae), which made every
+    // ellipse on the board invisible. ──
+    if (kind === 'ellipse') {
+        return (
+            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
+                <Ellipse
+                    x={aw / 2} y={ah / 2} radiusX={aw / 2} radiusY={ah / 2}
+                    fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
+                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
+                    listening={false} perfectDrawEnabled={false}
+                />
+                {textNode}
+            </Group>
+        )
+    }
+
     // ── tapered arrow: a filled polygon between the two stored endpoints ──
     if (kind === 'taperedArrow') {
         const baseW = p.baseW || w || 1, baseH = p.baseH || h || 1
@@ -168,6 +185,10 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                 scaleY={baseH ? h / baseH : 1}
                 rotation={rotation}
                 points={p.points}
+                // A line bent from its middle handle: a smooth curve through the
+                // middle point (selection/lineHandles.js). Older builds draw it
+                // as a two-segment line, which is still the right shape roughly.
+                tension={p.curved && p.points?.length >= 6 ? 0.5 : 0}
                 stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)}
                 fill={isArrow ? p.stroke : undefined}
                 pointerLength={isArrow ? 10 : undefined}

@@ -58,7 +58,8 @@ function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSele
             <div className={styles.header}>
                 <span className={styles.label}>PDF</span>
                 <span className={styles.name} title={p.name}>{p.name || 'document.pdf'}</span>
-                <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove PDF">×</button>
+                {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+                {!selected && <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove PDF">×</button>}
             </div>
             <div ref={bodyRef} className={styles.body} data-sb-noedit="true">
                 {src

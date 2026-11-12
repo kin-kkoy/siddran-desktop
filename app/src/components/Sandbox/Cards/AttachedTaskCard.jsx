@@ -26,7 +26,8 @@ function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom,
     if (!task) {
         return (
             <div {...common} className={`${styles.card} ${styles.deleted} ${selected ? styles.selected : ''}`}>
-                <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove attachment">×</button>
+                {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+                {!selected && <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove attachment">×</button>}
                 <div className={styles.label}>TASK GONE</div>
                 <div className={styles.deletedNote}>The referenced task was deleted.</div>
             </div>
@@ -38,7 +39,8 @@ function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom,
 
     return (
         <div {...common} className={`${styles.card} ${styles['accent_' + prio]} ${task.is_completed ? styles.done : ''} ${selected ? styles.selected : ''}`}>
-            <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Detach (task is not deleted)">×</button>
+            {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+            {!selected && <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Detach (task is not deleted)">×</button>}
             <div className={styles.top}>
                 <button
                     data-sb-noedit="true"

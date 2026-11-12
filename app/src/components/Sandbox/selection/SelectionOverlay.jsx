@@ -9,6 +9,7 @@ import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
 import { isLineKind } from '../shapes/registry'
+import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 
 /**
  * The single transform overlay — one DOM/SVG surface drawn above BOTH the Konva
@@ -84,6 +85,10 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // A lone frame is grabbed by its border/title only, so clicks inside it
     // still reach the things placed on it.
     const frameOnly = boxItems.length > 0 && boxItems.every(isFrame)
+    // A lone line/arrow shape is edited by its ends (and middle), not a box.
+    const lineItem = (selectedItems.length === 1 && boxItems.length === 1 && boxItems[0].type === 'shape'
+        && isLineKind(boxItems[0].payload?.kind) && !locked) ? boxItems[0] : null
+    const lineH = lineItem ? lineHandles(lineItem) : null
 
     // Shape that should show the 4 connection dots: the hovered shape, else a
     // single selected shape.
@@ -158,6 +163,19 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             setGesturing(true)
         }
         const p = worldFromClient(e)
+
+        if (d.mode === 'line') {
+            let to = p
+            // Shift: keep the dragged end at 0/45/90° from the other end.
+            if (e.shiftKey && d.which !== 'mid') {
+                const o = d.which === 'start' ? d.ends.end : d.ends.start
+                const len = Math.hypot(p.x - o.x, p.y - o.y)
+                const a = Math.round(Math.atan2(p.y - o.y, p.x - o.x) / (Math.PI / 4)) * (Math.PI / 4)
+                to = { x: o.x + Math.cos(a) * len, y: o.y + Math.sin(a) * len }
+            }
+            updateItem(d.id, dragLineHandle(d.item, d.which, to))
+            return
+        }
 
         if (d.mode === 'bend') {
             updateItem(d.connId, { payload: { ...d.payload, bend: { dx: Math.round(p.x - d.mid.x), dy: Math.round(p.y - d.mid.y) } } })
@@ -389,6 +407,16 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         })
     }
 
+    // Drag a line/arrow shape's end or middle. Each frame is computed from the
+    // item as it was at the press (no compounding).
+    const onLineHandleDown = (which) => (e) => {
+        startGesture(e, { mode: 'line', which, id: lineItem.id, item: lineItem, ends: lineH }, [])
+    }
+    const onLineStraighten = (e) => {
+        e.stopPropagation()
+        beginTransaction(); updateItem(lineItem.id, straightenLine(lineItem)); endTransaction()
+    }
+
     const onRotateDown = (e) => startGesture(e, { mode: 'rotate', center: boxCenter(box) })
 
     const onResizeDown = (key) => (e) => {
@@ -445,7 +473,29 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                 {box && locked && (
                     <polygon points={outlinePts} fill="none" stroke="var(--text-muted)" strokeWidth={1.5} strokeDasharray="4 3" />
                 )}
-                {box && !locked && (
+                {lineH && (() => {
+                    const a = screenOf(lineH.start), b = screenOf(lineH.end)
+                    const m = lineH.mid ? screenOf(lineH.mid) : null
+                    const knob = (key, pt, which, title, filled) => (
+                        <g key={key} style={{ pointerEvents: 'auto', cursor: which === 'mid' ? 'move' : 'grab' }}
+                            onPointerDown={onLineHandleDown(which)}
+                            onDoubleClick={which === 'mid' && lineH.curved ? onLineStraighten : undefined}>
+                            <title>{title}</title>
+                            <circle cx={pt.x} cy={pt.y} r={12} fill="transparent" />
+                            <circle cx={pt.x} cy={pt.y} r={6} fill={filled ? 'var(--accent-warning)' : 'var(--bg-surface)'}
+                                stroke="var(--accent-warning)" strokeWidth={2} />
+                        </g>
+                    )
+                    return (
+                        <g>
+                            {knob('ls', a, 'start', 'Drag to move this end (Shift: straight angles)')}
+                            {knob('le', b, 'end', 'Drag to move this end (Shift: straight angles)')}
+                            {m && knob('lm', m, 'mid', lineH.curved ? 'Drag to bend · double-click to straighten' : 'Drag to bend', lineH.curved)}
+                        </g>
+                    )
+                })()}
+
+                {box && !locked && !lineItem && (
                     <>
                         {/* move region — interior of the selection box.
                             data-sb-move marks it as the shape body (not a true

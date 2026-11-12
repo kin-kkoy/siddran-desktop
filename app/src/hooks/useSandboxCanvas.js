@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { loadInk, saveInk, isInkTool } from '../components/Sandbox/ink/presets'
 
 // Re-export from the shape registry so existing imports from this module still work.
 export { SHAPE_TOOLS, SHAPE_KEYS, isLineKind } from '../components/Sandbox/shapes/registry'
@@ -7,17 +8,6 @@ const DEFAULT_VIEWPORT = { x: 0, y: 0, zoom: 1 }
 const ZOOM_MIN = 0.1
 const ZOOM_MAX = 8
 
-// Key bumped to v3 (was v2) when the single `smoothing` control was
-// reintroduced. `size` and `smoothing` are the only user-tunable knobs;
-// `smoothing` maps to perfect-freehand's `streamline` (the strongest knob),
-// overriding the per-device profile in strokeOutline.js. Other feel knobs
-// still live in those profiles.
-const BRUSH_KEY = 'cinder_sandbox_brush_v3'
-export const DEFAULT_BRUSH = {
-    size: 6,
-    smoothing: 0.6,
-}
-
 const SHAPE_KEY = 'cinder_sandbox_shapestyle_v1'
 export const DEFAULT_SHAPE_STYLE = {
     fill: 'transparent',
@@ -25,6 +15,8 @@ export const DEFAULT_SHAPE_STYLE = {
     strokeWidth: 2,
     radius: 0,
 }
+
+const PAINT_KEY = 'siddran_sandbox_paint_v1'
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n))
 
@@ -37,8 +29,13 @@ const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n))
  */
 export function useSandboxCanvas(initialTool = 'pointer') {
     const [viewport, setViewportState] = useState(DEFAULT_VIEWPORT)
-    const [tool, setTool] = useState(initialTool)
-    const [strokeColor, setStrokeColor] = useState('#e2ddf5') // var(--text-primary) cream
+    const [tool, setToolState] = useState(initialTool)
+    // The ink tool the dock's draw button returns to.
+    const [lastInkTool, setLastInkTool] = useState(isInkTool(initialTool) ? initialTool : 'pen')
+    const setTool = useCallback((t) => {
+        setToolState(t)
+        if (isInkTool(t)) setLastInkTool(t)
+    }, [])
     const [spacePanning, setSpacePanning] = useState(false)
     // Snap-to-grid / snap-to-items toggle (magnet button); on by default.
     const [snapEnabled, setSnapEnabled] = useState(true)
@@ -94,24 +91,31 @@ export function useSandboxCanvas(initialTool = 'pointer') {
         })
     }, [])
 
-    // Live-tunable brush options (currently just size). Persists to
-    // localStorage so the user's dialed-in value survives reload.
-    const [brush, setBrushState] = useState(() => {
-        try {
-            const raw = localStorage.getItem(BRUSH_KEY)
-            return raw ? { ...DEFAULT_BRUSH, ...JSON.parse(raw) } : DEFAULT_BRUSH
-        } catch { return DEFAULT_BRUSH }
-    })
-    const setBrush = useCallback((patch) => {
-        setBrushState(prev => {
-            const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
-            try { localStorage.setItem(BRUSH_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-            return next
-        })
+    // Ink presets: three per pen and per highlighter, each a size + colour +
+    // smoothing (+ opacity for the highlighter). Persisted per user. See
+    // components/Sandbox/ink/presets.js.
+    const [ink, setInkState] = useState(loadInk)
+    const updateInk = useCallback((fn) => {
+        setInkState(prev => { const next = fn(prev); saveInk(next); return next })
     }, [])
-    const resetBrush = useCallback(() => {
-        setBrushState(DEFAULT_BRUSH)
-        try { localStorage.removeItem(BRUSH_KEY) } catch { /* ignore */ }
+    const selectPreset = useCallback((group, index) => {
+        updateInk(prev => ({ ...prev, [group]: { ...prev[group], active: index } }))
+    }, [updateInk])
+    const updatePreset = useCallback((group, index, patch) => {
+        updateInk(prev => ({
+            ...prev,
+            [group]: { ...prev[group], presets: prev[group].presets.map((p, i) => (i === index ? { ...p, ...patch } : p)) },
+        }))
+    }, [updateInk])
+
+    // The paint bucket's colour ('transparent' = empty a fill). Separate from
+    // the default fill for new shapes, which the shape picker sets.
+    const [paintColor, setPaintColorState] = useState(() => {
+        try { return localStorage.getItem(PAINT_KEY) || '#5a9cf0' } catch { return '#5a9cf0' }
+    })
+    const setPaintColor = useCallback((c) => {
+        setPaintColorState(c)
+        try { localStorage.setItem(PAINT_KEY, c) } catch { /* not remembered */ }
     }, [])
 
     const activeStrokeRef = useRef(null)
@@ -198,8 +202,12 @@ export function useSandboxCanvas(initialTool = 'pointer') {
     return {
         viewport, setViewport, zoomAt, panBy, pinch,
         tool, setTool,
-        strokeColor, setStrokeColor,
-        brush, setBrush, resetBrush,
+        // Text boxes and connectors take the shapes' border colour (the pen's
+        // colour now lives in its presets).
+        strokeColor: shapeStyle.stroke,
+        ink, selectPreset, updatePreset,
+        lastInkTool,
+        paintColor, setPaintColor,
         shapeStyle, setShapeStyle,
         snapEnabled, setSnapEnabled,
         spacePanning,

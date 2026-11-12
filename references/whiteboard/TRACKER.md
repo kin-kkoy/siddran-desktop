@@ -96,24 +96,24 @@ per section, merged back into `whiteboard` one at a time.
       to the head. Available as a shape and as a connector body.
 - [x] Sticky-note dock icon that doesn't look like a document.
 
-## Section 2 — Drawing tools flyout (Miro-style)
+## Section 2 — Drawing tools flyout (Miro-style)  ✅ done (session 2) — checked by the user, committed
 
 Screenshot reference: clicking the pen opens a second column, top to bottom:
 
-- [ ] Pen, Highlighter, Smart drawing, Eraser, Precision eraser, Lasso.
-- [ ] Three preset circles under the tools. Each preset is a thickness plus a
+- [x] Pen, Highlighter, Smart drawing, Eraser, Precision eraser, Lasso.
+- [x] Three preset circles under the tools. Each preset is a thickness plus a
       colour. Clicking an active preset opens its editor (size, colour,
       smoothing). The pen and the highlighter each have their own three.
-- [ ] Highlighter: translucent (~35%), flat caps, drawn beneath text
+- [x] Highlighter: translucent (~35%), flat caps, drawn beneath text
       (spec §10.3). Store as a stroke with `payload.highlighter: true`.
-- [ ] Precision eraser: removes only the part of a stroke under it, splitting
+- [x] Precision eraser: removes only the part of a stroke under it, splitting
       the stroke. Re-run `strokeOutline` on each piece. The ordinary eraser
       still removes whole strokes.
-- [ ] Move the dock's stroke colour into the pen flyout. Give the fill bucket
+- [x] Move the dock's stroke colour into the pen flyout. Give the fill bucket
       its own fill colour.
-- [ ] Shapes: the shape picker shows border and fill colour choices. The default
+- [x] Shapes: the shape picker shows border and fill colour choices. The default
       is cream `#e2ddf5` (decided).
-- [ ] Smart drawing (spec §10.4): a rough stroke becomes a clean
+- [x] Smart drawing (spec §10.4): a rough stroke becomes a clean
       rectangle/ellipse/triangle/diamond/arrow, keeping the source ink for
       undo. Rule-based recogniser first. This could be its own session if it
       runs long.
@@ -198,3 +198,53 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   placed on whole pixels. **Don't reintroduce backdrop-filter or transform-based
   centring on these bars.** Not yet confirmed by the user on the real display.
   Next: section 2.
+- 2026-11-12 · session 2 · section 2 built and committed after the user's check. New
+  `components/Sandbox/ink/`: `presets.js` (tools, 3 presets each for pen and
+  highlighter, persisted at `siddran_sandbox_ink_v1`; the old brush migrates to
+  the pen's middle preset), `precisionErase.js`, `recognize.js`,
+  `highlighterZ.js`, all unit-tested. UI: `Toolbar/DrawFlyout.jsx`, plus
+  `Toolbar/ColorMenu.jsx` (shared Popover and CustomColor; `BrushSettings` and
+  `ColorPalette` were removed). Choices made:
+  - One dock button opens the flyout. P/P toggles Pen ⇄ Highlighter, E/E
+    toggles Eraser ⇄ Precision.
+  - The highlighter colour has its alpha baked in (`#rrggbb59`), so old builds
+    also draw it translucent. No multiply blend: on the dark board it would go black.
+  - The highlighter sits beneath crossed pen ink and outline-only shapes, and
+    above filled things.
+  - Smart drawing gives two undo steps (ink, then shape). The shape keeps
+    `payload.sourceInk`, and the floating bar has "Back to drawing".
+  - Text and connector colour now follow the shape border colour (the pen
+    colour moved into presets).
+- Checked headless on a copy of the test Bag (dev localStorage backed up and
+  restored afterwards):
+  - Precision cuts render in place, including on a moved, stretched and
+    rotated stroke.
+  - The highlighter stacks as intended.
+  - All 5 recognised shapes render.
+  - The P/P and E/E flyouts and the picker's Border/Fill rows look right.
+- **Fixed a regression from 816e3ae:** committed `ellipse` shapes rendered
+  nothing (the Konva ellipse fast-path had been dropped).
+- Gestures (drawing, erasing, preset clicks) can't be driven headlessly; the
+  user must try them. **Check-in: the user reviews section 2 before section 3.**
+- 2026-11-12 · session 2 · user feedback round on section 2:
+  - Cards (text, notes, tasks, PDFs) let presses through while drawing,
+    highlighting, lassoing or painting. The plain eraser still deletes them.
+  - New precision-eraser icon: a cut line with a ring over the gap.
+  - The dock's menus and the draw flyout are one slot: opening one closes the others.
+  - The shape picker is icons only, in one sectioned grid. Arrow thumbnails
+    now have both barbs. Its transform animation was removed (blur rule).
+  - A single selected line or arrow SHAPE gets end handles plus a middle bend
+    handle instead of a box (`selection/lineHandles.js`). Curved lines store
+    3 points plus `payload.curved` and render with tension. The line bar has
+    − / + thickness.
+  - The paint bucket is now a tool (`fill`, `ink/paint.js`): pick a colour,
+    click things to paint them. It is separate from the default fill for new
+    shapes (shape picker).
+  - Verified headless: arrow handles, single menu, picker, icon, Esc.
+  - Precision-eraser icon redone again (the ring version read as a "black hole"):
+    a smaller lucide eraser whose tip sits in a gap cut in a line. Thickness
+    steppers (−  n  +) made compact on every bar.
+  - Last round: the floating bar is ONE row (the groups sit side by side, so
+    with everything showing it runs ~1300 px and the half-width dock view clips
+    it). Font size is − n +. Cards hide their × while selected (the bar's
+    trash does it). Next: section 3.
