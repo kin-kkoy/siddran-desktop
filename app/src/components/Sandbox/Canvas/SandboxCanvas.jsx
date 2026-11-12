@@ -249,14 +249,28 @@ function SandboxCanvas({
             const { canvas, onPlaceText } = latestRef.current
             // Middle mouse button → pan from anywhere, regardless of the active
             // tool (and over cards). preventDefault suppresses the OS autoscroll.
+            //
+            // Panning owns the press outright: stopPropagation keeps it from
+            // reaching a card underneath (cards' React handlers run after this
+            // native listener), which would otherwise start dragging the card
+            // at the same time — or, with Space, instead.
             if (e.button === 1) {
                 e.preventDefault()
+                e.stopPropagation()
                 lastPanRef.current = screenPointerWorld(e).screen
                 midPanRef.current = true
                 el.setPointerCapture?.(e.pointerId)
                 return
             }
             if (e.button !== 0 && e.button !== undefined) return
+            // Space-drag / the pan tool pan over cards too (handles excluded:
+            // those are the selection's own grips).
+            if ((canvas.tool === 'hand' || canvas.spacePanning) && e.pointerType !== 'touch' && !e.target?.closest?.('[data-sb-handle="true"]')) {
+                e.stopPropagation()
+                lastPanRef.current = screenPointerWorld(e).screen
+                el.setPointerCapture?.(e.pointerId)
+                return
+            }
             const target = e.target
             if (target && target !== el && (
                 target.closest('[data-sb-card="true"]') || target.closest('[data-sb-handle="true"]')

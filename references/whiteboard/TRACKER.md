@@ -440,3 +440,13 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   - Note for the user: "go around" rarely shows in the editor because its
     layout keeps boxes out of the way. It matters on the board once boxes
     are moved by hand.
+- 2026-11-13 · session 3 · bug: panning over a card. The bug was in all four
+  cards (text, note, task, PDF) through the shared `useCardPointer`.
+  Middle-drag panned AND dragged the card. Space-drag only dragged it,
+  because the canvas skipped card presses before checking for a pan. Fix,
+  in SandboxCanvas's native pointerdown, which runs before the cards' React
+  handlers:
+  - a middle press, or Space / the pan tool, now takes the press over cards
+    too (selection handles excepted);
+  - it calls `stopPropagation`, so the card never starts a drag.
+  Gestures can't be driven headlessly; the user checks it by hand.
