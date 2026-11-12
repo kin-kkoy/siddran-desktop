@@ -36,6 +36,32 @@ done, so the next session knows where things stand.
   - Use `pgrep -x siddran` to stop the app, never `pkill -f` (it kills its own shell).
 - **Run it:** from the worktree root, `npm run tauri:dev`.
 
+## Decisions already made by the user (2026-11-12) — don't re-ask
+
+1. **Default shape and pen colour (section 2):** light cream `#e2ddf5`, today's
+   default. It's readable on the dark board, and black stays available in the
+   presets.
+2. **Node editor (section 3):** a **pop-up window**, like today's "Diagram from
+   text". Text mode stays as a tab in the same pop-up. Insert puts the diagram
+   on the board.
+3. **Format data (section 5): both, chosen per widget.**
+   - Each Kanban/Table/Timeline/Matrix is either *linked to Siddran tasks*
+     (shows and edits real tasks, filtered by tag or project) or uses *its own
+     records* stored in the board.
+   - Design one view layer over two data sources (an adapter interface).
+     Don't build two copies of each view.
+   - Linked mode must go through the existing tasks store and the live-sync
+     path (`desktop/localStore.js`), never write `tasks.siddran` directly.
+4. **Engage and Talktrack (section 11): solo versions.**
+   - Engage means self-quizzes, flashcards, and polls or votes you fill in yourself.
+   - Talktrack means recording your screen and voice over the board, saved
+     as a video in the Bag.
+   - No multi-user server.
+
+**Check-ins:** the user reviews by hand after **section 2** and after
+**section 5**. Stop at those points and ask them to try it. Other sections can
+run straight on, and the user reviews them at the end.
+
 ## Parallel or sequential?
 
 Sections 1–4 all edit the same hot files (the page, canvas, overlay and
@@ -85,9 +111,8 @@ Screenshot reference: clicking the pen opens a second column, top to bottom:
       still removes whole strokes.
 - [ ] Move the dock's stroke colour into the pen flyout. Give the fill bucket
       its own fill colour.
-- [ ] Shapes: the shape picker shows border and fill colour choices. The user
-      said "by default black", but the board is dark, so confirm the default
-      with the user before choosing.
+- [ ] Shapes: the shape picker shows border and fill colour choices. The default
+      is cream `#e2ddf5` (decided).
 - [ ] Smart drawing (spec §10.4): a rough stroke becomes a clean
       rectangle/ellipse/triangle/diamond/arrow, keeping the source ink for
       undo. Rule-based recogniser first. This could be its own session if it
@@ -103,9 +128,7 @@ way to build the same thing. Keep the text mode for AI and paste.
       data/database). Live preview using `flow/flowText.js` layout, then insert.
 - [ ] Two-way: open an existing diagram selection in the node editor, and
       round-trip with `itemsToFlow`.
-- [ ] Decide with the user whether this is a modal, a side panel, or a "diagram
-      container" on the canvas (spec §13.8 calls it a Diagram format, which
-      could fold into section 5).
+- [ ] Build it as a **pop-up window** (decided), with Nodes and Text tabs.
 - [ ] Give it its own dock icon. The user asked for a new look; it's now
       `LuWaypoints` as a stopgap. Pick one that reads as "node graph" once
       the node editor exists.
@@ -133,9 +156,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       are views of one dataset.
 - [ ] Undo, merge (`mergeRows` is per item; a dataset may need per-record
       merging) and CLI round-trip.
-- [ ] Decide with the user how this relates to Siddran's existing Tasks and
-      kanban (TasksHub). Reusing tasks as records may be far better than a
-      second task system.
+- [ ] Data source per widget, **linked tasks or own records** (decided: both).
+      One adapter interface, one set of views.
 
 ## Sections 6–11 — Formats (can run in parallel after section 5)
 
@@ -148,10 +170,9 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       F5/arrows/Esc (§11.8, §13.10).
 - [ ] **10 · Prototype:** screens with click-through hotspots and a preview
       mode (§13.11).
-- [ ] **11 · Engage activities + Talktrack:** Kahoot-style polls, quizzes and
-      word clouds; screen and camera recording with chapters. Siddran is
-      single-user and local, so ask the user what "participants" means here
-      before building (§13.12–13.13).
+- [ ] **11 · Engage activities + Talktrack, solo versions (decided):**
+      self-quizzes, flashcards, polls and votes; screen and voice recording of
+      the board, saved as video in the Bag (§13.12–13.13).
 
 ## Not planned (user decision, 2026-11-12)
 
