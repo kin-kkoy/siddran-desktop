@@ -171,3 +171,9 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   `width: max-content` with no wrapping. The sticky now looks like paper (gradient,
   adhesive strip, lifted shadow, folded corner). Dock icons are bigger (44 px
   buttons). The diagram icon is now `LuWaypoints`.
+- 2026-11-12 · session 1 · blurry toolbars: the user's HDMI monitor is scaled
+  0.83. Composited layers (backdrop-filter, translate(-50%), lingering
+  animations) rasterise soft there. They were removed and the bar is now
+  placed on whole pixels. **Don't reintroduce backdrop-filter or transform-based
+  centring on these bars.** Not yet confirmed by the user on the real display.
+  Next: section 2.
