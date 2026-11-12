@@ -142,6 +142,12 @@ way to build the same thing. Keep the text mode for AI and paste.
 - [ ] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
       `lineStyle` and `routing: "curved"`.
 - [ ] Keep the parity tests between `flowText.js` and `diagram.rs` green.
+- [ ] **Port the family rows to `diagram.rs`** (done in `flowText.js` in session 3).
+      `layoutGraph` now lays each connected group out on its own and stacks
+      the groups top to bottom, `GAP_FAMILY = 144` apart, left-aligned, in
+      order of their first node. A graph with one family is unchanged, so the
+      existing parity tests still hold. Mirror the "families" tests in
+      `flowGraph.test.js`.
 
 ## Section 5 — Format shell + shared record model (prerequisite for 6–11)
 
@@ -291,3 +297,32 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   Ctrl+Enter Update, a single Ctrl+Z, Ctrl+Y. The preview routes links round
   other boxes the way the board does. Port dragging and clicking kinds can't
   be driven headlessly; the user checks those at the end. Next: section 4.
+- 2026-11-12 · session 3 · user feedback round on the node editor:
+  - **Nothing jumps any more.** The view no longer re-fits after every
+    change. It holds still around the node you're on (the camera shifts by
+    that node's move), other nodes glide to their new places in 200 ms
+    (new ones grow out of their linked node), and the selected node is
+    panned into view if needed.
+  - **Zoom and pan:** the wheel zooms at the pointer (as on the board); drag
+    empty space or middle-drag to pan; a − n% + ⛶ pill sits bottom-left;
+    keys `=`/`-` zoom on the selected node and `1` fits everything.
+  - **One "+" handle** on the outgoing side, in place of the four dots:
+    click it for the next step, drag it onto a node to link.
+  - **Families as rows:** unlinked groups stack top to bottom, 144 px apart
+    (in `layoutGraph`, see section 4).
+  - **Shapes:** the kind picker is the shape menu's own Basic / Flowchart /
+    Callouts sections (`ShapeThumb` is exported from ShapePicker). Kinds
+    with no text form are written as `[box]` and kept when that line comes
+    back unchanged; `terminator` is written as `([pill])`.
+  - **Icons:** a custom `DiagramIcon` (box → diamond → pill) on the dock and
+    the floating bar, and a `NextStepIcon` (box → ⊕) for "next step", both
+    in `flow/icons.jsx`.
+  - **Dock: one item active at a time.** Opening the shapes or media menu
+    drops the held tool (text, pen, sticky…) to Select, so a board click
+    with the menu up no longer drops text. While a menu is open, its button
+    is the only one lit.
+  - Esc / Ctrl+Enter work even when focus slips out of the pop-up, and other
+    keys pull focus back in (seen headless: Ctrl+A selected the whole page).
+  - Verified headless (Bag copy, localStorage restored): the T→S dock fix,
+    the new family's row, the camera following, zoom on the selection, the
+    shape picker, both icons.

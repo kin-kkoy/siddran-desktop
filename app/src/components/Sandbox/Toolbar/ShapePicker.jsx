@@ -50,7 +50,7 @@ function StyleRows({ style, onChange }) {
 
 // ── Tiny shape thumbnail drawn on a <canvas> ──
 
-function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
+export function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
     const canvasRef = useRef(null)
     useLayoutEffect(() => {
         const cvs = canvasRef.current

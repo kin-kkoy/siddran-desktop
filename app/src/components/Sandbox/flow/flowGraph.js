@@ -15,27 +15,26 @@
 // rather than deleting and redrawing them.
 
 import { layoutGraph, nodeSize, wrap, DEFAULT_STYLE, parseFlow } from './flowText'
-import { isLineKind } from '../shapes/registry'
+import { isLineKind, SHAPES, shapesInGroup } from '../shapes/registry'
 import { isFrame } from '../frames/frames'
 
-/** The node kinds the editor offers, in picker order. */
-export const NODE_KINDS = [
-  { id: 'box', kind: 'rect', round: 'some', label: 'Step' },
-  { id: 'rounded', kind: 'roundedRect', round: 'some', label: 'Rounded step' },
-  { id: 'terminal', kind: 'roundedRect', round: 'pill', label: 'Start / end' },
-  { id: 'decision', kind: 'rhombus', round: 'none', label: 'Decision' },
-  { id: 'data', kind: 'parallelogram', round: 'none', label: 'Data (input / output)' },
-  { id: 'database', kind: 'cylinder', round: 'none', label: 'Database' },
-  { id: 'circle', kind: 'ellipse', round: 'none', label: 'Circle' },
-  { id: 'prep', kind: 'hexagon', round: 'none', label: 'Preparation' },
-]
+/**
+ * The node kinds the editor offers: the shape menu's own sections, minus lines
+ * (a node is a box) — so any shape you can draw can be a step.
+ */
+export const NODE_GROUPS = [
+  { id: 'basic', label: 'Basic' }, { id: 'flowchart', label: 'Flowchart' }, { id: 'callout', label: 'Callouts' },
+].map((g) => ({ ...g, kinds: shapesInGroup(g.id) }))
 
-/** Which picker entry a node is, or null for a board shape the text can't name. */
-export function kindOf(node) {
-  if (node.kind === 'roundedRect') return NODE_KINDS.find((k) => k.id === (node.round === 'pill' ? 'terminal' : 'rounded'))
-  if (node.kind === 'rect') return NODE_KINDS[0]
-  return NODE_KINDS.find((k) => k.kind === node.kind) || null
-}
+export const kindLabel = (kind) => SHAPES[kind]?.label || kind
+
+// The kinds flowchart text has a bracket form for; any other shape is written
+// as a plain [box] and kept as it is when the text comes back (textToGraph).
+const TEXT_KINDS = new Set(['rect', 'roundedRect', 'terminator', 'rhombus', 'ellipse', 'hexagon', 'cylinder', 'parallelogram'])
+export const hasTextForm = (kind) => TEXT_KINDS.has(kind)
+
+/** The `round` a kind gets when picked: text's `[box]` is a rect with soft corners. */
+export const roundFor = (kind) => (kind === 'rect' || kind === 'roundedRect' ? 'some' : 'none')
 
 export const emptyGraph = (dir = 'down') => ({ dir, nodes: [], edges: [] })
 
@@ -72,8 +71,9 @@ export function connect(g, from, to, extra = {}) {
 /** A new node linked from `from` — the editor's "next step". */
 export function addNext(g, from, opts = {}) {
   const src = g.nodes.find((n) => n.key === from)
-  // After a decision come steps, not more questions (as Tab does on the board).
-  const like = src && src.kind !== 'rhombus' ? { kind: src.kind, round: src.round } : { kind: 'rect', round: 'some' }
+  // After a decision or a start/end come steps (as Tab does on the board).
+  const plain = !src || ['rhombus', 'terminator'].includes(src.kind) || (src.kind === 'roundedRect' && src.round === 'pill')
+  const like = plain ? { kind: 'rect', round: 'some' } : { kind: src.kind, round: src.round }
   const { graph, key } = addNode(g, { ...like, ...opts })
   return { graph: connect(graph, from, key), key }
 }
@@ -100,6 +100,7 @@ const BRACKETS = {
 }
 
 function brackets(n) {
+  if (n.kind === 'terminator') return ['([', '])']
   if (n.kind === 'roundedRect') return n.round === 'pill' ? ['([', '])'] : ['(', ')']
   if (n.kind === 'rect') return n.round === 'none' ? ['>', ']'] : ['[', ']']
   return BRACKETS[n.kind] || ['[', ']']
@@ -142,9 +143,10 @@ export function textToGraph(text, prev = null) {
       const old = byKey.get(n.key)
       if (!old) continue
       if (old.itemId) n.itemId = old.itemId
-      // The text has no word for a board-only shape (a cloud, a sticky); a plain
-      // box in the text for one of those means "unchanged", not "make it a box".
-      if (!kindOf(old) && n.kind === 'rect' && n.round === 'some') { n.kind = old.kind; n.round = old.round }
+      // Written the same way as before means the same shape: the text has no
+      // word for a cloud or a terminator, so their [box] / ([pill]) coming
+      // back unchanged keeps them a cloud or a terminator.
+      if (brackets(n).join() === brackets(old).join()) { n.kind = old.kind; n.round = old.round }
       if (n.label === '…' && !old.label) n.label = ''
     }
     const pool = prev.edges.filter((e) => e.itemId)

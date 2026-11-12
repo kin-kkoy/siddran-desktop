@@ -15,6 +15,9 @@
 
 const GAP_LAYER = 72
 const GAP_SIBLING = 48
+// Between separate families (groups of nodes with no link between them), which
+// are stacked as rows so an unlinked node never reads as part of a neighbour's tree.
+const GAP_FAMILY = 144
 
 export const DEFAULT_STYLE = { stroke: '#e2ddf5', text: '#e2ddf5', fill: 'transparent', font: 16 }
 
@@ -200,8 +203,40 @@ export function nodeSize(label, kind, font = DEFAULT_STYLE.font) {
  * Layered layout of `nodes` (each { key, w, h }) and `edges` ({ from, to }).
  * Returns key → { x, y } top-left, with the whole drawing's top-left at
  * `origin`, plus each edge's sides. Used for text-to-diagram and for Tidy.
+ *
+ * Each family (connected group) is laid out on its own, and the families are
+ * stacked top to bottom as rows, GAP_FAMILY apart, in order of their first node.
+ * One family lays out exactly as it always has.
  */
 export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 }) {
+  const index = new Map(nodes.map((nd, i) => [nd.key, i]))
+  const parent = nodes.map((_, i) => i)
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i }
+  for (const e of edges) {
+    const a = index.get(e.from), b = index.get(e.to)
+    if (a != null && b != null) parent[find(a)] = find(b)
+  }
+  const groups = new Map()
+  nodes.forEach((_, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(i) })
+  if (groups.size <= 1) return layoutFamily(nodes, edges, dir, origin)
+
+  const pos = new Map()
+  const sides = new Array(edges.length).fill(null)
+  let y = origin.y
+  for (const members of groups.values()) {
+    const keys = new Set(members.map((i) => nodes[i].key))
+    const sub = members.map((i) => nodes[i])
+    const subEdges = [], at = []
+    edges.forEach((e, i) => { if (keys.has(e.from) && keys.has(e.to)) { subEdges.push(e); at.push(i) } })
+    const r = layoutFamily(sub, subEdges, dir, { x: origin.x, y })
+    for (const [k, p] of r.pos) pos.set(k, p)
+    r.sides.forEach((sd, j) => { sides[at[j]] = sd })
+    y = Math.max(...sub.map((nd) => r.pos.get(nd.key).y + nd.h)) + GAP_FAMILY
+  }
+  return { pos, sides }
+}
+
+function layoutFamily(nodes, edges, dir, origin) {
   const n = nodes.length
   const index = new Map(nodes.map((nd, i) => [nd.key, i]))
   const E = edges.map((e) => [index.get(e.from), index.get(e.to)]).filter(([a, b]) => a != null && b != null)

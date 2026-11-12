@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseFlow, flowToItems, itemsToFlow } from './flowText'
 import {
   emptyGraph, addNode, addNext, connect, removeNode, updateEdge, reverseEdge,
-  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, kindOf, NODE_KINDS,
+  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm,
 } from './flowGraph'
 import { shapeOutline } from './svgPath'
 
@@ -16,7 +16,7 @@ describe('editing', () => {
     const a = r.key
     r = addNext(g, a, { label: 'Next' }); g = r.graph
     expect(g.nodes.map((n) => n.key)).toEqual(['n1', 'n2'])
-    expect(g.nodes[1]).toMatchObject({ kind: 'roundedRect', round: 'pill' })
+    expect(g.nodes[1]).toMatchObject({ kind: 'rect', round: 'some' })   // after a start, a step
     expect(g.edges).toEqual([{ from: 'n1', to: 'n2', label: null, head: true, dashed: false }])
     expect(connect(g, 'n1', 'n2')).toBe(g)   // no duplicate
     expect(connect(g, 'n1', 'n1')).toBe(g)   // no self-link
@@ -40,16 +40,25 @@ describe('editing', () => {
     expect(reverseEdge(g, 0)).toBe(g)
   })
 
-  it('names every picker kind', () => {
-    for (const k of NODE_KINDS) expect(kindOf({ kind: k.kind, round: k.round }).id).toBe(k.id)
-    expect(kindOf({ kind: 'cloud' })).toBeNull()
+  it('offers the shape menu\'s boxes, not its lines', () => {
+    const all = NODE_GROUPS.flatMap((g) => g.kinds)
+    expect(all).toEqual(expect.arrayContaining(['rect', 'rhombus', 'cylinder', 'cloud', 'terminator', 'speechBubble']))
+    expect(all).not.toContain('arrow')
+    expect(all).not.toContain('frame')
+  })
+
+  it('follows a start/end with a plain step', () => {
+    let g = addNode(emptyGraph(), { kind: 'terminator', round: 'none' }).graph
+    g = addNext(g, 'n1').graph
+    expect(g.nodes[1]).toMatchObject({ kind: 'rect', round: 'some' })
   })
 })
 
 describe('graphToText', () => {
   it('round-trips through parseFlow, every kind and edge style', () => {
     let g = emptyGraph('right')
-    for (const k of NODE_KINDS) g = addNode(g, { label: k.label, kind: k.kind, round: k.round }).graph
+    const forms = [['rect', 'some'], ['roundedRect', 'some'], ['roundedRect', 'pill'], ['rhombus', 'none'], ['parallelogram', 'none'], ['cylinder', 'none'], ['ellipse', 'none'], ['hexagon', 'none']]
+    for (const [kind, round] of forms) g = addNode(g, { label: `${kind} ${round}`, kind, round }).graph
     g = { ...g, nodes: [...g.nodes, { key: 'flag', label: 'Flag', kind: 'rect', round: 'none' }] }
     g = connect(g, 'n1', 'n2'); g = connect(g, 'n2', 'n3', { label: 'yes' })
     g = connect(g, 'n3', 'n4', { head: false }); g = connect(g, 'n4', 'n5', { dashed: true })
@@ -86,6 +95,13 @@ describe('textToGraph', () => {
     const { graph } = textToGraph('flowchart TD\n  n1[A renamed] --> n2[B]\n  n2 --> n3[New]\n', prev)
     expect(graph.nodes.map((n) => n.itemId)).toEqual(['s1', 's2', undefined])
     expect(graph.nodes[1].kind).toBe('cloud')        // a plain box in the text = unchanged board shape
+    expect(hasTextForm('cloud')).toBe(false)
+    // …but a box written differently is what the text now says
+    expect(textToGraph('n1[A] --> n2{B}', prev).graph.nodes[1].kind).toBe('rhombus')
+    // a terminator goes out as ([pill]) and comes back a terminator
+    const term = { dir: 'down', nodes: [{ key: 'n1', label: 'Go', kind: 'terminator', round: 'none' }], edges: [] }
+    expect(graphToText(term)).toContain('n1([Go])')
+    expect(textToGraph(graphToText(term), term).graph.nodes[0].kind).toBe('terminator')
     expect(graph.edges.map((e) => e.itemId)).toEqual(['c1', undefined])
   })
 })
@@ -101,7 +117,8 @@ describe('itemsToGraph', () => {
     const { graph, origin } = itemsToGraph([...shapes, ...connectors])
     expect(origin).toEqual({ x: 50, y: 60 })
     expect(graph.dir).toBe('right')
-    expect(graph.nodes.map((n) => [n.label, kindOf(n)?.id])).toEqual(expect.arrayContaining([['Start', 'terminal'], ['Ok?', 'decision'], ['Store', 'database'], ['Ask', 'data']]))
+    expect(graph.nodes.map((n) => [n.label, n.kind, n.round])).toEqual(expect.arrayContaining([
+      ['Start', 'roundedRect', 'pill'], ['Ok?', 'rhombus', 'none'], ['Store', 'cylinder', 'none'], ['Ask', 'parallelogram', 'none']]))
     const label = (k) => graph.nodes.find((n) => n.key === k).label
     expect(graph.edges.map((e) => [label(e.from), label(e.to), e.label, e.dashed])).toEqual([
       ['Start', 'Ok?', null, false], ['Ok?', 'Store', 'yes', false], ['Ok?', 'Ask', null, true],
@@ -199,5 +216,26 @@ describe('planDiagram ≡ flowToItems for a new diagram', () => {
     const want = flowToItems(g, { origin: { x: 10, y: 20 }, newId: ids() })
     const plan = planDiagram(g, { origin: { x: 10, y: 20 }, newId: ids() })
     expect(plan.add).toEqual([...want.shapes, ...want.connectors])
+  })
+})
+
+describe('families', () => {
+  it('stacks unlinked groups as rows, well apart', () => {
+    let g = addNode(emptyGraph(), { label: 'a' }).graph
+    g = addNext(g, 'n1', { label: 'b' }).graph
+    g = addNext(g, 'n1', { label: 'c' }).graph
+    g = addNode(g, { label: 'lonely' }).graph
+    const { nodes, sides } = layoutFor(g)
+    const at = (k) => nodes.find((n) => n.key === k)
+    const bottom = Math.max(...['n1', 'n2', 'n3'].map((k) => at(k).y + at(k).h))
+    expect(at('n4').y - bottom).toBe(144)
+    expect(at('n4').x).toBe(Math.min(...nodes.map((n) => n.x)))
+    expect(sides).toEqual([['s', 'n'], ['s', 'n']])
+  })
+
+  it('lays one family out exactly as before (CLI parity)', () => {
+    const g = parseFlow('A --> B\nA --> C\nC --> D').graph
+    const { shapes } = flowToItems(g, { newId: ids() })
+    expect(shapes.map((s) => [s.x, s.y])).toEqual([[84, 0], [0, 128], [168, 128], [168, 256]])
   })
 })

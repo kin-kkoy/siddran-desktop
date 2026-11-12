@@ -4,13 +4,14 @@ import {
     LuAlignStartVertical, LuAlignCenterVertical, LuAlignEndVertical,
     LuAlignStartHorizontal, LuAlignCenterHorizontal, LuAlignEndHorizontal,
     LuAlignHorizontalDistributeCenter, LuAlignVerticalDistributeCenter,
-    LuCornerRightDown, LuCable, LuNetwork, LuClipboardCopy,
+    LuCable, LuNetwork, LuClipboardCopy,
     LuBold, LuItalic, LuUnderline, LuStrikethrough,
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuPencil, LuWorkflow,
+    LuPencil,
 } from 'react-icons/lu'
+import { DiagramIcon, NextStepIcon } from '../flow/icons'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
 import { connectorPoints, connectorMidpoint } from '../connectors/geometry'
@@ -463,7 +464,7 @@ function ContextToolbar({
                         {textShapes.length === 1 && selectedCount === 1 && (
                             <button className={styles.btn} onClick={() => flow.createNext(textShapes[0].id, 's')}
                                 title="Next step — a connected box below (Tab)" aria-label="Next step">
-                                <LuCornerRightDown size={18} />
+                                <NextStepIcon size={18} />
                             </button>
                         )}
                         {selectedCount === 2 && boxItems.length === 2 && (
@@ -481,7 +482,7 @@ function ContextToolbar({
                         {onEditDiagram && (
                             <button className={styles.btn} onClick={onEditDiagram}
                                 title="Edit as diagram — nodes and links in the Diagram editor (D)" aria-label="Edit as diagram">
-                                <LuWorkflow size={18} />
+                                <DiagramIcon size={18} />
                             </button>
                         )}
                         <button className={styles.btn} onClick={() => flow.copyAsText()}

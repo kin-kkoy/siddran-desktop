@@ -1,11 +1,12 @@
 import {
     LuMousePointer2, LuHand, LuShapes,
     LuType, LuImagePlus, LuPaintBucket,
-    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
+    LuUndo2, LuRedo2, LuMagnet, LuDownload,
     LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
 import styles from './SandboxToolbar.module.css'
+import { DiagramIcon } from '../flow/icons'
 import ShapePicker from './ShapePicker'
 import InsertMenu from './InsertMenu'
 import ColorMenu from './ColorMenu'
@@ -67,7 +68,7 @@ function SandboxToolbar({
                 button) flips between them. Space-drag, middle-drag and two
                 fingers pan from any tool. */}
             <ToolBtn
-                active={tool === 'pointer' || tool === 'hand'}
+                active={(tool === 'pointer' || tool === 'hand') && !shapePickerOpen && !insertMenuOpen}
                 title={tool === 'hand' ? 'Pan — V or click for Select' : 'Select (V) — press V again to pan'}
                 onClick={() => onToolChange(tool === 'pointer' ? 'hand' : 'pointer')}
             >
@@ -81,7 +82,7 @@ function SandboxToolbar({
             <div className={styles.divider} />
 
             <span ref={shapeRef}>
-                <ToolBtn active={isShapeTool} title="Shapes (S)" onClick={onToggleShapePicker}>
+                <ToolBtn active={isShapeTool || shapePickerOpen} title="Shapes (S)" onClick={onToggleShapePicker}>
                     <LuShapes size={21} />
                 </ToolBtn>
             </span>
@@ -110,7 +111,7 @@ function SandboxToolbar({
             )}
             {onOpenDiagram && (
                 <ToolBtn title="Diagram — build from nodes or text (D)" onClick={onOpenDiagram}>
-                    <LuWorkflow size={21} />
+                    <DiagramIcon size={21} />
                 </ToolBtn>
             )}
             <span ref={insertRef}>

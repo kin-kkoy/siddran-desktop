@@ -1,22 +1,29 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LuPlus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuCornerRightDown, LuMoveRight, LuMinus } from 'react-icons/lu'
-import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, kindOf, NODE_KINDS } from './flowGraph'
+import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuMoveRight, LuScan } from 'react-icons/lu'
+import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm } from './flowGraph'
 import { shapeOutline } from './svgPath'
+import { NextStepIcon } from './icons'
+import { ShapeThumb } from '../Toolbar/ShapePicker'
 import { routeConnector, labelBox, LABEL_FONT } from '../connectors/geometry'
 import { headGeometry, pathEnds } from '../connectors/heads'
 import { fontCss } from '../text/textStyle'
 
 // The Nodes tab: build a flowchart by hand, without writing any text.
 //
-// The drawing IS the preview. Positions come from the same layered layout that
-// the board's text-to-diagram and Tidy use, so nothing is dragged into place: add a
-// node, drag from one of its dots onto another node to link them (or onto
-// empty space for a new linked node), and the diagram re-flows as you go.
-// Insert lays it on the board exactly as drawn here.
+// The drawing IS the preview. Positions come from the same layered layout the
+// board's text-to-diagram and Tidy use, so nothing is dragged into place.
+// Each node has one "+" handle on its outgoing side: click it for the next
+// step, or drag it onto another node to link the two.
+//
+// When the layout changes, nodes glide to their new places rather than jump,
+// and the view holds still around the node you're working on: the camera
+// moves with it, so it stays put on screen while the rest re-flows.
+// Wheel zooms at the pointer, as on the board; drag empty space to pan.
 
 const PAD = 48
-const PORT_R = 6
-const SIDES = ['n', 'e', 's', 'w']
+const DUR = 200             // ms a re-flow takes to glide into place
+const ZMIN = 0.2, ZMAX = 2.5
+const HANDLE_R = 9
 
 const anchor = (n, side) => ({
   n: { x: n.x + n.w / 2, y: n.y }, s: { x: n.x + n.w / 2, y: n.y + n.h },
@@ -24,46 +31,39 @@ const anchor = (n, side) => ({
 }[side])
 
 const pairs = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push(`${pts[i]},${pts[i + 1]}`); return out.join(' ') }
+const clampZ = (z) => Math.min(ZMAX, Math.max(ZMIN, z))
 
 const s = {
   wrap: { display: 'flex', flex: 1, minHeight: 0, gap: 12 },
   stage: { position: 'relative', flex: 1, minWidth: 0, background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' },
   bar: { position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4, zIndex: 1 },
-  side: { fontFamily: fontCss(), width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' },
+  zoom: { position: 'absolute', bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 2, zIndex: 1, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 2 },
+  pct: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'center' },
+  side: { fontFamily: fontCss(), width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingRight: 2 },
   label: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase' },
+  group: { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 },
   input: {
     width: '100%', boxSizing: 'border-box', fontSize: 13, color: 'var(--text-primary)', background: 'var(--bg-primary)',
     border: '1px solid var(--border-default)', borderRadius: 6, padding: '7px 9px', outline: 'none', fontFamily: 'inherit', resize: 'vertical',
   },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 },
   row: { display: 'flex', gap: 4, flexWrap: 'wrap' },
   help: { fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 },
   kbd: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', background: 'var(--bg-elevated)', borderRadius: 4, padding: '0 4px' },
   empty: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13, pointerEvents: 'none' },
 }
 
-function IconBtn({ active, title, onClick, children, danger }) {
+function IconBtn({ active, title, onClick, children, danger, size = 34, plain }) {
   return (
     <button
       type="button" title={title} aria-label={title} aria-pressed={active || undefined} onClick={onClick}
       style={{
-        width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 7,
-        border: `1px solid ${active ? 'var(--accent-warning)' : 'var(--border-default)'}`,
-        background: active ? 'color-mix(in srgb, var(--accent-warning) 16%, transparent)' : 'var(--bg-surface)',
+        width: size, height: size, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 7,
+        border: plain ? '1px solid transparent' : `1px solid ${active ? 'var(--accent-warning)' : 'var(--border-default)'}`,
+        background: active ? 'color-mix(in srgb, var(--accent-warning) 16%, transparent)' : plain ? 'transparent' : 'var(--bg-surface)',
         color: danger ? 'var(--accent-danger, #e05c5c)' : active ? 'var(--accent-warning)' : 'var(--text-secondary)',
       }}
     >{children}</button>
-  )
-}
-
-/** A node kind's outline, as a small picker icon. */
-function KindIcon({ kind, round }) {
-  const w = kind === 'ellipse' || kind === 'rhombus' ? 22 : 24, h = kind === 'cylinder' ? 20 : 15
-  const r = round === 'pill' ? h / 2 : round === 'some' ? 3.5 : 0
-  return (
-    <svg width={26} height={22} viewBox={`-1 -1 ${w + 2} ${h + 2}`} aria-hidden="true" style={{ overflow: 'visible' }}>
-      <path d={shapeOutline(kind, w, h, r)} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />
-    </svg>
   )
 }
 
@@ -71,9 +71,16 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   const svgRef = useRef(null)
   const stageRef = useRef(null)
   const labelRef = useRef(null)
-  const [size, setSize] = useState({ w: 600, h: 400 })
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  const [cam, setCam] = useState({ x: 0, y: 0, z: 1 })
   const [hover, setHover] = useState(null)
-  const [drag, setDrag] = useState(null)   // { from, side, at: {x,y}, over }
+  const [drag, setDrag] = useState(null)   // { from, at, start, moved, over } — the + handle
+  const [pan, setPan] = useState(null)     // { sx, sy, cam, moved }
+  const [anim, setAnim] = useState(null)   // { from: Map key → {x,y}, t0 }
+  const [now, setNow] = useState(0)
+  const fittedRef = useRef(false)
+  const prevLaidRef = useRef(null)
+  const shownRef = useRef(new Map())
 
   useLayoutEffect(() => {
     const el = stageRef.current
@@ -84,30 +91,123 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   }, [])
 
   const laid = useMemo(() => layoutFor(graph, { byId }), [graph, byId])
-  const nodeAt = useMemo(() => new Map(laid.nodes.map((n) => [n.key, n])), [laid])
+  const out = graph.dir === 'right' ? 'e' : 's'
 
-  // Fit the drawing in the stage, never larger than life (a two-box diagram
-  // should not fill the window with giant boxes).
-  const view = useMemo(() => {
-    const ns = laid.nodes
-    const minX = ns.length ? Math.min(...ns.map((n) => n.x)) : 0, minY = ns.length ? Math.min(...ns.map((n) => n.y)) : 0
-    const maxX = ns.length ? Math.max(...ns.map((n) => n.x + n.w)) : 0, maxY = ns.length ? Math.max(...ns.map((n) => n.y + n.h)) : 0
-    const w = Math.max(maxX - minX + PAD * 2, size.w), h = Math.max(maxY - minY + PAD * 2 + 40, size.h)
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2 + 20
-    return { x: cx - w / 2, y: cy - h / 2, w, h }
-  }, [laid, size])
+  // Where each node is drawn this frame: gliding from `anim.from` to its place.
+  const progress = anim ? Math.max(0, Math.min(1, (now - anim.t0) / DUR)) : 1
+  const shown = useMemo(() => {
+    const ease = 1 - Math.pow(1 - progress, 3)
+    return laid.nodes.map((n) => {
+      const f = anim?.from.get(n.key)
+      return f && progress < 1 ? { ...n, x: f.x + (n.x - f.x) * ease, y: f.y + (n.y - f.y) * ease } : n
+    })
+  }, [laid, anim, progress])
+  const shownAt = useMemo(() => new Map(shown.map((n) => [n.key, n])), [shown])
+
+  const fitCam = (nodes, box = size) => {
+    if (!nodes.length || !box.w) return { x: -box.w / 2, y: -box.h / 2, z: 1 }
+    const minX = Math.min(...nodes.map((n) => n.x)), minY = Math.min(...nodes.map((n) => n.y))
+    const maxX = Math.max(...nodes.map((n) => n.x + n.w)), maxY = Math.max(...nodes.map((n) => n.y + n.h))
+    // Never larger than life: two boxes shouldn't fill the window.
+    const z = clampZ(Math.min(1, (box.w - PAD * 2) / (maxX - minX || 1), (box.h - PAD * 2 - 40) / (maxY - minY || 1)))
+    return { x: (minX + maxX) / 2 - box.w / z / 2, y: (minY + maxY) / 2 - box.h / z / 2 + 20 / z, z }
+  }
+
+  // Fit once, when the stage first has a size.
+  useLayoutEffect(() => {
+    if (fittedRef.current || !size.w) return
+    fittedRef.current = true
+    setCam(fitCam(laid.nodes))
+  }, [size]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The layout changed: glide there, holding the node you're on still.
+  useLayoutEffect(() => {
+    const prev = prevLaidRef.current
+    prevLaidRef.current = laid
+    if (!prev || prev === laid) return
+    const before = new Map(prev.nodes.map((n) => [n.key, n]))
+    const after = new Map(laid.nodes.map((n) => [n.key, n]))
+    const still = [selected?.key, ...prev.nodes.map((n) => n.key)].find((k) => k && before.has(k) && after.has(k))
+    const d = still ? { x: after.get(still).x - before.get(still).x, y: after.get(still).y - before.get(still).y } : { x: 0, y: 0 }
+    const cur = shownRef.current
+    const from = new Map()
+    for (const n of laid.nodes) {
+      const at = cur.get(n.key)
+      if (at) { from.set(n.key, { x: at.x + d.x, y: at.y + d.y }); continue }
+      // New: grows out of the node it's linked to.
+      const e = graph.edges.find((x) => (x.to === n.key && cur.has(x.from)) || (x.from === n.key && cur.has(x.to)))
+      const nb = e && cur.get(e.to === n.key ? e.from : e.to)
+      if (nb) from.set(n.key, { x: nb.x + d.x, y: nb.y + d.y })
+    }
+    setCam((c) => {
+      let x = c.x + d.x, y = c.y + d.y
+      // …and if the node you're on ended up out of view, bring it in.
+      const sel = selected?.type === 'node' && after.get(selected.key)
+      if (sel && size.w) {
+        const vw = size.w / c.z, vh = size.h / c.z, m = 56 / c.z
+        if (sel.x - m < x) x = sel.x - m
+        else if (sel.x + sel.w + m > x + vw) x = sel.x + sel.w + m - vw
+        if (sel.y - m < y) y = sel.y - m
+        else if (sel.y + sel.h + m > y + vh) y = sel.y + sel.h + m - vh
+      }
+      return { ...c, x, y }
+    })
+    const t = performance.now()
+    setAnim({ from, t0: t }); setNow(t)
+  }, [laid, selected, graph.edges, size])
+
+  useLayoutEffect(() => { shownRef.current = shownAt })
+
+  useEffect(() => {
+    if (!anim) return
+    let id
+    const step = (t) => { setNow(t); if (t - anim.t0 < DUR) id = requestAnimationFrame(step); else setAnim(null) }
+    id = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(id)
+  }, [anim])
+
+  // Wheel zooms at the pointer (as on the board). Native, so it can preventDefault.
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      const px = e.clientX - r.left, py = e.clientY - r.top
+      setCam((c) => {
+        const z = clampZ(c.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))
+        const wx = c.x + px / c.z, wy = c.y + py / c.z
+        return { x: wx - px / z, y: wy - py / z, z }
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Buttons and keys zoom on the node you're on (else the middle of the view).
+  const zoomBy = (f) => setCam((c) => {
+    const z = clampZ(c.z * f)
+    const sel = selected?.type === 'node' && laid.nodes.find((n) => n.key === selected.key)
+    const focus = sel ? { x: sel.x + sel.w / 2, y: sel.y + sel.h / 2 } : { x: c.x + size.w / c.z / 2, y: c.y + size.h / c.z / 2 }
+    const sx = (focus.x - c.x) * c.z, sy = (focus.y - c.y) * c.z
+    const inView = sx >= 0 && sx <= size.w && sy >= 0 && sy <= size.h
+    // Keep it where it is on screen; if it was off screen, bring it to the middle.
+    const px = inView ? sx : size.w / 2, py = inView ? sy : size.h / 2
+    return { x: focus.x - px / z, y: focus.y - py / z, z }
+  })
+  const fit = () => setCam(fitCam(laid.nodes))
 
   const edges = useMemo(() => graph.edges.map((e, i) => {
-    const a = nodeAt.get(e.from), b = nodeAt.get(e.to), sd = laid.sides[i]
+    const a = shownAt.get(e.from), b = shownAt.get(e.to), sd = laid.sides[i]
     if (!a || !b || !sd) return null
     const pts = routeConnector(anchor(a, sd[0]), anchor(b, sd[1]), 'elbow', {
       fromSide: sd[0], toSide: sd[1], fromBox: a, toBox: b,
       // Round the other boxes, as the board routes it.
-      obstacles: () => laid.nodes.filter((n) => n !== a && n !== b),
+      obstacles: () => shown.filter((n) => n !== a && n !== b),
     })
     const end = pathEnds(pts)?.end
     return { e, i, pts, head: e.head && end ? headGeometry('arrow', end.tip, end.prev, 2) : null, label: e.label ? labelBox(pts, e.label) : null }
-  }).filter(Boolean), [graph.edges, nodeAt, laid])
+  }).filter(Boolean), [graph.edges, shownAt, shown, laid.sides])
 
   const selNode = selected?.type === 'node' ? graph.nodes.find((n) => n.key === selected.key) : null
   const selEdge = selected?.type === 'edge' ? graph.edges[selected.i] : null
@@ -129,11 +229,11 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     const r = p.matrixTransform(m.inverse())
     return { x: r.x, y: r.y }
   }
-  const hitNode = (pt) => laid.nodes.find((n) => pt.x >= n.x - 8 && pt.x <= n.x + n.w + 8 && pt.y >= n.y - 8 && pt.y <= n.y + n.h + 8)
+  const hitNode = (pt) => shown.find((n) => pt.x >= n.x - 8 && pt.x <= n.x + n.w + 8 && pt.y >= n.y - 8 && pt.y <= n.y + n.h + 8)
 
   const select = (sel, focus = false) => onSelect(sel, focus)
   const add = () => {
-    const like = selNode && kindOf(selNode) ? { kind: selNode.kind, round: selNode.round } : {}
+    const like = selNode ? { kind: selNode.kind, round: selNode.round } : {}
     const { graph: g, key } = addNode(graph, like)
     onChange(g); select({ type: 'node', key }, true)
   }
@@ -143,23 +243,43 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     else if (selEdge) { onChange(removeEdge(graph, selected.i)); select(null) }
   }
 
-  const startPort = (ev, key, side) => {
+  const capture = (ev) => svgRef.current.setPointerCapture?.(ev.pointerId)
+  const startHandle = (ev, key) => {
+    if (ev.button !== 0) return
     ev.stopPropagation(); ev.preventDefault()
-    svgRef.current.setPointerCapture?.(ev.pointerId)
-    setDrag({ from: key, side, at: world(ev), over: null })
+    capture(ev)
+    const at = world(ev)
+    setDrag({ from: key, at, start: at, moved: false, over: null })
+  }
+  const startPan = (ev) => {
+    capture(ev)
+    setPan({ sx: ev.clientX, sy: ev.clientY, cam, moved: false })
   }
   const onMove = (ev) => {
+    if (pan) {
+      const dx = ev.clientX - pan.sx, dy = ev.clientY - pan.sy
+      const moved = pan.moved || Math.hypot(dx, dy) > 3
+      if (moved) setCam({ ...pan.cam, x: pan.cam.x - dx / pan.cam.z, y: pan.cam.y - dy / pan.cam.z })
+      if (moved !== pan.moved) setPan({ ...pan, moved })
+      return
+    }
     if (!drag) return
     const at = world(ev)
-    const over = hitNode(at)
-    setDrag({ ...drag, at, over: over && over.key !== drag.from ? over.key : null })
+    const moved = drag.moved || Math.hypot(at.x - drag.start.x, at.y - drag.start.y) * cam.z > 4
+    const over = moved ? hitNode(at) : null
+    setDrag({ ...drag, at, moved, over: over && over.key !== drag.from ? over.key : null })
   }
   const onUp = (ev) => {
+    if (pan) {
+      if (!pan.moved && ev.button === 0) select(null)   // a click on empty space
+      setPan(null)
+      return
+    }
     if (!drag) return
-    const at = world(ev)
-    const target = hitNode(at)
-    const from = drag.from
+    const { from, moved } = drag
     setDrag(null)
+    if (!moved) { next(from); return }                  // a click on + : the next step
+    const target = hitNode(world(ev))
     if (target && target.key === from) return
     if (target) {
       const g = connect(graph, from, target.key)
@@ -176,46 +296,60 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
     else if (ev.key === 'Tab' && selNode) { ev.preventDefault(); next(selNode.key) }
     else if (ev.key === 'Enter' && selected) { ev.preventDefault(); labelRef.current?.focus(); labelRef.current?.select() }
     else if ((ev.key === 'n' || ev.key === 'N') && !ev.ctrlKey && !ev.metaKey) { ev.preventDefault(); add() }
+    else if ((ev.key === '=' || ev.key === '+') && !ev.ctrlKey) { ev.preventDefault(); zoomBy(1.2) }
+    else if (ev.key === '-' && !ev.ctrlKey) { ev.preventDefault(); zoomBy(1 / 1.2) }
+    else if (ev.key === '1') { ev.preventDefault(); fit() }
   }
 
-  const showPorts = (key) => hover === key || selected?.key === key || drag?.from === key
   const accent = 'var(--accent-warning)'
+  const vw = size.w / cam.z || 1, vh = size.h / cam.z || 1
 
   return (
     <div style={s.wrap} onKeyDown={onKey}>
       <div ref={stageRef} style={s.stage}>
         <div style={s.bar}>
-          <IconBtn title="Add a node (N)" onClick={add}><LuPlus size={17} /></IconBtn>
+          <IconBtn title="Add a node (N) — a new family, on its own row" onClick={add}><LuPlus size={17} /></IconBtn>
           <IconBtn title="Top to bottom" active={graph.dir !== 'right'} onClick={() => onChange({ ...graph, dir: 'down' })}><LuArrowDown size={17} /></IconBtn>
           <IconBtn title="Left to right" active={graph.dir === 'right'} onClick={() => onChange({ ...graph, dir: 'right' })}><LuArrowRight size={17} /></IconBtn>
+        </div>
+        <div style={s.zoom}>
+          <IconBtn plain size={28} title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}><LuMinus size={15} /></IconBtn>
+          <span style={s.pct}>{Math.round(cam.z * 100)}%</span>
+          <IconBtn plain size={28} title="Zoom in (+)" onClick={() => zoomBy(1.2)}><LuPlus size={15} /></IconBtn>
+          <IconBtn plain size={28} title="Fit everything (1)" onClick={fit}><LuScan size={15} /></IconBtn>
         </div>
         {!graph.nodes.length && <div style={s.empty}>Press + (or N) to add the first node</div>}
         <svg
           ref={svgRef} width="100%" height="100%" tabIndex={0} role="application" aria-label="Diagram nodes"
-          viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} preserveAspectRatio="xMidYMid meet"
-          style={{ display: 'block', outline: 'none', touchAction: 'none', cursor: drag ? 'crosshair' : 'default', userSelect: 'none' }}
-          onPointerMove={onMove} onPointerUp={onUp}
-          onPointerDown={(ev) => { svgRef.current.focus(); if (ev.target === svgRef.current) select(null) }}
+          viewBox={`${cam.x} ${cam.y} ${vw} ${vh}`} preserveAspectRatio="xMinYMin meet"
+          style={{ display: 'block', outline: 'none', touchAction: 'none', cursor: drag?.moved ? 'crosshair' : pan?.moved ? 'grabbing' : 'grab', userSelect: 'none' }}
+          onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { setDrag(null); setPan(null) }}
+          onPointerDown={(ev) => {
+            svgRef.current.focus()
+            // Empty space, or the middle button anywhere: pan.
+            if (ev.target === svgRef.current || ev.button === 1) { ev.preventDefault(); startPan(ev) }
+          }}
         >
           {edges.map(({ e, i, pts, head, label }) => {
             const on = selected?.type === 'edge' && selected.i === i
             const col = on ? accent : colors.stroke
             return (
-              <g key={`e${i}`} onPointerDown={(ev) => { ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i }) }}
+              <g key={`e${i}`} onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i }) }}
                 onDoubleClick={() => select({ type: 'edge', i }, true)} style={{ cursor: 'pointer' }}>
-                <polyline points={pairs(pts)} fill="none" stroke="transparent" strokeWidth={14} />
+                <polyline points={pairs(pts)} fill="none" stroke="transparent" strokeWidth={14 / cam.z} />
                 <polyline points={pairs(pts)} fill="none" stroke={col} strokeWidth={on ? 2.5 : 2} strokeDasharray={e.dashed ? '8 6' : undefined} strokeLinejoin="round" />
                 {head && <polygon points={pairs(head.pts)} fill={col} />}
                 {label && (
                   <g>
                     <rect x={label.x} y={label.y} width={label.w} height={label.h} rx={label.h / 2} fill="var(--bg-surface)" stroke={col} strokeWidth={1} />
-                    <text x={label.x + label.w / 2} y={label.y + label.h / 2} textAnchor="middle" dominantBaseline="central" fontSize={LABEL_FONT} fill={colors.text} style={{ fontFamily: fontCss() }}>{e.label}</text>
+                    <text x={label.x + label.w / 2} y={label.y + label.h / 2} textAnchor="middle" dominantBaseline="central" fontSize={LABEL_FONT}
+                      fill={colors.text} style={{ fontFamily: fontCss() }}>{e.label}</text>
                   </g>
                 )}
               </g>
             )
           })}
-          {laid.nodes.map((n) => {
+          {shown.map((n) => {
             const on = selected?.type === 'node' && selected.key === n.key
             const target = drag?.over === n.key
             const lines = (n.text || '').split('\n')
@@ -224,35 +358,36 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             const p = n.itemId ? byId.get(n.itemId)?.payload : null
             const look = p ? { fill: p.fill || 'transparent', stroke: p.stroke || colors.stroke, text: p.textColor || colors.text, font: fontCss(p) }
               : { ...colors, font: fontCss() }
+            const h = anchor({ x: 0, y: 0, w: n.w, h: n.h }, out)
+            const hx = h.x + (out === 'e' ? 16 : 0), hy = h.y + (out === 's' ? 16 : 0)
+            const showHandle = !drag && !pan?.moved && (hover === n.key || on)
             return (
               <g key={n.key} transform={`translate(${n.x} ${n.y})`}
-                onPointerEnter={() => setHover(n.key)} onPointerLeave={() => setHover((h) => (h === n.key ? null : h))}
-                onPointerDown={(ev) => { ev.stopPropagation(); svgRef.current.focus(); select({ type: 'node', key: n.key }) }}
+                onPointerEnter={() => setHover(n.key)} onPointerLeave={() => setHover((k) => (k === n.key ? null : k))}
+                onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'node', key: n.key }) }}
                 onDoubleClick={() => select({ type: 'node', key: n.key }, true)} style={{ cursor: 'pointer' }}>
-                {/* a margin round the box, so the ports stay reachable from outside it */}
-                <rect x={-14} y={-14} width={n.w + 28} height={n.h + 28} fill="transparent" />
+                {/* a margin round the box, so the handle stays reachable */}
+                <rect x={-6} y={-6} width={n.w + 12 + (out === 'e' ? 22 : 0)} height={n.h + 12 + (out === 's' ? 22 : 0)} fill="transparent" />
                 <path d={shapeOutline(n.kind, n.w, n.h, radius)} fill={target ? 'color-mix(in srgb, var(--accent-warning) 18%, transparent)' : look.fill}
                   stroke={on || target ? accent : look.stroke} strokeWidth={on ? 2.5 : 2} strokeLinejoin="round" />
                 <text x={n.w / 2} y={n.h / 2 - ((lines.length - 1) * 16 * 1.25) / 2} textAnchor="middle" dominantBaseline="central" fontSize={16}
                   fill={n.label ? look.text : 'var(--text-muted)'} style={{ pointerEvents: 'none', fontFamily: look.font }}>
                   {n.label ? lines.map((l, k) => <tspan key={k} x={n.w / 2} dy={k ? 16 * 1.25 : 0}>{l}</tspan>) : 'Untitled'}
                 </text>
-                {showPorts(n.key) && SIDES.map((sd) => {
-                  const p = anchor({ x: 0, y: 0, w: n.w, h: n.h }, sd)
-                  return (
-                    <circle key={sd} cx={p.x} cy={p.y} r={PORT_R} fill="var(--bg-surface)" stroke={accent} strokeWidth={2}
-                      style={{ cursor: 'crosshair' }} onPointerDown={(ev) => startPort(ev, n.key, sd)}>
-                      <title>Drag to another node to link — or to empty space for a new one</title>
-                    </circle>
-                  )
-                })}
+                {showHandle && (
+                  <g style={{ cursor: 'crosshair' }} onPointerDown={(ev) => startHandle(ev, n.key)}>
+                    <title>Click for the next step · drag onto another node to link them</title>
+                    <circle cx={hx} cy={hy} r={HANDLE_R} fill={accent} />
+                    <path d={`M${hx - 4.5} ${hy}h9M${hx} ${hy - 4.5}v9`} stroke="var(--bg-primary)" strokeWidth={2} strokeLinecap="round" />
+                  </g>
+                )}
               </g>
             )
           })}
-          {drag && (() => {
-            const a = nodeAt.get(drag.from)
+          {drag?.moved && (() => {
+            const a = shownAt.get(drag.from)
             if (!a) return null
-            const p = anchor(a, drag.side)
+            const p = anchor(a, out)
             return <line x1={p.x} y1={p.y} x2={drag.at.x} y2={drag.at.y} stroke={accent} strokeWidth={2} strokeDasharray="6 5" pointerEvents="none" />
           })()}
         </svg>
@@ -271,20 +406,25 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
                 else if (ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) { ev.preventDefault(); svgRef.current?.focus() }
               }}
             />
-            <span style={s.label}>Kind</span>
-            <div style={s.grid}>
-              {NODE_KINDS.map((k) => (
-                <IconBtn key={k.id} title={k.label} active={kindOf(selNode)?.id === k.id}
-                  onClick={() => onChange(updateNode(graph, selNode.key, { kind: k.kind, round: k.round }))}>
-                  <KindIcon kind={k.kind} round={k.round} />
-                </IconBtn>
-              ))}
-            </div>
-            {!kindOf(selNode) && <p style={s.help}>A board shape the text form has no name for; it stays as it is.</p>}
             <div style={s.row}>
-              <IconBtn title="Next step — a linked node after this one (Tab)" onClick={() => next(selNode.key)}><LuCornerRightDown size={17} /></IconBtn>
+              <IconBtn title="Add the next step — a new node linked after this one (Tab)" onClick={() => next(selNode.key)}><NextStepIcon size={18} /></IconBtn>
               <IconBtn title="Delete node (Del)" danger onClick={del}><LuTrash2 size={17} /></IconBtn>
             </div>
+            <span style={s.label}>Shape · {kindLabel(selNode.kind)}</span>
+            {NODE_GROUPS.map((g) => (
+              <div key={g.id}>
+                <div style={s.group}>{g.label}</div>
+                <div style={s.grid}>
+                  {g.kinds.map((k) => (
+                    <IconBtn key={k} size={32} title={kindLabel(k)} active={selNode.kind === k}
+                      onClick={() => onChange(updateNode(graph, selNode.key, { kind: k, round: roundFor(k) }))}>
+                      <ShapeThumb kind={k} size={20} />
+                    </IconBtn>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!hasTextForm(selNode.kind) && <p style={s.help}>The Text tab writes this shape as a plain [box]; it stays a {kindLabel(selNode.kind).toLowerCase()} unless you change that line.</p>}
           </>
         )}
         {selEdge && (
@@ -311,14 +451,18 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
           <>
             <span style={s.label}>How</span>
             <p style={s.help}>
-              <b>+</b> adds a node. Hover a node and drag from one of its dots onto another node to link them,
-              or onto empty space for a new linked node.
+              <b>+</b> (or <span style={s.kbd}>N</span>) adds a node. With nothing selected it starts a new family, on its own row.
             </p>
             <p style={s.help}>
-              Click a node or link to edit it. <span style={s.kbd}>Tab</span> adds the next step,{' '}
-              <span style={s.kbd}>Del</span> removes, <span style={s.kbd}>Enter</span> renames.
+              Hover a node for its <b style={{ color: accent }}>+</b> handle: <b>click</b> it for the next step, or <b>drag</b> it onto
+              another node to link them.
             </p>
-            <p style={s.help}>The layout is automatic: it is the same one the board uses, so what you see here is what Insert puts down.</p>
+            <p style={s.help}>
+              Click a node or link to edit it. <span style={s.kbd}>Tab</span> next step, <span style={s.kbd}>Del</span> remove,{' '}
+              <span style={s.kbd}>Enter</span> rename.
+            </p>
+            <p style={s.help}>Wheel zooms, drag empty space to pan, <span style={s.kbd}>1</span> fits everything.</p>
+            <p style={s.help}>The layout is automatic, the same one the board uses: what you see here is what lands on the board.</p>
           </>
         )}
       </div>

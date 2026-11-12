@@ -38,6 +38,7 @@ import { recognizeStroke, shapeFromRecognition } from '../../components/Sandbox/
 import { highlighterZ } from '../../components/Sandbox/ink/highlighterZ'
 import { strokeOutline } from '../../components/Sandbox/Canvas/strokeOutline'
 import { useFlowActions } from '../../hooks/useFlowActions'
+import { SHAPE_TOOLS } from '../../components/Sandbox/shapes/registry'
 import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useApi } from '../../contexts/ApiContext'
 import { uploadImageFile } from '../../utils/imageUpload'
@@ -104,6 +105,9 @@ async function prepareImageBlob(file, maxStore = 1280) {
     const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85))
     return { blob: blob || file, naturalW: nW, naturalH: nH }
 }
+
+// A shape the shapes menu draws (not a sticky or frame, which have their own buttons).
+const isPlainShapeTool = (t) => SHAPE_TOOLS.includes(t) && t !== 'sticky' && t !== 'frame'
 
 function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', sandboxIdOverride }) {
     const { id: paramId } = useParams()
@@ -591,9 +595,18 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         fill: canvas.shapeStyle.fill || 'transparent',
     }), [canvas.shapeStyle])
     const closeMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : cur)), [])
-    const onToggleShapePicker = useCallback(() => toggleMenu('shapes'), [toggleMenu])
+    // One thing active at a time: opening the shapes or media menu puts down
+    // the tool you were holding (text, pen, sticky…), so a click on the board
+    // while the menu is up just closes it instead of dropping text there.
+    const toggleDockMenu = useCallback((m) => {
+        const opening = openMenu !== m
+        toggleMenu(m)
+        const keep = canvas.tool === 'pointer' || canvas.tool === 'hand' || (m === 'shapes' && isPlainShapeTool(canvas.tool))
+        if (opening && !keep) canvas.setTool('pointer')
+    }, [openMenu, toggleMenu, canvas])
+    const onToggleShapePicker = useCallback(() => toggleDockMenu('shapes'), [toggleDockMenu])
     const closeShapePicker = useCallback(() => closeMenu('shapes'), [closeMenu])
-    const onToggleInsertMenu = useCallback(() => toggleMenu('insert'), [toggleMenu])
+    const onToggleInsertMenu = useCallback(() => toggleDockMenu('insert'), [toggleDockMenu])
     const closeInsertMenu = useCallback(() => closeMenu('insert'), [closeMenu])
     const closePaintMenu = useCallback(() => closeMenu('paint'), [closeMenu])
     // Choosing a tool from the dock closes whatever menu was open.
@@ -753,7 +766,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             }
 
             // `S` opens the shape picker (then pick a shape with the mouse/pen).
-            if (e.key === 's' || e.key === 'S') { e.preventDefault(); toggleMenu('shapes'); return }
+            if (e.key === 's' || e.key === 'S') { e.preventDefault(); toggleDockMenu('shapes'); return }
 
             const t = TOOL_KEYS[e.key.toLowerCase()]
             // A tool's key again flips to its sibling: V Select ⇄ Pan,
@@ -764,7 +777,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
-        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleMenu, diagram, openDiagram])
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleDockMenu, diagram, openDiagram])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()

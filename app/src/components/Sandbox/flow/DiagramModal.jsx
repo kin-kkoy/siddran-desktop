@@ -69,6 +69,8 @@ function DiagramModal({ isOpen, onClose, source, onApply, byId, colors }) {
   const [focusReq, setFocusReq] = useState(0)
   const [touched, setTouched] = useState(false)
   const areaRef = useRef(null)
+  const modalRef = useRef(null)
+  const primaryRef = useRef(null)
 
   // A fresh start each time it opens.
   useEffect(() => {
@@ -81,6 +83,23 @@ function DiagramModal({ isOpen, onClose, source, onApply, byId, colors }) {
   }, [isOpen, source])
 
   useEffect(() => { if (isOpen && tab === 'text') setTimeout(() => areaRef.current?.focus(), 0) }, [isOpen, tab])
+
+  // If focus ever slips out of the pop-up (onto the page behind), its keys
+  // still work: Esc closes, Ctrl+Enter applies, and anything else pulls focus
+  // back in — never Ctrl+A selecting the whole page, or a key reaching the board.
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e) => {
+      const box = modalRef.current
+      if (!box || box.contains(e.target)) return
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); primaryRef.current?.click(); return }
+      e.preventDefault()
+      ;(box.querySelector('svg[tabindex]') || box).focus()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, onClose])
 
   const textEdited = text !== textFrom
   // Live read-back of the text, so a typo shows up before Insert rather than after.
@@ -139,7 +158,7 @@ function DiagramModal({ isOpen, onClose, source, onApply, byId, colors }) {
       // A stray click outside shouldn't throw away a diagram in progress.
       onClick={(e) => { if (e.target === e.currentTarget && !dirty) onClose() }}
     >
-      <div style={s.modal} role="dialog" aria-label={source ? 'Edit diagram' : 'Diagram'}>
+      <div ref={modalRef} tabIndex={-1} style={{ ...s.modal, outline: 'none' }} role="dialog" aria-label={source ? 'Edit diagram' : 'Diagram'}>
         <div style={s.header}>
           <span style={s.title}>{source ? 'Edit diagram' : 'Diagram'}</span>
           <div style={s.tabs} role="tablist">
@@ -187,7 +206,7 @@ function DiagramModal({ isOpen, onClose, source, onApply, byId, colors }) {
             <span style={{ marginLeft: 'auto' }} />
             {tab === 'text' && !source && <button style={s.btn} onClick={() => setText(EXAMPLE)}>Use example</button>}
             <button style={s.btn} onClick={onClose}>Cancel</button>
-            <button style={{ ...s.primary, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={apply}>{source ? 'Update' : 'Insert'}</button>
+            <button ref={primaryRef} style={{ ...s.primary, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={apply}>{source ? 'Update' : 'Insert'}</button>
           </div>
         </div>
       </div>
