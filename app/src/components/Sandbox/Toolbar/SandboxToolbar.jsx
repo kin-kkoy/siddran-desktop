@@ -1,7 +1,7 @@
 import {
     LuMousePointer2, LuLasso, LuHand, LuPenTool, LuShapes,
     LuType, LuEraser, LuImagePlus, LuPaintBucket,
-    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWorkflow,
+    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuWaypoints,
     LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
@@ -73,23 +73,23 @@ function SandboxToolbar({
                 title={tool === 'hand' ? 'Pan — V or click for Select' : 'Select (V) — press V again to pan'}
                 onClick={() => onToolChange(tool === 'pointer' ? 'hand' : 'pointer')}
             >
-                {tool === 'hand' ? <LuHand size={16} /> : <LuMousePointer2 size={16} />}
+                {tool === 'hand' ? <LuHand size={21} /> : <LuMousePointer2 size={21} />}
             </ToolBtn>
             <ToolBtn active={tool === 'lasso'} title="Lasso select (G)" onClick={() => onToolChange('lasso')}>
-                <LuLasso size={16} />
+                <LuLasso size={21} />
             </ToolBtn>
             <ToolBtn active={tool === 'pen'} title="Pen (P)" onClick={() => onToolChange('pen')}>
-                <LuPenTool size={16} />
+                <LuPenTool size={21} />
             </ToolBtn>
             <ToolBtn active={tool === 'eraser'} title="Eraser (E)" onClick={() => onToolChange('eraser')}>
-                <LuEraser size={16} />
+                <LuEraser size={21} />
             </ToolBtn>
 
             <div className={styles.divider} />
 
             <span ref={shapeRef}>
                 <ToolBtn active={isShapeTool} title="Shapes (S)" onClick={onToggleShapePicker}>
-                    <LuShapes size={16} />
+                    <LuShapes size={21} />
                 </ToolBtn>
             </span>
             <ShapePicker
@@ -100,27 +100,27 @@ function SandboxToolbar({
                 onClose={onCloseShapePicker}
             />
             <ToolBtn active={tool === 'text'} title="Text (T)" onClick={() => onToolChange('text')}>
-                <LuType size={16} />
+                <LuType size={21} />
             </ToolBtn>
             <ToolBtn active={tool === 'sticky'} title="Sticky note (N) — click to place" onClick={() => onToolChange('sticky')}>
-                <StickyIcon size={16} />
+                <StickyIcon size={21} />
             </ToolBtn>
             <ToolBtn active={tool === 'frame'} title="Frame (F) — drag to draw" onClick={() => onToolChange('frame')}>
-                <LuFrame size={16} />
+                <LuFrame size={21} />
             </ToolBtn>
             {onOpenTemplates && (
                 <ToolBtn title="Templates" onClick={onOpenTemplates}>
-                    <LuLayoutTemplate size={16} />
+                    <LuLayoutTemplate size={21} />
                 </ToolBtn>
             )}
             {onOpenFlowText && (
                 <ToolBtn title="Diagram from text (D)" onClick={onOpenFlowText}>
-                    <LuWorkflow size={16} />
+                    <LuWaypoints size={21} />
                 </ToolBtn>
             )}
             <span ref={insertRef}>
                 <ToolBtn active={insertMenuOpen} title="Media" onClick={onToggleInsertMenu}>
-                    <LuImagePlus size={16} />
+                    <LuImagePlus size={21} />
                 </ToolBtn>
             </span>
             <InsertMenu
@@ -152,25 +152,25 @@ function SandboxToolbar({
                 onClose={onClosePalette}
             />
             <ToolBtn active={fillOn} title="Fill shapes with color" onClick={onToggleFill}>
-                <LuPaintBucket size={15} />
+                <LuPaintBucket size={20} />
             </ToolBtn>
 
             <div className={styles.divider} />
 
             <ToolBtn active={snapEnabled} title="Snap to grid & items" onClick={onToggleSnap}>
-                <LuMagnet size={16} />
+                <LuMagnet size={21} />
             </ToolBtn>
             <ToolBtn title="Export as PNG" onClick={onExport}>
-                <LuDownload size={16} />
+                <LuDownload size={21} />
             </ToolBtn>
 
             <div className={styles.divider} />
 
             <ToolBtn title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo}>
-                <LuUndo2 size={16} />
+                <LuUndo2 size={21} />
             </ToolBtn>
             <ToolBtn title="Redo (⌘⇧Z)" onClick={onRedo} disabled={!canRedo}>
-                <LuRedo2 size={16} />
+                <LuRedo2 size={21} />
             </ToolBtn>
         </div>
     )

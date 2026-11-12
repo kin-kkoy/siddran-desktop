@@ -62,6 +62,18 @@ const CommittedStroke = memo(function CommittedStroke({ item }) {
     )
 })
 
+// Lighten (amt > 0) or darken (amt < 0) a #rrggbb[aa] colour, keeping alpha.
+function shade(hex, amt) {
+    const m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(hex || '')
+    if (!m) return hex
+    const n = parseInt(m[1], 16)
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+        const t = amt > 0 ? v + (255 - v) * amt : v * (1 + amt)
+        return Math.max(0, Math.min(255, Math.round(t))).toString(16).padStart(2, '0')
+    })
+    return `#${ch.join('')}${m[2] || ''}`
+}
+
 const centerProps = (item) => {
     const w = item.w ?? 0
     const h = item.h ?? 0
@@ -94,31 +106,33 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
         />
     ) : null
 
-    // ── sticky note: flat colour, soft shadow, no border (spec §7.3) ──────
+    // ── sticky note: looks like paper, not a box — a gentle top-to-bottom
+    // shade, the faint adhesive strip along the top, a lifted shadow, and the
+    // bottom-right corner folded over. No border (spec §7.3).
     if (isSticky) {
+        const base = p.fill && p.fill !== 'transparent' ? p.fill : STICKY_DEFAULT
+        const fold = Math.min(aw, ah) * 0.12
         return (
             <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
-                <Rect
-                    x={0} y={0} width={aw} height={ah} cornerRadius={2}
-                    fill={p.fill && p.fill !== 'transparent' ? p.fill : STICKY_DEFAULT}
-                    shadowColor="#000" shadowOpacity={0.28} shadowBlur={10} shadowOffsetY={3}
+                <Shape
+                    sceneFunc={(ctx, shape) => {
+                        ctx.beginPath()
+                        ctx.moveTo(0, 0); ctx.lineTo(aw, 0); ctx.lineTo(aw, ah - fold)
+                        ctx.lineTo(aw - fold, ah); ctx.lineTo(0, ah); ctx.closePath()
+                        ctx.fillStrokeShape(shape)
+                    }}
+                    fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                    fillLinearGradientEndPoint={{ x: 0, y: ah }}
+                    fillLinearGradientColorStops={[0, shade(base, 0.10), 1, shade(base, -0.04)]}
+                    shadowColor="#000" shadowOpacity={0.32} shadowBlur={12} shadowOffsetX={1} shadowOffsetY={5}
                     listening={false} perfectDrawEnabled={false}
                 />
-                {textNode}
-            </Group>
-        )
-    }
-
-    // ── fast-path: ellipse ───────────────────────────────────────────────
-    if (kind === 'ellipse') {
-        return (
-            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
-                <Ellipse
-                    x={aw / 2} y={ah / 2} radiusX={aw / 2} radiusY={ah / 2}
-                    fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
-                    listening={false} perfectDrawEnabled={false}
-                />
+                {/* adhesive strip */}
+                <Rect x={0} y={0} width={aw} height={Math.max(6, ah * 0.1)} fill="#000" opacity={0.05} listening={false} perfectDrawEnabled={false} />
+                {/* the folded-over corner */}
+                <Line points={[aw - fold, ah, aw, ah - fold, aw - fold, ah - fold]} closed
+                    fill={shade(base, -0.18)} shadowColor="#000" shadowOpacity={0.25} shadowBlur={3} shadowOffsetX={-1} shadowOffsetY={-1}
+                    listening={false} perfectDrawEnabled={false} />
                 {textNode}
             </Group>
         )

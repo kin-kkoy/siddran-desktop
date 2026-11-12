@@ -72,7 +72,7 @@ const ROUTINGS = [
 const LINE_GLYPH = { solid: '━', dashed: '┅', dotted: '┈' }
 const HEAD_GLYPH = { none: '—', arrow: '▶', open: '›', triangle: '▷', circle: '●', diamond: '◇', bar: '┃' }
 
-const GAP = 72  // px between the selection top and the bar, in screen space
+const GAP = 64  // px between the selection top and the bar, in screen space
 // The bar is up to two rows tall. Placed above a selection near the top of the
 // view it would be cut off by the canvas edge, so it pins just inside instead.
 const BAR_ROOM = 150
@@ -234,7 +234,7 @@ function ContextToolbar({
                     </select>
                     <button className={styles.btn} title="Swap ends" aria-label="Swap ends"
                         onClick={() => setPayload({ from: cp.to, to: cp.from, head: headStart, headStart: head })}>
-                        <LuArrowLeftRight size={20} />
+                        <LuArrowLeftRight size={18} />
                     </button>
                     <select className={styles.fontSelect} value={head} title="End of line" aria-label="End of line"
                         onChange={(e) => setPayload({ head: e.target.value })}>
@@ -358,15 +358,15 @@ function ContextToolbar({
                     <button className={styles.btn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, 1) })}
                         title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">A+</button>
                     <div className={styles.sep} />
-                    <button className={ref.bold ? styles.btnActive : styles.btn} onClick={() => toggle('bold')} title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed={!!ref.bold}><LuBold size={20} /></button>
-                    <button className={ref.italic ? styles.btnActive : styles.btn} onClick={() => toggle('italic')} title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed={!!ref.italic}><LuItalic size={20} /></button>
-                    <button className={ref.underline ? styles.btnActive : styles.btn} onClick={() => toggle('underline')} title="Underline (Ctrl+U)" aria-label="Underline" aria-pressed={!!ref.underline}><LuUnderline size={20} /></button>
-                    <button className={ref.strike ? styles.btnActive : styles.btn} onClick={() => toggle('strike')} title="Strikethrough" aria-label="Strikethrough" aria-pressed={!!ref.strike}><LuStrikethrough size={20} /></button>
+                    <button className={ref.bold ? styles.btnActive : styles.btn} onClick={() => toggle('bold')} title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed={!!ref.bold}><LuBold size={18} /></button>
+                    <button className={ref.italic ? styles.btnActive : styles.btn} onClick={() => toggle('italic')} title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed={!!ref.italic}><LuItalic size={18} /></button>
+                    <button className={ref.underline ? styles.btnActive : styles.btn} onClick={() => toggle('underline')} title="Underline (Ctrl+U)" aria-label="Underline" aria-pressed={!!ref.underline}><LuUnderline size={18} /></button>
+                    <button className={ref.strike ? styles.btnActive : styles.btn} onClick={() => toggle('strike')} title="Strikethrough" aria-label="Strikethrough" aria-pressed={!!ref.strike}><LuStrikethrough size={18} /></button>
                     <div className={styles.sep} />
                     {H_ALIGN.filter(a => a.v !== 'justify' || texts.length > 0).map(a => (
                         <button key={a.v} className={textAlign === a.v ? styles.btnActive : styles.btn}
                             onClick={() => patchText({ textAlign: a.v })} title={a.title} aria-label={a.title} aria-pressed={textAlign === a.v}>
-                            <a.Icon size={20} />
+                            <a.Icon size={18} />
                         </button>
                     ))}
                     {textShapes.length > 0 && texts.length === 0 && (
@@ -376,7 +376,7 @@ function ContextToolbar({
                                 <button key={a.v} className={(ref.verticalAlign || 'middle') === a.v ? styles.btnActive : styles.btn}
                                     onClick={() => patchText({ verticalAlign: a.v })} title={a.title} aria-label={a.title}
                                     aria-pressed={(ref.verticalAlign || 'middle') === a.v}>
-                                    <a.Icon size={20} />
+                                    <a.Icon size={18} />
                                 </button>
                             ))}
                         </>
@@ -396,7 +396,7 @@ function ContextToolbar({
                 {!locked && filledShapes.length > 0 && (
                     <>
                         <SwatchMenu id="fill" open={openMenu} setOpen={setOpenMenu} value={sref.fill} colors={PALETTE} allowNone
-                            title="Fill" icon={<LuPaintBucket size={20} />} onPick={(c) => patchItems(filledShapes, { fill: c })} />
+                            title="Fill" icon={<LuPaintBucket size={18} />} onPick={(c) => patchItems(filledShapes, { fill: c })} />
                         <SwatchMenu id="border" open={openMenu} setOpen={setOpenMenu} value={sref.stroke} colors={PALETTE} allowNone
                             title="Border colour" onPick={(c) => patchItems(filledShapes, { stroke: c })} />
                         <button className={styles.btn} onClick={() => patchItems(filledShapes, { strokeWidth: Math.max(0, borderWidth - 1) })}
@@ -454,12 +454,12 @@ function ContextToolbar({
                 {!locked && frames.length > 0 && (
                     <>
                         <SwatchMenu id="frame" open={openMenu} setOpen={setOpenMenu} value={frames[0].payload?.fill} colors={FRAME_FILLS}
-                            title="Frame colour" icon={<LuPaintBucket size={20} />} onPick={(c) => patchItems(frames, { fill: c })} />
+                            title="Frame colour" icon={<LuPaintBucket size={18} />} onPick={(c) => patchItems(frames, { fill: c })} />
                         {frames.length === 1 && onExportFrame && (
                             <>
                                 <button className={styles.btn} onClick={() => onEditText?.(frames[0].id)} title="Rename frame (double-click the title)" aria-label="Rename frame">Aa</button>
                                 <button className={styles.btn} onClick={() => onExportFrame?.(frames[0].id)} title="Export this frame as PNG" aria-label="Export frame">
-                                    <LuImageDown size={20} />
+                                    <LuImageDown size={18} />
                                 </button>
                             </>
                         )}
@@ -473,24 +473,24 @@ function ContextToolbar({
                         {textShapes.length === 1 && selectedCount === 1 && (
                             <button className={styles.btn} onClick={() => flow.createNext(textShapes[0].id, 's')}
                                 title="Next step — a connected box below (Tab)" aria-label="Next step">
-                                <LuCornerRightDown size={20} />
+                                <LuCornerRightDown size={18} />
                             </button>
                         )}
                         {selectedCount === 2 && boxItems.length === 2 && (
                             <button className={styles.btn} onClick={() => flow.connectSelected()}
                                 title="Connect these two (C)" aria-label="Connect">
-                                <LuCable size={20} />
+                                <LuCable size={18} />
                             </button>
                         )}
                         {textShapes.length >= 2 && (
                             <button className={styles.btn} onClick={() => flow.tidySelection()}
                                 title="Tidy — lay out along the arrows (⇧T)" aria-label="Tidy">
-                                <LuNetwork size={20} />
+                                <LuNetwork size={18} />
                             </button>
                         )}
                         <button className={styles.btn} onClick={() => flow.copyAsText()}
                             title="Copy as text — paste into a note or an AI chat" aria-label="Copy as text">
-                            <LuClipboardCopy size={20} />
+                            <LuClipboardCopy size={18} />
                         </button>
                         <div className={styles.sep} />
                     </>
@@ -498,10 +498,10 @@ function ContextToolbar({
 
                 {/* Arrange */}
                 <button className={styles.btn} onClick={() => onBringFront?.()} title="Bring to front (])" aria-label="Bring to front">
-                    <LuBringToFront size={20} />
+                    <LuBringToFront size={18} />
                 </button>
                 <button className={styles.btn} onClick={() => onSendBack?.()} title="Send to back ([)" aria-label="Send to back">
-                    <LuSendToBack size={20} />
+                    <LuSendToBack size={18} />
                 </button>
 
                 {/* Align / distribute — multi-select only */}
@@ -512,7 +512,7 @@ function ContextToolbar({
                             {ALIGN_OPS.map(a => (
                                 <button key={a.op} className={styles.miniBtn} title={a.title} aria-label={a.title}
                                     disabled={selectedCount < a.min} onClick={() => onAlign?.(a.op)}>
-                                    <a.Icon size={20} />
+                                    <a.Icon size={18} />
                                 </button>
                             ))}
                         </div>
@@ -522,30 +522,30 @@ function ContextToolbar({
                 <div className={styles.sep} />
                 {onFrameSelection && boxItems.length >= 2 && frames.length === 0 && (
                     <button className={styles.btn} onClick={() => onFrameSelection?.()} title="Put these in a frame" aria-label="Frame selection">
-                        <LuFrame size={20} />
+                        <LuFrame size={18} />
                     </button>
                 )}
                 {!onGroup ? null : grouped ? (
                     <button className={styles.btn} onClick={() => onUngroup?.()} title="Ungroup (Ctrl+Shift+G)" aria-label="Ungroup">
-                        <LuUngroup size={20} />
+                        <LuUngroup size={18} />
                     </button>
                 ) : boxItems.length >= 2 && (
                     <button className={styles.btn} onClick={() => onGroup?.()} title="Group (Ctrl+G)" aria-label="Group">
-                        <LuGroup size={20} />
+                        <LuGroup size={18} />
                     </button>
                 )}
                 {onToggleLock && (
                     <button className={locked ? styles.btnActive : styles.btn} onClick={() => onToggleLock()}
                         title={locked ? 'Unlock (Ctrl+Shift+L)' : 'Lock (Ctrl+Shift+L)'} aria-label={locked ? 'Unlock' : 'Lock'} aria-pressed={locked}>
-                        {locked ? <LuLock size={20} /> : <LuLockOpen size={20} />}
+                        {locked ? <LuLock size={18} /> : <LuLockOpen size={18} />}
                     </button>
                 )}
                 <button className={styles.btn} onClick={() => onDuplicate?.()} title="Duplicate (⌘D)" aria-label="Duplicate">
-                    <LuCopy size={20} />
+                    <LuCopy size={18} />
                 </button>
                 {!locked && (
                     <button className={styles.btn} onClick={() => onDelete?.()} title="Delete (Del)" aria-label="Delete">
-                        <LuTrash2 size={20} />
+                        <LuTrash2 size={18} />
                     </button>
                 )}
             </div>

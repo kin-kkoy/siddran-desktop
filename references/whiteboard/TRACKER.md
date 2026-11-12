@@ -106,6 +106,9 @@ way to build the same thing. Keep the text mode for AI and paste.
 - [ ] Decide with the user whether this is a modal, a side panel, or a "diagram
       container" on the canvas (spec §13.8 calls it a Diagram format, which
       could fold into section 5).
+- [ ] Give it its own dock icon. The user asked for a new look; it's now
+      `LuWaypoints` as a stopgap. Pick one that reads as "node graph" once
+      the node editor exists.
 - [ ] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
       change both.
 
@@ -163,3 +166,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   (`selection/hover.js`), bend routing, tapered geometry. The pointer gestures
   (press-drag, magnet press, bend drag) could NOT be driven headlessly, because
   there is no click/move dispatcher. The user is checking them by hand.
+- 2026-11-12 · session 1 · user feedback round. The floating bar was too big:
+  now ~10% smaller (36 px buttons). It wrapped near the right edge: now
+  `width: max-content` with no wrapping. The sticky now looks like paper (gradient,
+  adhesive strip, lifted shadow, folded corner). Dock icons are bigger (44 px
+  buttons). The diagram icon is now `LuWaypoints`.
