@@ -208,6 +208,9 @@ export function nodeSize(label, kind, font = DEFAULT_STYLE.font) {
  * diagram.rs has no such option and needs none: without it the layout is the
  * same as ever. Also returned, for the editor: each node's level, which
  * nodes have no children, and the depth before any drop.
+ *
+ * `opts.tidy` (desktop only — the node editor): place across the flow as a
+ * family tree instead (see tidyAcross). Levels are unchanged.
  */
 export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 }, opts = {}) {
   const n = nodes.length
@@ -318,6 +321,7 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 },
     const shift = diffs.length ? diffs.reduce((s, d) => s + d, 0) / diffs.length : 0
     r.forEach((v, i) => { cx[v] = placed[i][0] + shift })
   })
+  if (opts.tidy) tidyAcross(N, F, layer, across, cx)
   const layerAt = []
   let acc = 0
   rows.forEach((r, l) => { layerAt[l] = acc; acc += Math.max(0, ...r.map(along)) + GAP_LAYER })
@@ -351,6 +355,47 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 },
     natural: new Map(nodes.map((nd, v) => [nd.key, natural[v]])),
     leaves: new Set(nodes.filter((nd, v) => !hasKids[v]).map((nd) => nd.key)),
     depth: natDepth,
+  }
+}
+
+/**
+ * The node editor's across-the-flow placement, as a family tree. Each node
+ * hangs from one parent: the one on the level right above it, else the first.
+ * Every branch gets its own band, as wide as everything beneath it. Children
+ * sit side by side in the order they were added, centred under their parent,
+ * and the parent is centred over them. Branches never interleave, so links
+ * don't cross, and a lowered node's lane stays inside its own branch.
+ * Overwrites `cx`.
+ */
+function tidyAcross(N, F, layer, across, cx) {
+  const primary = new Array(N).fill(-1)
+  for (const [a, b] of F) {
+    const p = primary[b]
+    if (p === -1 || (layer[a] === layer[b] - 1 && layer[p] !== layer[b] - 1)) primary[b] = a
+  }
+  const kids = Array.from({ length: N }, () => [])
+  for (const [a, b] of F) if (primary[b] === a && !kids[a].includes(b)) kids[a].push(b)
+  const width = new Array(N).fill(0)
+  const span = (cs) => cs.reduce((s, c) => s + width[c], 0) + GAP_SIBLING * Math.max(0, cs.length - 1)
+  const measure = (v) => {
+    for (const c of kids[v]) measure(c)
+    width[v] = Math.max(across(v), span(kids[v]))
+  }
+  const place = (v, left) => {
+    const cs = kids[v]
+    let x = left + (width[v] - span(cs)) / 2
+    for (const c of cs) { place(c, x); x += width[c] + GAP_SIBLING }
+    // Over the middle of its first and last child (kept inside its own band).
+    const half = across(v) / 2
+    const mid = cs.length ? (cx[cs[0]] + cx[cs[cs.length - 1]]) / 2 : left + width[v] / 2
+    cx[v] = Math.min(left + width[v] - half, Math.max(left + half, mid))
+  }
+  let x = 0
+  for (let v = 0; v < N; v++) {
+    if (primary[v] !== -1) continue
+    measure(v)
+    place(v, x)
+    x += width[v] + GAP_SIBLING
   }
 }
 

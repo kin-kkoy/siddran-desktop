@@ -65,7 +65,7 @@ export function removeNode(g, key) {
 export function connect(g, from, to, extra = {}) {
   if (from === to || !g.nodes.some((n) => n.key === from) || !g.nodes.some((n) => n.key === to)) return g
   if (g.edges.some((e) => e.from === from && e.to === to)) return g
-  return { ...g, edges: [...g.edges, { from, to, label: null, head: true, dashed: false, ...extra }] }
+  return { ...g, edges: [...g.edges, { from, to, label: null, ...newLinkLook(g), ...extra }] }
 }
 
 /** A new node linked from `from` — the editor's "next step". */
@@ -125,12 +125,36 @@ export function linkLook(e, stroke) {
 }
 
 /**
- * Restyle link `which` (its index) or every link ('all'). `patch` holds any of
+ * How a new link starts out: in the diagram's link style (`g.look`, set by
+ * "All links"), so after switching the diagram to curved, the next link you
+ * add is curved too.
+ */
+export function newLinkLook(g) {
+  const k = g.look
+  if (!k) return { head: true, dashed: false }
+  return { head: k.head ? k.head !== 'none' : true, dashed: k.lineStyle ? k.lineStyle !== 'solid' : false, look: { ...k } }
+}
+
+/** The look "All links" shows: the diagram's link style, else the first link's. */
+export function diagramLook(g, stroke) {
+  return linkLook(g.look ? { ...newLinkLook(g) } : (g.edges[0] || { head: true, dashed: false }), stroke)
+}
+
+/**
+ * Restyle link `which` (its index) or every link ('all') — and for 'all',
+ * the diagram's link style for links added later. `patch` holds any of
  * routing, head, headStart, stroke, strokeWidth, lineStyle, body, avoid (null clears).
  */
 export function styleLinks(g, which, patch) {
+  let look = g.look
+  if (which === 'all') {
+    look = { ...(g.look || {}) }
+    for (const [k, v] of Object.entries(patch)) { if (v == null) delete look[k]; else look[k] = v }
+    if (look.body === 'tapered') look.routing = 'straight'
+  }
   return {
     ...g,
+    ...(look ? { look } : {}),
     edges: g.edges.map((e, i) => {
       if (which !== 'all' && which !== i) return e
       const out = { ...e }, look = { ...(e.look || {}) }
@@ -191,6 +215,7 @@ export function graphToText(g) {
 export function textToGraph(text, prev = null) {
   const { graph, problems } = parseFlow(text)
   const g = { dir: graph.dir || prev?.dir || 'down', nodes: graph.nodes.map((n) => ({ ...n })), edges: graph.edges.map((e) => ({ ...e })) }
+  if (prev?.look) g.look = prev.look
   if (prev) {
     const byKey = new Map(prev.nodes.map((n) => [n.key, n]))
     for (const n of g.nodes) {
@@ -255,7 +280,13 @@ export function itemsToGraph(items) {
   const sideways = links.filter((c) => 'ew'.includes(c.payload.from.side || 'x') && 'ew'.includes(c.payload.to.side || 'x')).length
   const dir = links.length && sideways * 2 > links.length ? 'right' : 'down'
   const origin = shapes.length ? { x: Math.min(...shapes.map((s) => s.x)), y: Math.min(...shapes.map((s) => s.y)) } : { x: 0, y: 0 }
-  return { graph: { dir, nodes, edges }, origin }
+  // The diagram's link style, for links added in the editor: the one most of
+  // its links share.
+  const tally = new Map()
+  for (const e of edges) { const k = JSON.stringify(e.look); tally.set(k, (tally.get(k) || 0) + 1) }
+  const common = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
+  const look = common && JSON.parse(common[0])
+  return { graph: { dir, nodes, edges, ...(look && Object.keys(look).length ? { look } : {}) }, origin }
 }
 
 // ── layout (the preview, and what Insert / Update places) ────────────
@@ -288,7 +319,7 @@ export function layoutFor(g, { byId = new Map(), origin = { x: 0, y: 0 }, font =
     const sub = sized.filter((n) => set.has(n.key))
     const at = [], subEdges = []
     g.edges.forEach((e, i) => { if (set.has(e.from) && set.has(e.to)) { at.push(i); subEdges.push(e) } })
-    const placed = layoutGraph(sub, subEdges, dir, dir === 'down' ? { x: across, y: origin.y } : { x: origin.x, y: across }, { drop })
+    const placed = layoutGraph(sub, subEdges, dir, dir === 'down' ? { x: across, y: origin.y } : { x: origin.x, y: across }, { drop, tidy: true })
     placed.sides.forEach((sd, j) => { sides[at[j]] = sd; turns[at[j]] = placed.turns[j] })
     for (const n of sub) {
       const level = placed.layers.get(n.key), natural = placed.natural.get(n.key)

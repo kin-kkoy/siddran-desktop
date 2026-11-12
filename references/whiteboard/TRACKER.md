@@ -416,3 +416,27 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   - Verified headless: a board link set to go around clears the box in its
     way, the editor draws it the same, and dimming works for a new root and
     for a Tab-added child.
+- 2026-11-13 · session 3 · fixes from the user's hands-on check:
+  - **The editor lays out as a family tree** (`layoutGraph(…, { tidy })`,
+    desktop only; text-to-diagram, Tidy and the CLI are unchanged). Each node
+    hangs from one parent: the one on the level just above it, else the
+    first. Each branch gets its own band. Children sit in the order they were
+    added, and a parent is centred over its first and last child. This fixed
+    two bugs:
+    - A new child landed on the far side of a cousin and its link crossed
+      over. Cause: the barycentre up-sweep compared positions from two
+      different rows.
+    - A parent sat off-centre over its children.
+    For a straight chain the result is identical to text-to-diagram (tested);
+    for branches only positions differ.
+  - **Dimming only on a deliberate click.** A node selected because you just
+    added it (Tab, the + handle, Root node, a drag-link) doesn't dim anything.
+  - **New links take the diagram's link style.** "All links" also sets
+    `graph.look`, which `connect` applies to every new link. Reopened from
+    the board, it is the look most links share. The Text tab keeps it.
+  - The link palette fills the panel (8 per row, centred).
+  - Verified headless: the user's tree is centred all the way down, new
+    nodes don't dim, and links added in a curved diagram are saved as curved.
+  - Note for the user: "go around" rarely shows in the editor because its
+    layout keeps boxes out of the way. It matters on the board once boxes
+    are moved by hand.

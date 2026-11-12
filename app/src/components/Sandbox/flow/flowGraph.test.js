@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseFlow, flowToItems, itemsToFlow } from './flowText'
 import {
   emptyGraph, addNode, addNext, connect, removeNode, updateEdge, reverseEdge,
-  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm, familiesOf, moveFamily, setLowered, GAP_FAMILY, anchorOf, styleLinks, linkLook,
+  graphToText, textToGraph, itemsToGraph, planDiagram, layoutFor, NODE_GROUPS, hasTextForm, familiesOf, moveFamily, setLowered, GAP_FAMILY, anchorOf, styleLinks, linkLook, diagramLook,
 } from './flowGraph'
 import { shapeOutline } from './svgPath'
 import { routeConnector } from '../connectors/geometry'
@@ -211,12 +211,59 @@ describe('shapeOutline', () => {
   })
 })
 
-describe('planDiagram ≡ flowToItems for a new diagram', () => {
-  it('places exactly what text-to-diagram (and the CLI) would', () => {
+describe('planDiagram vs flowToItems (the text path the CLI mirrors)', () => {
+  it('makes the same items; only where branches sit differs (the editor lays out as a family tree)', () => {
     const g = parseFlow('flowchart TD\nA([Start]) --> B{Ok?}\nB -->|yes| C[(Store)]\nB -.-> D[/Ask about a fairly long thing/]\nD --> A').graph
     const want = flowToItems(g, { origin: { x: 10, y: 20 }, newId: ids() })
     const plan = planDiagram(g, { origin: { x: 10, y: 20 }, newId: ids() })
+    const noPos = (it) => { const out = { ...it }; delete out.x; delete out.y; return out }
+    expect(plan.add.map(noPos)).toEqual([...want.shapes, ...want.connectors].map(noPos))
+  })
+
+  it('places a straight chain exactly as text-to-diagram does', () => {
+    const g = parseFlow('A[One] --> B[Two, a bit longer] --> C{Three?} --> D((Four))').graph
+    const want = flowToItems(g, { origin: { x: 10, y: 20 }, newId: ids() })
+    const plan = planDiagram(g, { origin: { x: 10, y: 20 }, newId: ids() })
     expect(plan.add).toEqual([...want.shapes, ...want.connectors])
+  })
+})
+
+describe('family-tree layout (the editor)', () => {
+  const tree = () => {
+    let g = addNode(emptyGraph(), { label: 'r' }).graph
+    g = addNext(g, 'n1').graph; g = addNext(g, 'n1').graph          // A = n2, B = n3
+    g = addNext(g, 'n2').graph; g = addNext(g, 'n2').graph          // A's n4, n5
+    return addNext(g, 'n3').graph                                    // B's n6
+  }
+  const cx = (laid, k) => { const n = laid.nodes.find((x) => x.key === k); return n.x + n.w / 2 }
+
+  it('keeps each parent\'s children together, in the order added, even after grandchildren', () => {
+    // the reported case: B's child gets a child, then A gets another child
+    let g = addNext(tree(), 'n4').graph          // n7 under n4
+    g = addNext(g, 'n6').graph                   // n8 under B's n6
+    g = addNext(g, 'n2').graph                   // n9: A's third child
+    const laid = layoutFor(g)
+    const row = ['n4', 'n5', 'n9', 'n6'].map((k) => cx(laid, k))
+    expect(row).toEqual([...row].sort((a, b) => a - b))           // A's three, then B's
+  })
+
+  it('centres every parent over its children', () => {
+    let g = addNext(tree(), 'n2').graph          // A has three children
+    g = addNext(g, 'n4').graph
+    const laid = layoutFor(g)
+    for (const [p, kids] of [['n1', ['n2', 'n3']], ['n2', ['n4', 'n5', 'n7']], ['n3', ['n6']], ['n4', ['n8']]]) {
+      const mid = (Math.min(...kids.map((k) => cx(laid, k))) + Math.max(...kids.map((k) => cx(laid, k)))) / 2
+      expect(cx(laid, p)).toBeCloseTo(mid, 5)
+    }
+  })
+
+  it('never overlaps boxes', () => {
+    let g = tree()
+    for (const k of ['n4', 'n4', 'n5', 'n6', 'n6', 'n2']) g = addNext(g, k).graph
+    const { nodes } = layoutFor(g)
+    for (const p of nodes) for (const q of nodes) if (p !== q) {
+      expect(p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h).toBe(false)
+    }
   })
 })
 
@@ -397,5 +444,31 @@ describe('link looks', () => {
     const g = styleLinks(setLowered(parseFlow('P --> L\nP --> R\nL --> L1 --> L2').graph, 'R', 2), 'all', { routing: 'straight' })
     const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
     expect(plan.add.filter((i) => i.type === 'connector').every((c) => !c.payload.bend)).toBe(true)
+  })
+})
+
+describe('new links take the diagram\'s link style', () => {
+  it('after "All links" → curved, a link added later is curved too', () => {
+    let g = addNext(addNode(emptyGraph(), { label: 'a' }).graph, 'n1').graph
+    g = styleLinks(g, 'all', { routing: 'curved', lineStyle: 'dotted', head: 'open' })
+    g = addNext(g, 'n2').graph
+    expect(linkLook(g.edges[1], '#fff')).toMatchObject({ routing: 'curved', lineStyle: 'dotted', head: 'open' })
+    expect(g.edges[1]).toMatchObject({ head: true, dashed: true })
+    expect(diagramLook(g, '#fff').routing).toBe('curved')
+  })
+
+  it('reopened from the board, the style most links share is the default', () => {
+    let g = parseFlow('P --> A\nP --> B\nP --> C').graph
+    g = styleLinks(styleLinks(g, 'all', { routing: 'straight' }), 2, { routing: 'curved' })
+    const plan = planDiagram(g, { origin: { x: 0, y: 0 }, newId: ids() })
+    const back = itemsToGraph(plan.add).graph
+    expect(diagramLook(back, '#e2ddf5').routing).toBe('straight')
+    expect(linkLook(addNext(back, back.nodes[0].key).graph.edges[3], '#e2ddf5').routing).toBe('straight')
+  })
+
+  it('a fresh diagram starts with plain elbow arrows', () => {
+    const g = addNext(addNode(emptyGraph()).graph, 'n1').graph
+    expect(g.edges[0].look).toBeUndefined()
+    expect(linkLook(g.edges[0], '#fff')).toMatchObject({ routing: 'elbow', head: 'arrow' })
   })
 })

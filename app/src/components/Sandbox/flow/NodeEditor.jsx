@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LuPlus, LuMinus, LuTrash2, LuArrowRightLeft, LuArrowDown, LuArrowRight, LuArrowUp, LuArrowLeft, LuScan, LuCircleHelp, LuChevronLeft, LuChevronRight, LuChevronUp, LuChevronDown } from 'react-icons/lu'
-import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm, moveFamily, setLowered, laneBend, linkLook, styleLinks } from './flowGraph'
+import { layoutFor, addNode, addNext, connect, updateNode, removeNode, updateEdge, removeEdge, reverseEdge, NODE_GROUPS, kindLabel, roundFor, hasTextForm, moveFamily, setLowered, laneBend, linkLook, styleLinks, diagramLook } from './flowGraph'
 import { shapeOutline } from './svgPath'
 import { NextStepIcon } from './icons'
 import { keepInView } from './camera'
@@ -238,10 +238,12 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   const selNode = selected?.type === 'node' ? graph.nodes.find((n) => n.key === selected.key) : null
   const selEdge = selected?.type === 'edge' ? graph.edges[selected.i] : null
 
-  // What the selection touches stays at full strength; the rest dims. A node:
-  // itself, every link on it, and the node at each link's other end. A link:
-  // itself and its two ends. Nothing selected: nothing dims.
+  // What a CLICKED selection touches stays at full strength; the rest dims. A
+  // node: itself, every link on it, and the node at each link's other end. A
+  // link: itself and its two ends. A node you just added (Tab, the + handle,
+  // Root node) is selected but doesn't dim anything — you didn't pick it out.
   const focus = useMemo(() => {
+    if (!selected?.clicked) return null
     if (selNode) {
       const links = new Set(), nodes = new Set([selNode.key])
       graph.edges.forEach((e, i) => {
@@ -422,8 +424,8 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             const on = selected?.type === 'edge' && selected.i === i
             const col = L.stroke
             return (
-              <g key={`e${i}`} onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i }) }}
-                onDoubleClick={() => select({ type: 'edge', i }, true)} style={{ cursor: 'pointer', ...dim(focus?.links.has(i)) }}>
+              <g key={`e${i}`} onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'edge', i, clicked: true }) }}
+                onDoubleClick={() => select({ type: 'edge', i, clicked: true }, true)} style={{ cursor: 'pointer', ...dim(focus?.links.has(i)) }}>
                 <polyline points={pairs(pts)} fill="none" stroke="transparent" strokeWidth={14 / cam.z} />
                 {/* selected: a soft accent halo under the line, so its own colour still shows */}
                 {on && <polyline points={pairs(pts)} fill="none" stroke={accent} strokeOpacity={0.35} strokeWidth={L.strokeWidth + 6} strokeLinejoin="round" strokeLinecap="round" />}
@@ -460,8 +462,8 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             return (
               <g key={n.key} transform={`translate(${n.x} ${n.y})`}
                 onPointerEnter={() => setHover(n.key)} onPointerLeave={() => setHover((k) => (k === n.key ? null : k))}
-                onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'node', key: n.key }) }}
-                onDoubleClick={() => select({ type: 'node', key: n.key }, true)} style={{ cursor: 'pointer', ...dim(focus?.nodes.has(n.key) || target) }}>
+                onPointerDown={(ev) => { if (ev.button !== 0) return; ev.stopPropagation(); svgRef.current.focus(); select({ type: 'node', key: n.key, clicked: true }) }}
+                onDoubleClick={() => select({ type: 'node', key: n.key, clicked: true }, true)} style={{ cursor: 'pointer', ...dim(focus?.nodes.has(n.key) || target) }}>
                 {/* a margin round the box, so the handle stays reachable */}
                 <rect x={-6} y={-6} width={n.w + 12 + (out === 'e' ? 22 : 0)} height={n.h + 12 + (out === 's' ? 22 : 0)} fill="transparent" />
                 <path d={shapeOutline(n.kind, n.w, n.h, radius)} fill={target ? 'color-mix(in srgb, var(--accent-warning) 18%, transparent)' : look.fill}
@@ -576,11 +578,11 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
             (top right) shows how everything works.
           </p>
         )}
-        {!selNode && !selEdge && graph.edges.length > 0 && (
+        {!selNode && !selEdge && graph.nodes.length > 0 && (
           <>
             <span style={s.label}>All links</span>
-            <p style={s.note}>Sets every link at once — e.g. straight or curved branches instead of elbows. Select one link to style just that one.</p>
-            <LinkControls look={linkLook(graph.edges[0], colors.stroke)} onPatch={(patch) => onChange(styleLinks(graph, 'all', patch))} />
+            <p style={s.note}>Sets every link at once — and links you add after — e.g. straight or curved branches instead of elbows. Select one link to style just that one.</p>
+            <LinkControls look={diagramLook(graph, colors.stroke)} onPatch={(patch) => onChange(styleLinks(graph, 'all', patch))} />
           </>
         )}
       </div>

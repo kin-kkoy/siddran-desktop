@@ -1,7 +1,7 @@
 import { HEAD_TYPES, HEAD_LABELS } from '../connectors/heads'
 import { LINE_STYLES } from '../connectors/lineStyle'
 import { LINK_PALETTE, ROUTINGS, LINE_GLYPH, HEAD_GLYPH } from '../connectors/controls'
-import { ColorGrid } from '../Toolbar/ColorMenu'
+import { CustomColor } from '../Toolbar/ColorMenu'
 import { fontCss } from '../text/textStyle'
 
 // A link's look in the node editor's side panel: the same choices as the
@@ -15,6 +15,9 @@ const s = {
     flex: 1, minWidth: 0, height: 30, fontSize: 12.5, color: 'var(--text-primary)', background: 'var(--bg-primary)',
     border: '1px solid var(--border-default)', borderRadius: 6, padding: '0 6px', fontFamily: fontCss(),
   },
+  // The palette spread across the panel: 8 a row, each swatch centred in its cell.
+  swatches: { display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', rowGap: 10, justifyItems: 'center', margin: '2px 0 4px' },
+  swatch: { width: 24, height: 24, borderRadius: '50%', padding: 0, border: 'none', cursor: 'pointer' },
   value: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)', minWidth: 22, textAlign: 'center' },
 }
 
@@ -81,7 +84,16 @@ function LinkControls({ look, onPatch }) {
         <span style={s.value}>{look.strokeWidth}</span>
         <Btn w={28} title="Thicker" onClick={() => onPatch({ strokeWidth: Math.min(12, look.strokeWidth + 1) })}>+</Btn>
       </div>
-      <ColorGrid colors={LINK_PALETTE} value={look.stroke} onPick={(c) => onPatch({ stroke: c })} />
+      <div style={s.swatches}>
+        {LINK_PALETTE.map((c) => {
+          const on = c.toLowerCase() === String(look.stroke).slice(0, 7).toLowerCase()
+          return (
+            <button key={c} type="button" title={c} aria-label={c} aria-pressed={on} onClick={() => onPatch({ stroke: c })}
+              style={{ ...s.swatch, backgroundColor: c, boxShadow: on ? '0 0 0 2px rgb(18, 18, 30), 0 0 0 4px var(--accent-warning)' : '0 0 0 1px rgba(255, 255, 255, 0.16)' }} />
+          )
+        })}
+      </div>
+      <CustomColor value={look.stroke} onPick={(c) => onPatch({ stroke: c })} />
     </>
   )
 }
