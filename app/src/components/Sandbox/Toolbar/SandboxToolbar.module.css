@@ -9,11 +9,13 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    background-color: rgba(18, 18, 30, 0.92);
+    background-color: rgb(18, 18, 30);
     border: 1px solid var(--border-default);
     border-radius: 12px;
     padding: 6px;
-    backdrop-filter: blur(12px);
+    /* No backdrop-filter: it puts the dock on its own compositing layer, which
+       WebKit rasterises soft on a fractionally-scaled display (blurry icons).
+       At 0.92 opacity there was almost nothing to blur anyway. */
     box-shadow: 0 8px 28px var(--shadow-color);
     max-height: calc(100% - 32px);
     overflow-y: auto;

@@ -11,7 +11,6 @@
     background-color: rgba(18, 18, 30, 0.96);
     border: 1px solid var(--border-default);
     border-radius: 14px;
-    backdrop-filter: blur(12px);
     box-shadow: 0 12px 32px var(--shadow-color);
 }
 

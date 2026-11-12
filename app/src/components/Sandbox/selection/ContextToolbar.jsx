@@ -9,6 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
+    LuAArrowDown, LuAArrowUp,
 } from 'react-icons/lu'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -77,10 +78,13 @@ const GAP = 64  // px between the selection top and the bar, in screen space
 // view it would be cut off by the canvas edge, so it pins just inside instead.
 const BAR_ROOM = 150
 
+// Where the bar's centre-bottom (or, pinned, centre-top) goes. The actual
+// centring happens after layout in whole pixels (see the layout effect) — a
+// translate(-50%) lands on half pixels and blurs the text.
 function barPosition(x, anchorY) {
     const top = anchorY - GAP
-    if (top < BAR_ROOM) return { left: x, top: 8, transform: 'translate(-50%, 0)' }
-    return { left: x, top, transform: 'translate(-50%, -100%)' }
+    if (top < BAR_ROOM) return { left: Math.round(x), top: 8, '--above': 0 }
+    return { left: Math.round(x), top: Math.round(top), '--above': 1 }
 }
 
 const CONVERTIBLE = SHAPE_GROUPS.filter(g => g.id !== 'line').flatMap(g => shapesInGroup(g.id))
@@ -179,13 +183,15 @@ function ContextToolbar({
         const el = barRef.current
         const host = el?.offsetParent
         if (!el || !host) return
-        el.style.marginLeft = '0px'
-        const r = el.getBoundingClientRect(), h = host.getBoundingClientRect()
+        // Centre on `left`, sit above `top` (unless pinned), keep inside the
+        // canvas — all as whole-pixel margins, so the text paints crisply.
+        const w = el.offsetWidth, hgt = el.offsetHeight
+        const left = parseFloat(el.style.left) || 0
         const pad = 8
-        let shift = 0
-        if (r.left < h.left + pad) shift = h.left + pad - r.left
-        else if (r.right > h.right - pad) shift = h.right - pad - r.right
-        el.style.marginLeft = `${shift}px`
+        let x = Math.round(left - w / 2)
+        x = Math.max(pad, Math.min(x, host.clientWidth - pad - w))
+        el.style.marginLeft = `${x - left}px`
+        el.style.marginTop = el.style.getPropertyValue('--above') === '1' ? `${-hgt}px` : '0px'
     })
     const frames = useMemo(() => selectedItems.filter(isFrame), [selectedItems])
     const shapes = useMemo(() => selectedItems.filter(it => it.type === 'shape' && !isFrame(it)), [selectedItems])
@@ -350,13 +356,13 @@ function ContextToolbar({
                         {Object.entries(FONT_FAMILIES).map(([k, f]) => <option key={k} value={k}>{f.label}</option>)}
                     </select>
                     <button className={styles.btn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, -1) })}
-                        title="Smaller text (Ctrl+Shift+<)" aria-label="Smaller text">A−</button>
+                        title="Smaller text (Ctrl+Shift+<)" aria-label="Smaller text"><LuAArrowDown size={22} /></button>
                     <select className={styles.fontSelect} value={fontSize} title="Font size" aria-label="Font size"
                         onChange={(e) => patchText({ fontSize: Number(e.target.value) })}>
                         {[...new Set([...FONT_SIZES, fontSize])].sort((a, b) => a - b).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <button className={styles.btn} onClick={() => patchText({ fontSize: stepFontSize(fontSize, 1) })}
-                        title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">A+</button>
+                        title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text"><LuAArrowUp size={22} /></button>
                     <div className={styles.sep} />
                     <button className={ref.bold ? styles.btnActive : styles.btn} onClick={() => toggle('bold')} title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed={!!ref.bold}><LuBold size={18} /></button>
                     <button className={ref.italic ? styles.btnActive : styles.btn} onClick={() => toggle('italic')} title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed={!!ref.italic}><LuItalic size={18} /></button>

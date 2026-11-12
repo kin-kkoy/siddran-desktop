@@ -8,13 +8,16 @@
     align-items: stretch;
     gap: 5px;
     padding: 7px 11px;
-    background-color: rgba(18, 18, 30, 0.94);
+    background-color: rgb(18, 18, 30);
     border: 1px solid var(--border-default);
     border-radius: 14px;
-    backdrop-filter: blur(12px);
+    /* No backdrop-filter, no transform, no lingering animation: each puts the
+       bar on its own compositing layer, and on a fractionally-scaled display
+       (0.83 here) WebKit rasterises such layers soft — the blurry text and
+       icons. The bar is positioned on whole pixels from JS instead. */
     box-shadow: 0 8px 24px var(--shadow-color);
     pointer-events: auto;
-    animation: ctxFadeIn 0.12s ease both;
+    animation: ctxFadeIn 0.12s ease backwards;
     white-space: nowrap;
     /* Size to the content, always. An absolutely-positioned box otherwise
        shrinks to the room left between its `left` and the container's right
@@ -22,13 +25,11 @@
     width: max-content;
 }
 
-/* Animates the separate `translate` property, NOT `transform`: the bar is
-   centred with an inline transform: translate(-50%, …), and an animated
-   transform (fill-mode both) silently replaced it — which is why the bar's
-   LEFT edge, not its middle, sat over the selection. */
+/* Opacity only, fill-mode `backwards`: once the fade ends nothing is left
+   applied, so the bar drops back to plain, crisp painting. */
 @keyframes ctxFadeIn {
-    from { opacity: 0; translate: 0 6px; }
-    to   { opacity: 1; translate: 0 0; }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 /* ── Compact button ── */
