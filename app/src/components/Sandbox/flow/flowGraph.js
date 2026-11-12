@@ -14,9 +14,8 @@
 // change those items in place (keeping their colours, ids and undo history)
 // rather than deleting and redrawing them.
 
-import { layoutGraph, nodeSize, wrap, DEFAULT_STYLE, parseFlow } from './flowText'
-import { isLineKind, SHAPES, shapesInGroup } from '../shapes/registry'
-import { isFrame } from '../frames/frames'
+import { layoutGraph, nodeSize, wrap, DEFAULT_STYLE, parseFlow, isDiagramShape } from './flowText'
+import { SHAPES, shapesInGroup } from '../shapes/registry'
 
 /**
  * The node kinds the editor offers: the shape menu's own sections, minus lines
@@ -247,7 +246,7 @@ export function textToGraph(text, prev = null) {
 // ── board items → graph ──────────────────────────────────────────────
 
 /** The shapes in `items` a diagram is made of (no frames, lines or arrows-as-shapes). */
-export const isDiagramShape = (i) => i?.type === 'shape' && !isFrame(i) && !isLineKind(i.payload?.kind)
+export { isDiagramShape }
 
 function roundOf(s) {
   const r = s.payload?.radius || 0

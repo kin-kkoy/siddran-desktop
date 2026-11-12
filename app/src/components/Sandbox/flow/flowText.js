@@ -12,6 +12,7 @@
 //       A[Start] --> B{Logged in?}
 //       B -->|yes| C(Dashboard)
 //       B -- no --> D[/Login form/]
+import { isLineKind } from '../shapes/registry'
 
 const GAP_LAYER = 72
 const GAP_SIBLING = 48
@@ -453,8 +454,12 @@ export function tidy(shapes, connectors, dir = 'down') {
 }
 
 /** Items → flowchart text (what "Copy as text" puts on the clipboard). */
+// Frames and line shapes are shapes but not boxes, so they are left out (as
+// Siddran-CLI's `describe` does with `is_diagram_shape`).
+export const isDiagramShape = (i) => i?.type === 'shape' && i.payload?.kind !== 'frame' && !isLineKind(i.payload?.kind)
+
 export function itemsToFlow(items) {
-  const shapes = items.filter((i) => i.type === 'shape').sort((a, b) => Math.trunc(a.y / 40) - Math.trunc(b.y / 40) || a.x - b.x)
+  const shapes = items.filter(isDiagramShape).sort((a, b) => Math.trunc(a.y / 40) - Math.trunc(b.y / 40) || a.x - b.x)
   const key = new Map(shapes.map((s, i) => [s.id, `n${i + 1}`]))
   const br = { rhombus: ['{', '}'], ellipse: ['((', '))'], roundedRect: ['(', ')'], hexagon: ['{{', '}}'], cylinder: ['[(', ')]'], parallelogram: ['[/', '/]'] }
   const lines = ['flowchart TD']

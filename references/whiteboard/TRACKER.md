@@ -135,18 +135,18 @@ way to build the same thing. Keep the text mode for AI and paste.
 - [x] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
       change both.
 
-## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)
+## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)  ✅ built (session 4) — user reviews at the end with 3
 
-- [ ] `sandbox_read`: list frames as frames (title plus contents), not as empty
+- [x] `sandbox_read`: list frames as frames (title plus contents), not as empty
       boxes. Stickies read as sticky notes.
-- [ ] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
+- [x] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
       `lineStyle` and `routing: "curved"`.
-- [ ] Also from section 3: a connector's `avoid` (go around boxes) and
+- [x] Also from section 3: a connector's `avoid` (go around boxes) and
       `body: "tapered"`, and a shape's `flowDrop` (the node editor's lowered
       level). The CLI only needs to keep them when round-tripping; it doesn't
       have to lay them out. Layout stays CLI-mirror only: the families and
       lowering are desktop-only (user's decision).
-- [ ] Keep the parity tests between `flowText.js` and `diagram.rs` green.
+- [x] Keep the parity tests between `flowText.js` and `diagram.rs` green.
 
 ## Section 5 — Format shell + shared record model (prerequisite for 6–11)
 
@@ -450,3 +450,47 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     too (selection handles excepted);
   - it calls `stopPropagation`, so the card never starts a drag.
   Gestures can't be driven headlessly; the user checks it by hand.
+- 2026-11-13 · session 4 · section 4 built. The CLI work is on a new branch
+  `whiteboard` in `../Siddran-CLI` (its `master` is untouched), uncommitted
+  until the user says so.
+  - **The vocabulary lives in `diagram.rs`:** `BOX_KINDS` (all 35 box shapes
+    plus `sticky`), `LINE_KINDS`, `HEADS`, `LINE_STYLES`, `ROUTINGS`. A new
+    desktop test pins the same lists against the registry and connector
+    constants, so a new shape kind fails there until the CLI learns it.
+  - **`describe` and `itemsToFlow` both skip frames and line shapes** (the
+    rule is `isDiagramShape`, which now lives in flowText.js and is
+    re-exported by flowGraph.js). Both have a matching test. Stickies stay
+    boxes, so links to them still show, and the node editor numbers keys the
+    same way.
+  - **`sandbox_read`** adds `shape` to each `box_ids` entry, a
+    `sticky_notes` list (key, id, text, colour) and `frames`. Each frame
+    lists its title and what is inside it: box keys, text ids, nested frame
+    ids and counts of the rest. An item belongs to the smallest frame that
+    holds its centre. A frame belongs to another only if it fits wholly
+    inside it. Line shapes are counted as `lines`.
+  - **`sandbox_edit`:**
+    - `add` takes any box kind, `sticky` (192 px, `#FFE45C`, the templates'
+      payload), `frame` (`around` boxes with 40 px padding, like "Frame
+      selection", z below everything, the `framePayload` fields), `fill`, and
+      `w`/`h`.
+    - Arrows (from `after`, and in `connect`) take `routing`, `head`,
+      `headStart` and `lineStyle`. Setting `lineStyle` removes the old `dash`.
+    - `update` takes a connector id (label and style), renames a frame
+      through `text`, and refuses an unknown shape. A typo would otherwise
+      draw nothing.
+    - New boxes can now land inside a frame (frames are no longer obstacles
+      for free space).
+  - **`sandbox_diagram`:** `shapes` (node key → kind) and `links` (a style
+    for every arrow; a `---` or `-.->` in the text wins).
+  - `avoid`, `body`, `bend` and `flowDrop` survive an edit (tested). The CLI
+    still doesn't lay them out.
+  - Checks: CLI `cargo test` passes (6 new tool tests, 1 new core test);
+    clippy shows only its 3 old warnings. Desktop `npm test` passes (616),
+    lint is at the baseline of 25, build and `cargo check` pass. Checked with
+    the real `siddran call` on a copy of the test Bag: a real board with two
+    frames reads correctly, and draw → frame `around` → sticky `after` →
+    read gives the expected frame contents. Then seen headless in the dev app
+    (Bag copy; dev localStorage backed up and restored; opened with the CLI's
+    `app_open`): all of it renders as intended. That's the titled frame, the
+    sticky, the `document` shape, dotted curved links with circle start
+    heads, the dashed `no` loop and the diamond head.
