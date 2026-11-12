@@ -73,6 +73,15 @@ const LINE_GLYPH = { solid: '━', dashed: '┅', dotted: '┈' }
 const HEAD_GLYPH = { none: '—', arrow: '▶', open: '›', triangle: '▷', circle: '●', diamond: '◇', bar: '┃' }
 
 const GAP = 48  // px above the selection top in screen space
+// The bar is up to two rows tall. Placed above a selection near the top of the
+// view it would be cut off by the canvas edge, so it pins just inside instead.
+const BAR_ROOM = 96
+
+function barPosition(x, anchorY) {
+    const top = anchorY - GAP
+    if (top < BAR_ROOM) return { left: x, top: 8, transform: 'translate(-50%, 0)' }
+    return { left: x, top, transform: 'translate(-50%, -100%)' }
+}
 
 const CONVERTIBLE = SHAPE_GROUPS.filter(g => g.id !== 'line').flatMap(g => shapesInGroup(g.id))
 
@@ -155,7 +164,7 @@ function ContextToolbar({
         const mid = pts && connectorMidpoint(pts)
         if (!mid) return null
         const midScreen = canvas.screenFromWorld(mid)
-        const cStyle = { left: midScreen.x, top: midScreen.y - GAP, transform: 'translate(-50%, -100%)' }
+        const cStyle = barPosition(midScreen.x, midScreen.y)
         const setPayload = (updates) => { beginTransaction(); onUpdatePayload(conn.id, updates); endTransaction() }
         const stroke = cp.stroke || '#e2ddf5'
         const width = cp.strokeWidth || 2
@@ -226,7 +235,7 @@ function ContextToolbar({
     // Position: top-center of selection, in screen coords (frames: above the title)
     const topScreen = canvas.screenFromWorld(getOrientedAnchors(box).n)
     const lift = frames.length && frames.length === boxItems.length ? 24 : 0
-    const style = { left: topScreen.x, top: topScreen.y - GAP - lift, transform: 'translate(-50%, -100%)' }
+    const style = barPosition(topScreen.x, topScreen.y - lift)
 
     const selectedCount = selectedItems.length
     const locked = boxItems.some(it => it.payload?.locked)
