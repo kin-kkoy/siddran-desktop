@@ -536,14 +536,20 @@ async function runTable() {
     // Points: select a cell, type (the key starts the edit), Enter commits and moves down; Tab moves right.
     const grid = () => W().querySelector('[role="grid"]')
     const press = (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(ptr('pointerdown', r.left + 4, r.top + 4)); window.dispatchEvent(ptr('pointerup', r.left + 4, r.top + 4)) }
-    press(cellOf(dataRows()[0], 'Points').querySelector('button')); await sleep(200)
-    kd(grid(), '5'); await sleep(200)
-    let inp = W().querySelector('input[aria-label="Points"]'); kd(inp, 'Enter'); await sleep(300)
-    kd(grid(), '1'); await sleep(200)
+    const dbl = (el) => el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    const ptsCell = (ri) => cellOf(dataRows()[ri], 'Points').querySelector('button')
+    press(ptsCell(0)); await sleep(150)
+    kd(grid(), 'Q'); await sleep(200)
+    const typeIgnored = !W().querySelector('input[aria-label="Points"]')
+    dbl(ptsCell(0)); await sleep(200)
+    let inp = W().querySelector('input[aria-label="Points"]')
+    const caretAtEnd = inp && inp.selectionStart === inp.value.length
+    setInput(inp, '5'); kd(inp, 'Enter'); await sleep(300)
+    dbl(ptsCell(1)); await sleep(200)
     inp = W().querySelector('input[aria-label="Points"]'); const downOk = dataRows()[1].contains(inp)
     setInput(inp, '1,200'); kd(inp, 'Enter'); await sleep(300)
-    kd(grid(), '3'); await sleep(200)
-    inp = W().querySelector('input[aria-label="Points"]'); kd(inp, 'Tab'); await sleep(300)
+    dbl(ptsCell(2)); await sleep(200)
+    inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '3'); kd(inp, 'Tab'); await sleep(300)
     kd(grid(), 'Enter'); await sleep(400)
     const picker = pop()
     const tabToTags = !!picker && picker.getAttribute('aria-label') === 'Tags options'
@@ -553,7 +559,7 @@ async function runTable() {
     press(cellOf(dataRows()[0], 'Status').querySelector('button')); await sleep(200)
     kd(grid(), 'Enter'); await sleep(300)
     ;[...pop().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done')?.click(); await sleep(300)
-    await step('cells', { downOk, tabToTags, values: values(), points: texts('Points'), tagOptions: P()?.fields?.find(f => f.name === 'Tags')?.options })
+    await step('cells', { typeIgnored, caretAtEnd, downOk, tabToTags, values: values(), points: texts('Points'), tagOptions: P()?.fields?.find(f => f.name === 'Tags')?.options })
 
     // Sort by Points, descending.
     tool('Sort').click(); await sleep(300)
@@ -721,12 +727,21 @@ async function runGrid() {
     const ti = heads().findIndex(h => h.textContent.trim().startsWith('Title'))
     press(cell(0, ti).querySelector('button')); await sleep(100)
     const e0 = performance.now()
-    kd(G(), 'X'); await sleep(50)
+    cell(0, ti).querySelector('button').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })); await sleep(50)
     const inp = W().querySelector('input[aria-label="Title"]'); setInput(inp, 'Edited'); kd(inp, 'Enter')
     await frame(); await frame()
     const editMs = Math.round(performance.now() - e0)
     await sleep(300)
-    await step('long', { records: P().records.length, drawn, addMs, lastTitles, editMs, firstTitle: rows()[0].children[1 + ti]?.textContent.trim(), spacers: [...W().querySelectorAll('[aria-hidden="true"]')].length })
+    // The eraser passes through the widget (and cards) to the board: the widget stays.
+    key('Escape'); await sleep(100)
+    key('e'); await sleep(300)
+    const [ex, ey] = center(W().querySelector('header'))
+    const under = document.elementFromPoint(ex, ey)
+    const passes = !W().contains(under)
+    under.dispatchEvent(ptr('pointerdown', ex, ey)); under.dispatchEvent(ptr('pointerup', ex, ey)); window.dispatchEvent(ptr('pointerup', ex, ey)); await sleep(400)
+    const widgetKept = live().some(i => i.id === fid)
+    key('v'); await sleep(200)
+    await step('long', { passes, under: under?.tagName, widgetKept, records: P().records.length, drawn, addMs, lastTitles, editMs, firstTitle: rows()[0].children[1 + ti]?.textContent.trim(), spacers: [...W().querySelectorAll('[aria-hidden="true"]')].length })
     send('done', true)
 }
 

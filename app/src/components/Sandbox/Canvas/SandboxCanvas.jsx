@@ -46,14 +46,15 @@ const CULL_BUCKET = 200      // snap the cull rect to this grid so panning a lit
 export const PRECISION_ERASER_PX = 8
 // While one of these is active, cards (text boxes, notes, tasks, PDFs) can't be
 // grabbed or selected: the press goes through to the board, so you can draw,
-// highlight, lasso or paint right over them. The plain eraser still deletes cards.
+// highlight, lasso, paint or erase right over them. Neither eraser deletes a card
+// or a widget (the user's call, 2026-11-13): they erase strokes and shapes only.
 // The paint bucket's cursor: a white bucket on a dark outline (visible on any
 // background), hotspot at the pouring lip, bottom-left.
 const BUCKET_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linejoin="round" stroke-linecap="round">'
     + '<g stroke="#000" stroke-width="4"><path d="M12 3l8 8-7 7-8-8z"/><path d="M5 10c-2 3-3 7-1 10"/></g>'
     + '<g stroke="#fff" stroke-width="1.8"><path d="M12 3l8 8-7 7-8-8z"/><path d="M5 10c-2 3-3 7-1 10"/></g></svg>'
 const BUCKET_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(BUCKET_SVG)}") 4 20, crosshair`
-const CARD_PASS_THROUGH = new Set(['pen', 'highlighter', 'smart', 'precisionEraser', 'lasso', 'fill'])
+const CARD_PASS_THROUGH = new Set(['pen', 'highlighter', 'smart', 'eraser', 'precisionEraser', 'lasso', 'fill'])
 // Shape, sticky and text tools pass through too, so you can draw them ON a
 // card or widget (what lands on a widget attaches to it and is drawn on the
 // top canvas). The frame tool doesn't: frames never go on widgets.
@@ -224,9 +225,10 @@ function SandboxCanvas({
             return all.some(it => ids.has(it.id) && itemHitTest(it, world.x, world.y, 2))
         }
 
+        // Strokes, shapes (stickies, frames, lines) and connectors — never images, cards or widgets.
         const eraseAt = (world) => {
             const hit = topHitAt(world)
-            if (hit) latestRef.current.onErase?.(hit.id)
+            if (hit && hit.type !== 'image') latestRef.current.onErase?.(hit.id)
         }
         // Precision eraser: cut along the path from the last position, in steps
         // of half the radius, so a fast drag leaves no un-erased gaps.

@@ -86,14 +86,13 @@ const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_F
 // Full screen: its own size once set, else 15% over the widget's.
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || FORMAT_FONT) * 1.15)
 
-function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
+function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
 
     const onPointerDown = (e) => {
         if (e.button !== 0) return
-        if (tool === 'eraser') { e.stopPropagation(); onRemove?.(item.id); return }
         e.stopPropagation()
         // Typing or clicking a control inside doesn't (re)select the widget.
         if (e.target.closest('input, button, select, textarea')) return

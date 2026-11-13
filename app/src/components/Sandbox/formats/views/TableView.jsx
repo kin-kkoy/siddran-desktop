@@ -20,8 +20,8 @@ import { requestOpenExternal } from '../../../../desktop/openExternal'
  * Reads and writes only through `source` (dataSource.js), so the same table
  * works over own records and linked tasks.
  *
- * Like a spreadsheet: a click selects a cell, a second click (or double-click,
- * Enter, F2, or just typing) edits it. Arrows move, Shift extends, drag
+ * Like a spreadsheet: a click selects a cell; a double-click (one tap on a
+ * touch screen, or Enter / F2) edits it, with the caret at the end. Arrows move, Shift extends, drag
  * selects a block; the row grip selects a row, a column header its column, the
  * corner everything. Tab / Enter commit and move on, Esc cancels; Delete
  * clears; Ctrl+C copies the block as text; Ctrl+B/I/U style it. Rows drag
@@ -294,8 +294,8 @@ function TableView({ source, item, onConfig }) {
             if (ae && ae !== gridRef.current && gridRef.current?.contains(ae) && ae.tagName === 'INPUT') ae.blur()
             focusGrid()
             if (e.shiftKey && sel) { selectCell(ri, ci, true); return }
-            const sole = sel?.mode === 'cells' && sel.a.ri === ri && sel.a.ci === ci && sel.b.ri === ri && sel.b.ci === ci
-            if (sole && !edit && fields[ci]?.type !== 'check') { startEdit(ri, ci); return }
+            // A finger can't double-tap comfortably: one tap edits (and brings up the on-screen keyboard).
+            if (e.pointerType === 'touch' && fields[ci]?.type !== 'check') { startEdit(ri, ci); return }
             selectCell(ri, ci)
             dragSel.current = true
             const stop = () => { dragSel.current = false; window.removeEventListener('pointerup', stop, true) }
@@ -365,10 +365,7 @@ function TableView({ source, item, onConfig }) {
         if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(ri, ci); return }
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearRange(); return }
         if (e.key === ' ' && fields[ci]?.type === 'check') { e.preventDefault(); startEdit(ri, ci); return }
-        if (e.key.length === 1 && !e.altKey) {
-            const f = fields[ci]
-            if (f && f.type !== 'check' && f.type !== 'date') { e.preventDefault(); startEdit(ri, ci, e.key) }
-        }
+        // Typing on a selected cell does nothing: editing starts with a double-click (the user's call).
     }
 
     // A press outside the widget (and outside its menus) ends the selection.
@@ -447,16 +444,16 @@ function TableView({ source, item, onConfig }) {
         <div ref={rootRef} className={styles.table} style={{ '--cols': cols }}>
             <div className={styles.toolbar}>
                 <button className={`${styles.tool} ${nFilters ? styles.toolOn : ''}`} onClick={(e) => openMenu('filter', e)} aria-label="Filter">
-                    <LuFilter size={12} /> Filter{nFilters ? ` · ${nFilters}` : ''}
+                    <LuFilter size="1em" /> Filter{nFilters ? ` · ${nFilters}` : ''}
                 </button>
                 <button className={`${styles.tool} ${nSorts ? styles.toolOn : ''}`} onClick={(e) => openMenu('sort', e)} aria-label="Sort">
-                    <LuArrowUpDown size={12} /> Sort{nSorts ? ` · ${nSorts}` : ''}
+                    <LuArrowUpDown size="1em" /> Sort{nSorts ? ` · ${nSorts}` : ''}
                 </button>
                 <button className={`${styles.tool} ${t.groupField ? styles.toolOn : ''}`} onClick={(e) => openMenu('group', e)} aria-label="Group">
-                    <LuRows3 size={12} /> {t.groupField ? `Group · ${t.groupField.name}` : 'Group'}
+                    <LuRows3 size="1em" /> {t.groupField ? `Group · ${t.groupField.name}` : 'Group'}
                 </button>
                 <button className={`${styles.tool} ${nHidden ? styles.toolOn : ''}`} onClick={(e) => openMenu('fields', e)} aria-label="Fields">
-                    <LuColumns3 size={12} /> Fields{nHidden ? ` · ${nHidden} hidden` : ''}
+                    <LuColumns3 size="1em" /> Fields{nHidden ? ` · ${nHidden} hidden` : ''}
                 </button>
                 {t.rows.length !== t.total && <span className={styles.count}>{t.rows.length} of {t.total}</span>}
                 <span className={styles.grow} />

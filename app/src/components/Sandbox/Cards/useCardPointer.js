@@ -1,22 +1,22 @@
 import { useRef } from 'react'
 
 /**
- * Shared pointer behaviour for DOM cards (note / task / text):
- *   - eraser tool  → click deletes
- *   - otherwise    → select on down (shift = additive) + drag to move
+ * Shared pointer behaviour for DOM cards (note / task / text): select on down
+ * (shift = additive) + drag to move. The erasers never delete a card — while
+ * one is active the cards let presses through to the board (SandboxCanvas
+ * CARD_PASS_THROUGH).
  * Drag is wrapped in a history transaction so a move is one undo step, and
  * zoom-compensated like the original AttachedNoteCard.
  *
  * Children that should NOT start a drag/select (links, buttons, edit areas)
  * carry `data-sb-card-title`, a <button>, or `data-sb-noedit`.
  */
-export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
+export function useCardPointer({ item, zoom, onSelect, onUpdate, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const elRef = useRef(null)
     const dragRef = useRef(null)
 
     const onPointerDown = (e) => {
         if (e.target.closest('button') || e.target.closest('[data-sb-card-title]') || e.target.closest('[data-sb-noedit]')) return
-        if (tool === 'eraser') { e.stopPropagation(); onRemove?.(item.id); return }
         e.stopPropagation()
         // The board's own move (SelectionOverlay): the same drag shapes get —
         // snapping and guides, groups, what's attached riding along, the drag

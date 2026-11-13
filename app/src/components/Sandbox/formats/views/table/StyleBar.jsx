@@ -37,10 +37,10 @@ export default function StyleBar({ cur, enabled, apply, label }) {
                 <option value="">Font</option>
                 {Object.entries(FONT_FAMILIES).map(([k, f]) => <option key={k} value={k}>{f.label}</option>)}
             </select>
-            {btn(s.bold, 'Bold (Ctrl+B)', () => toggle('bold'), <LuBold size={13} />)}
-            {btn(s.italic, 'Italic (Ctrl+I)', () => toggle('italic'), <LuItalic size={13} />)}
-            {btn(s.underline, 'Underline (Ctrl+U)', () => toggle('underline'), <LuUnderline size={13} />)}
-            {btn(s.strike, 'Strikethrough', () => toggle('strike'), <LuStrikethrough size={13} />)}
+            {btn(s.bold, 'Bold (Ctrl+B)', () => toggle('bold'), <LuBold size="1em" />)}
+            {btn(s.italic, 'Italic (Ctrl+I)', () => toggle('italic'), <LuItalic size="1em" />)}
+            {btn(s.underline, 'Underline (Ctrl+U)', () => toggle('underline'), <LuUnderline size="1em" />)}
+            {btn(s.strike, 'Strikethrough', () => toggle('strike'), <LuStrikethrough size="1em" />)}
             <button ref={colorRef} className={styles.styleBtn} disabled={!enabled} title="Text colour" aria-label="Text colour" onClick={() => setMenu(m => m === 'color' ? null : 'color')}>
                 <span className={styles.colorA} style={{ borderBottomColor: s.color || 'var(--text-primary)' }}>A</span>
             </button>
@@ -50,10 +50,10 @@ export default function StyleBar({ cur, enabled, apply, label }) {
             <button className={styles.styleBtn} disabled={!enabled || scale <= SCALE_MIN} title="Smaller" aria-label="Smaller text" onClick={() => step(-0.1)}>−</button>
             <span className={styles.styleScale} title="Text size in these cells">{Math.round(scale * 100)}%</span>
             <button className={styles.styleBtn} disabled={!enabled || scale >= SCALE_MAX} title="Bigger" aria-label="Bigger text" onClick={() => step(0.1)}>+</button>
-            {btn(s.textAlign === 'left', 'Align left', () => apply({ textAlign: s.textAlign === 'left' ? null : 'left' }), <LuAlignLeft size={13} />)}
-            {btn(s.textAlign === 'center', 'Align centre', () => apply({ textAlign: s.textAlign === 'center' ? null : 'center' }), <LuAlignCenter size={13} />)}
-            {btn(s.textAlign === 'right', 'Align right', () => apply({ textAlign: s.textAlign === 'right' ? null : 'right' }), <LuAlignRight size={13} />)}
-            {btn(false, 'Clear formatting', () => apply(null), <LuEraser size={13} />)}
+            {btn(s.textAlign === 'left', 'Align left', () => apply({ textAlign: s.textAlign === 'left' ? null : 'left' }), <LuAlignLeft size="1em" />)}
+            {btn(s.textAlign === 'center', 'Align centre', () => apply({ textAlign: s.textAlign === 'center' ? null : 'center' }), <LuAlignCenter size="1em" />)}
+            {btn(s.textAlign === 'right', 'Align right', () => apply({ textAlign: s.textAlign === 'right' ? null : 'right' }), <LuAlignRight size="1em" />)}
+            {btn(false, 'Clear formatting', () => apply(null), <LuEraser size="1em" />)}
             {menu && (
                 <Popover anchor={menu === 'color' ? colorRef : bgRef} width={196} onClose={() => setMenu(null)} label={menu === 'color' ? 'Text colour' : 'Fill'}>
                     <div className={styles.swatches}>

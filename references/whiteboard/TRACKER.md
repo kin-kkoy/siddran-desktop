@@ -969,4 +969,22 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     The console's "key prop spread into JSX" warning comes from the
     sidebar's notebook list (useDragReorder), not the table — left alone.
     Desktop 676 tests, lint 25, build and `cargo check` pass.
+- 2026-11-13 · session 6 · user feedback on checkpoint 1:
+  - **Editing starts with a double-click** (typing on a selected cell does
+    nothing now; Enter / F2 still edit from the keyboard). On a touch
+    screen ONE tap edits (pointerType 'touch'), so the on-screen keyboard
+    comes up — untested, no touch device here; a pen behaves like a mouse.
+    The caret lands at the end of the value instead of selecting it.
+  - **The table's toolbar scales with the widget's text size** at 80 %
+    (sized in em; 15 px text → a 12 px bar), the style bar included.
+  - **The erasers never delete cards or widgets** (user's call): the plain
+    eraser now passes through cards and widgets like the precision eraser
+    (CARD_PASS_THROUGH), so it erases what's drawn over them; on the canvas
+    it erases strokes, shapes (stickies, frames, lines) and connectors, not
+    images. The precision eraser already only cut pen strokes.
+  - Checked in a hidden window: typing on a selected cell made no editor;
+    double-click opened one with the caret at the end; the whole `table:`
+    and `grid:` walks pass; with the eraser, the point over a widget's
+    title bar is the board canvas and a press there left the widget.
+    Lint 25, 676 tests, build pass.
 

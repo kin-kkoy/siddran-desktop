@@ -18,28 +18,30 @@
     display: flex;
     flex-wrap: wrap;          /* a narrow widget puts the style bar on its own line, always (never toggling) */
     align-items: center;
-    gap: 4px;
-    padding: 0 0 6px;
+    gap: 0.33em;
+    padding: 0 0 0.5em;
+    /* Sized off the widget's text size, a step smaller than the table (15 px text → 12 px bar). */
+    font-size: 0.8em;
 }
 .tool {
     flex: none;
     display: flex;
     align-items: center;
-    gap: 5px;
-    height: 24px;
-    padding: 0 8px;
+    gap: 0.42em;
+    height: 2em;
+    padding: 0 0.67em;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 0.5em;
     background: transparent;
     color: var(--text-secondary);
-    font: 11.5px var(--font-body);
+    font: 0.96em var(--font-body);
     white-space: nowrap;
     cursor: pointer;
 }
 .tool:hover { background-color: var(--bg-hover); color: var(--text-primary); }
 .toolOn { color: var(--accent-warning); border-color: rgba(240, 184, 64, 0.35); }
 .grow { flex: 1; min-width: 0; }
-.count { flex: none; font: 11px var(--font-mono); color: var(--text-muted); padding-right: 4px; }
+.count { flex: none; font: 0.92em var(--font-mono); color: var(--text-muted); padding-right: 0.33em; }
 
 /* ── the grid ── */
 .scroll {
@@ -505,40 +507,40 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .dropRight { box-shadow: inset -3px 0 0 var(--accent-warning); }
 
 /* ── the style bar (fonts for selected cells) ── */
-.styleBar { display: flex; align-items: center; gap: 2px; }
+.styleBar { display: flex; align-items: center; gap: 0.17em; }
 .styleBarOff { opacity: 0.45; }
 .styleBtn {
     flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 3px;
+    min-width: 2em;
+    height: 2em;
+    padding: 0 0.25em;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: 0.42em;
     background: transparent;
     color: var(--text-secondary);
-    font: 13px var(--font-body);
+    font: 1.08em var(--font-body);
     cursor: pointer;
 }
 .styleBtn:hover:not(:disabled) { background-color: var(--bg-hover); color: var(--text-primary); }
 .styleBtn:disabled { cursor: default; }
 .styleOn { color: var(--accent-warning); border-color: rgba(240, 184, 64, 0.4); }
 .styleSelect {
-    height: 24px;
-    max-width: 78px;
-    padding: 0 4px;
+    height: 2em;
+    max-width: 6.5em;
+    padding: 0 0.33em;
     border: 1px solid var(--border-default);
-    border-radius: 5px;
+    border-radius: 0.42em;
     background-color: var(--bg-surface);
     color: var(--text-secondary);
-    font: 11.5px var(--font-body);
+    font: 0.96em var(--font-body);
     color-scheme: dark light;
 }
-.styleScale { min-width: 34px; text-align: center; font: 10.5px var(--font-mono); color: var(--text-muted); }
+.styleScale { min-width: 3.2em; text-align: center; font: 0.88em var(--font-mono); color: var(--text-muted); }
 .colorA { font-weight: 700; line-height: 1; padding-bottom: 1px; border-bottom: 3px solid; }
-.fillSwatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--border-strong); }
+.fillSwatch { width: 1em; height: 1em; border-radius: 0.25em; border: 1px solid var(--border-strong); }
 .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 6px; }
 .swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
 .swatch:hover { outline: 2px solid var(--accent-warning); outline-offset: 1px; }

@@ -96,7 +96,8 @@ export function CellEditor({ field, value, seed, anchor, canCreate, onDone }) {
             inputMode={field.type === 'number' ? 'decimal' : undefined}
             onFocus={(e) => {
                 if (e.currentTarget.type !== 'text') return
-                if (start != null) { const n = e.currentTarget.value.length; e.currentTarget.setSelectionRange(n, n) } else e.currentTarget.select()
+                // The caret at the end, ready to type (not the whole value selected).
+                const n = e.currentTarget.value.length; e.currentTarget.setSelectionRange(n, n)
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={keys} onBlur={(e) => finish({ value: e.currentTarget.value })} />
