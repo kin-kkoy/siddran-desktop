@@ -138,8 +138,17 @@ function SandboxCanvas({
             // instead of zooming the canvas — anywhere inside it, header included.
             const card = e.target?.closest?.('[data-sb-scrollcard="true"]')
             if (card) {
-                const scroller = card.querySelector('[data-sb-scroll="true"]')
-                if (scroller) { e.preventDefault(); scroller.scrollTop += e.deltaY; return }
+                // The nearest scroller under the pointer that can move (a table inside a widget's body),
+                // else the card's first. Shift+wheel or a sideways swipe scrolls across.
+                const near = e.target.closest('[data-sb-scroll="true"]')
+                const canMove = (el) => el && card.contains(el) && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)
+                const scroller = canMove(near) ? near : card.querySelector('[data-sb-scroll="true"]')
+                if (scroller) {
+                    e.preventDefault()
+                    if (e.shiftKey && !e.deltaX) scroller.scrollLeft += e.deltaY
+                    else { scroller.scrollTop += e.deltaY; scroller.scrollLeft += e.deltaX }
+                    return
+                }
             }
             e.preventDefault()
             const rect = el.getBoundingClientRect()

@@ -9,6 +9,9 @@
  *     editable: Set(fieldId), // which values the views may change
  *     canAdd, canRemove,
  *     add(values), update(id, patch), remove(id),
+ *     fieldsEditable,         // own records only: the field verbs below work
+ *     fields: addField(def) → id, updateField(id, patch), removeField(id),
+ *             moveField(id, index), addOption / renameOption / removeOption,
  *   }
  * Views read `fields`/`records` and call the three verbs; they never know
  * where the data lives.
@@ -20,6 +23,7 @@
  * would delete real tasks from a widget, too easy to do by accident.
  */
 import { addRecord, updateRecord, removeRecord, newRecordId } from './formats'
+import * as F from './fields'
 import { fromPickerValue, toPickerValue } from '../../../utils/deadline'
 
 export const TASK_STATUS = ['To do', 'Done']
@@ -71,8 +75,22 @@ export function ownSource(payload, commit) {
         editable: new Set(fields.map(f => f.id)),
         canAdd: true, canRemove: true,
         add: (values) => { const id = newRecordId(); commit(p => addRecord(p, values, { id }).payload); return id },
-        update: (id, patch) => commit(p => updateRecord(p, id, patch)),
+        // A new option typed into a cell joins its field in the same undo step.
+        update: (id, patch) => commit(p => F.ensureOptions(updateRecord(p, id, patch), patch)),
         remove: (id) => commit(p => removeRecord(p, id)),
+        fieldsEditable: true,
+        canAddField: fields.length < F.MAX_FIELDS,
+        addField: (def) => {
+            const id = F.newFieldId()
+            commit(p => { const r = F.addField(p, def, { id }); return r.error ? p : r.payload })
+            return id
+        },
+        updateField: (id, patch) => commit(p => F.updateField(p, id, patch)),
+        removeField: (id) => commit(p => F.removeField(p, id)),
+        moveField: (id, index) => commit(p => F.moveField(p, id, index)),
+        addOption: (fieldId, label) => commit(p => F.addOption(p, fieldId, label)),
+        renameOption: (fieldId, from, to) => commit(p => F.renameOption(p, fieldId, from, to)),
+        removeOption: (fieldId, label) => commit(p => F.removeOption(p, fieldId, label)),
     }
 }
 

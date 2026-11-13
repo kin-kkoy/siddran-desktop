@@ -15,7 +15,7 @@ import { cutLabel } from '../selection/attach'
  * (the same widget, full screen). The body is whichever view `payload.view`
  * names (views/index.js), fed one data source (dataSource.js).
  */
-function Chrome({ item, source, focus, renaming, onRenameDone, onToggleFocus, onPickSource, onTitlePointerDown }) {
+function Chrome({ item, source, commit, focus, renaming, onRenameDone, onToggleFocus, onPickSource, onTitlePointerDown }) {
     const { bundles } = useTasksApi()
     const p = item.payload || {}
     const [menu, setMenu] = useState(false)
@@ -29,6 +29,8 @@ function Chrome({ item, source, focus, renaming, onRenameDone, onToggleFocus, on
         onRenameDone?.(v)
     }
     const View = viewComponent(p.view)
+    // A view's own settings (filters, sorts, widths…) live under payload[view]; one undo step per change.
+    const onConfig = useCallback((fn) => commit(q => ({ ...q, [q.view || 'table']: fn(q[q.view || 'table'] || {}) })), [commit])
     return (
         <>
             <header className={styles.bar} onPointerDown={onTitlePointerDown}
@@ -61,7 +63,7 @@ function Chrome({ item, source, focus, renaming, onRenameDone, onToggleFocus, on
             </header>
             {/* data-sb-scroll: the board's wheel scrolls this instead of zooming. */}
             <div className={styles.body} data-sb-scroll="true">
-                <View item={item} source={source} />
+                <View item={item} source={source} onConfig={onConfig} />
             </div>
             {menu && <SourceMenu anchorRef={srcRef} source={p.source} bundles={bundles} onClose={closeMenu}
                 onPick={(s) => { setMenu(false); onPickSource(s) }} />}
@@ -107,7 +109,7 @@ function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, o
             style={{ left: item.x, top: item.y, width: item.w, height: item.h, ...fontVar(item) }}
             onPointerDown={onPointerDown}
         >
-            <Chrome item={item} source={source} renaming={renaming} onRenameDone={onRename}
+            <Chrome item={item} source={source} commit={commit} renaming={renaming} onRenameDone={onRename}
                 onToggleFocus={() => onOpenFocus?.(item.id)} onPickSource={onPickSource} onTitlePointerDown={onTitlePointerDown} />
             {cut && (
                 // Cropped: partly showing past the edge. Out of view: none of it shows.
@@ -137,7 +139,7 @@ export function FormatFocus({ item, onClose, onCommit }) {
     return createPortal(
         <div className={styles.focusBackdrop} onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
             <div className={styles.focusPanel} role="dialog" aria-label={item.payload?.title || 'Widget'} style={fontVar(item)}>
-                <Chrome item={item} source={source} focus onToggleFocus={onClose}
+                <Chrome item={item} source={source} commit={commit} focus onToggleFocus={onClose}
                     onPickSource={(s) => commit(p => ({ ...p, source: s }))}
                     onRenameDone={(v) => { if (v && v !== item.payload?.title) commit(p => ({ ...p, title: v })) }} />
             </div>

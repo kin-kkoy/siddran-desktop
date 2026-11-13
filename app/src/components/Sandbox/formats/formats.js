@@ -15,8 +15,9 @@
  *   source: { type: 'own' }                              // records below
  *         | { type: 'tasks', show: 'open'|'all'|'done' }  // the Bag's tasks
  *         | { type: 'project', projectId, show },         // one project's tasks
- *   fields:  [{ id, name, type: 'text'|'select'|'date'|'number'|'check', options? }],
+ *   fields:  [{ id, name, type, options?, decimals? }],   // types: fields.js
  *   records: [{ id, values: { [fieldId]: value }, updated_at }],
+ *   table:   { filters, match, sorts, groupBy, hidden, widths, calcs, wrap },  // the Table view's settings (query.js)
  * }
  *
  * `fields` and `records` are only used by an own-records widget; a linked one

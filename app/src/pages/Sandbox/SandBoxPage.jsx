@@ -53,7 +53,7 @@ const CARD_TYPES = new Set(['note', 'task', 'text', 'pdf'])
 const isEditable = (el) => {
     if (!el) return false
     const tag = el.tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
 }
 
 // Per-shape keys were dropped — `S` opens the shape picker and the shape is

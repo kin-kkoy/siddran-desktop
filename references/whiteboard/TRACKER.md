@@ -188,7 +188,7 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 
 ## Sections 6–11 — Formats (can run in parallel after section 5)
 
-- [ ] **6 · Table:** field types, sort, filter, group (spec §13.4).
+- [x] **6 · Table:** field types, sort, filter, group (spec §13.4). ✅ built (session 6) — awaiting the user's hands-on check
 - [ ] **7 · Timeline + Kanban + Matrix:** views over the same records
       (§13.5–13.7).
 - [ ] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
@@ -804,3 +804,90 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     lint 25, build passes.
 - 2026-11-13 · session 5 · **Section 5 closed with the user** (all checks
   done by hand). Handed to the next session for section 6.
+- 2026-11-13 · session 6 · **section 6 built (Table view)**. Desktop and CLI
+  both on `whiteboard`. A `view: 'table'` widget now renders as a real table
+  (`formats/views/TableView.jsx`); Kanban/Timeline/Matrix still fall back to
+  the plain list until section 7.
+  - **Field types** (`formats/fields.js`, tested): text, long text, number
+    (0–4 decimals or auto), select, multi-select, date, checkbox, URL, email.
+    Values stay plain JSON per type; empty = key absent. Options stay plain
+    labels (as in section 5); a chip's colour is hashed from its label, so it
+    never shifts. Field ids are stable (`f_…`), so renames break nothing.
+    - Add a field from the **+** header (name + type); click a header for
+      its menu: rename, change type, options (add / rename — cells follow /
+      remove — cells cleared), decimals, sort, group, hide, move left/right,
+      delete (warns with the number of values; Ctrl+Z restores).
+    - Changing type converts every value (text→number parses "1,200";
+      number→text is plain digits; text→select/multi gathers the options)
+      and drops that field's filters and calculations (sorts stay).
+    - At most 50 fields, 100 options per field.
+  - **View settings in `payload.table`** (`formats/query.js`, tested):
+    `filters` + `match` (all/any, one level), `sorts` (multi-key, empties
+    last), `groupBy` (one level, collapsible; options in their order, a
+    multi-select record in each of its groups), `hidden`, `widths`, `calcs`,
+    `wrap`. Per widget, so a linked widget keeps them too. Merge treats
+    `table` as one key (newer wins on a clash).
+  - **Cells:** click to edit; Tab / Shift+Tab along the row, Enter commits
+    and moves down, Esc cancels; one undo step per cell. Select and
+    multi-select open a picker (type to find; Enter creates a new option —
+    joining the field in the same undo step); long text opens a larger
+    editor (Shift+Enter for a new line; a click outside saves). Checkboxes
+    toggle in one click. URL/email cells have an open button that goes
+    through the app's external-link prompt.
+  - **Footer calculations** per column (sum, average, min, max, median,
+    filled, empty, count, % checked, earliest/latest date), shown overall
+    and under each group.
+  - Records added while a filter is on stay visible (dimmed) until the
+    filter changes, so a new row doesn't vanish as you type it.
+  - Column widths: drag a header's right edge (stored at the default text
+    size, drawn in em, so they grow with the widget's text size).
+  - **Linked tasks:** the task fields are fixed (no + header, no
+    rename/type/delete); sort, filter, group, hide and calculations work.
+  - **Wheel:** over a widget it now scrolls the nearest scroller that can
+    move (the table), and Shift+wheel or a sideways swipe scrolls across
+    (SandboxCanvas). `SELECT` now counts as editing for board shortcuts.
+  - **CLI** (`../Siddran-CLI`): `sandbox_read` lists each own-records
+    widget's `fields` as `{ id, name, type, options? }` (was names only —
+    record values are keyed by field id, so the ids are needed).
+  - Not built (spec items left out on purpose): formulas, relations /
+    nesting, synced cards, row detail panel, multi-row selection, paste
+    from spreadsheets, fill handle, row drag-reordering (records keep their
+    added order unless sorted, so no `order` key was needed), virtualized
+    rows (fine at hundreds; 1,000 rows would be heavy), person / attachment
+    / created-time fields.
+  - Checked in a HIDDEN window (`table:` probe, live store, Bag copy, dev
+    localStorage backed up and restored, no screenshots):
+    - insert → Title/Status/Due columns; 3 records added;
+    - + header: Points (number) and Tags (multi-select);
+    - Points 5, Enter → next row, "1,200" → 1200, Tab → Tags picker; typing
+      "ui", "api" created both options and set them;
+    - Status picked "Done"; sort Points ↓ → 1200, 5, 3;
+    - filter Points > 4 → "2 of 3"; a record added under it stayed shown;
+    - group by Status → To do 0 · Doing 0 · Done 1 · No Status 2; Sum under
+      Points per group (5 / 1,200) and overall (1,205);
+    - Points → Text gave "5", "1200", "3"; its filter and sum went, sort
+      stayed;
+    - Title column dragged +60 → width 280; Ctrl+Z removed it;
+    - Shift+wheel over the table scrolled it 120 px across; the board's zoom
+      didn't change;
+    - All tasks: Title/Status/Priority/Due, no + header, settings kept;
+      back to own records: 3 records. No console errors.
+    Two bugs found by the walk and fixed: the filter hid nothing (every
+    record counted as "just added"), and number→text wrote the locale's
+    "1,200". Desktop 664 tests pass, lint 25, build and `cargo check`
+    pass; CLI 87 tests pass, clippy unchanged.
+  - **Please try (looks and feel, which the hidden window can't show):**
+    1. Insert a Table. Add records; click cells, Tab / Enter / Esc through
+       them. Does editing feel like a spreadsheet?
+    2. + header → add a Number, a Select and a Date field. Rename one; change
+       a type; delete one and Ctrl+Z.
+    3. Select cell: pick, type a new option, Enter. Do the option colours
+       read well on your theme (dark and light)?
+    4. Filter / Sort / Group / Fields in the table's toolbar. Try "is past"
+       and "next 7 days" on a date.
+    5. Footer: hover under a column → Calculate → Sum (or % checked).
+    6. Drag a column edge; scroll a wide table with Shift+wheel.
+    7. Long text and URL cells (the ↗ button asks before opening).
+    8. Link it to All tasks: edit a title, status, priority, due date.
+    9. Full screen (Enter) with a big table — is it readable?
+

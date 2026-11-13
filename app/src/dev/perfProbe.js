@@ -1,10 +1,12 @@
 // Dev-only probes, loaded by main.jsx only when VITE_PERF_PROBE is set, so
 // they never ship:
 //   drag:<boardId>   — drag smoothness (below)
-//   format:<boardId> — a scripted walk through a Format widget (runFormat)
+//   format:<boardId> — a scripted walk through a Format widget (runFormat; drives
+//                      the plain list, which a Table widget no longer shows — use table:)
 //   attach:<boardId> — sticky attachment, clipping and text size (runAttach)
 //   frames:<boardId> — sticky attachment on frames (runFrames)
 //   top:<boardId>    — things drawn on a widget, on the top canvas (runTop)
+//   table:<boardId>  — the Table view: fields, cells, sort, filter, group (runTable)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -484,6 +486,132 @@ async function runTop() {
     send('done', true)
 }
 
+// ── table:<boardId> — the Table view (section 6). Drives the DOM with synthetic
+// events (keys go to the element, not the focus, so a hidden window works) and
+// reads the live store.
+async function runTable() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click()
+    await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click()
+    await sleep(1000)
+    const fid = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const P = () => live().find(i => i.id === fid)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${fid}"]`)
+    const pop = () => [...document.querySelectorAll('[role="dialog"][data-sb-handle="true"]')].at(-1)
+    const popBtn = (txt) => [...(pop()?.querySelectorAll('button') || [])].find(b => b.textContent.trim().startsWith(txt))
+    const setSel = (el, v) => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('change', { bubbles: true })) }
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const heads = () => [...W().querySelectorAll('[role="columnheader"] button')].map(b => b.textContent.trim())
+    const dataRows = () => [...W().querySelectorAll('[role="row"]')].filter(r => r.querySelector('[role="gridcell"]'))
+    const cellOf = (row, name) => row.children[1 + heads().findIndex(h => h.replace(/ [↑↓]$/, '') === name)]
+    const texts = (name) => dataRows().map(r => cellOf(r, name)?.textContent.trim())
+    const tool = (label) => W().querySelector(`button[aria-label="${label}"]`)
+    const values = () => P()?.records?.map(r => r.values)
+    await step('inserted', { fid, view: P()?.view, heads: heads() })
+
+    const add = W().querySelector('input[aria-label="New record"]')
+    for (const t of ['Plan the week', 'Make the stock', 'Write the tracker']) { setInput(add, t); kd(add, 'Enter'); await sleep(300) }
+    await step('records', { titles: texts('Title') })
+
+    // Two new fields from the + header: a number and a multi-select.
+    for (const [name, type] of [['Points', 'Number'], ['Tags', 'Multi-select']]) {
+        W().querySelector('button[aria-label="Add a field"]').click(); await sleep(300)
+        setInput(pop().querySelector('input'), name); await sleep(50)
+        popBtn(type).click(); await sleep(400)
+    }
+    await step('fields', { heads: heads(), fields: P()?.fields?.map(f => [f.name, f.type]) })
+
+    // Points: click, type, Enter moves down; Tab moves right into Tags (a picker).
+    cellOf(dataRows()[0], 'Points').querySelector('button').click(); await sleep(200)
+    let inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '5'); kd(inp, 'Enter'); await sleep(300)
+    inp = W().querySelector('input[aria-label="Points"]'); const downOk = dataRows()[1].contains(inp)
+    setInput(inp, '1,200'); kd(inp, 'Enter'); await sleep(300)
+    inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '3'); kd(inp, 'Tab'); await sleep(400)
+    const picker = pop()
+    const tabToTags = !!picker && picker.getAttribute('aria-label') === 'Tags options'
+    if (picker) { const q = picker.querySelector('input'); setInput(q, 'ui'); kd(q, 'Enter'); await sleep(300); setInput(q, 'api'); kd(q, 'Enter'); await sleep(300) }
+    key('Escape'); await sleep(300)
+    // Status of row 1 → Done (picked from the list).
+    cellOf(dataRows()[0], 'Status').querySelector('button').click(); await sleep(300)
+    ;[...pop().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done')?.click(); await sleep(300)
+    await step('cells', { downOk, tabToTags, values: values(), points: texts('Points'), tagOptions: P()?.fields?.find(f => f.name === 'Tags')?.options })
+
+    // Sort by Points, descending.
+    tool('Sort').click(); await sleep(300)
+    popBtn('Add sort').click(); await sleep(300)
+    const pts = P().fields.find(f => f.name === 'Points').id
+    setSel(pop().querySelector('select'), pts); await sleep(300)
+    popBtn('Ascending').click(); await sleep(300)
+    key('Escape'); await sleep(200)
+    await step('sorted', { sorts: P()?.table?.sorts, titles: texts('Title'), points: texts('Points') })
+
+    // Filter: Points > 4.
+    tool('Filter').click(); await sleep(300)
+    popBtn('Add filter').click(); await sleep(300)
+    let sels = pop().querySelectorAll('select'); setSel(sels[0], pts); await sleep(300)
+    sels = pop().querySelectorAll('select'); setSel(sels[1], 'gt'); await sleep(300)
+    const val = pop().querySelector('input[placeholder="Value"]'); setInput(val, '4'); val.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); await sleep(300)
+    key('Escape'); await sleep(200)
+    await step('filtered', { filters: P()?.table?.filters, titles: texts('Title'), count: [...W().querySelectorAll('span')].find(x => / of \d+$/.test(x.textContent))?.textContent })
+    // A record added under the filter stays shown until the filter changes.
+    setInput(add, 'Tiny'); kd(add, 'Enter'); await sleep(400)
+    await step('added-under-filter', { titles: texts('Title') })
+
+    // Group by Status; a Sum under Points.
+    tool('Group').click(); await sleep(300)
+    popBtn('Status').click(); await sleep(400)
+    const groups = [...W().querySelectorAll('[class*="groupHead"]')].map(b => b.textContent.trim())
+    const calc = [...W().querySelectorAll('[class*="calcRow"]')].at(-1)
+    calc.children[1 + heads().findIndex(h => h.startsWith('Points'))].click(); await sleep(300)
+    popBtn('Sum').click(); await sleep(300)
+    const sums = [...W().querySelectorAll('[class*="calcRow"]')].map(r => r.children[1 + heads().findIndex(h => h.startsWith('Points'))].textContent.trim())
+    await step('grouped', { groupBy: P()?.table?.groupBy, groups, calcs: P()?.table?.calcs, sums })
+
+    // Points → Text: values convert, the filter on it goes, the sort stays.
+    W().querySelector('[role="columnheader"] button[title^="Points"]').click(); await sleep(300)
+    setSel(pop().querySelector('select[aria-label="Field type"]'), 'text'); await sleep(400)
+    key('Escape'); await sleep(200)
+    await step('retyped', { type: P()?.fields?.find(f => f.id === pts)?.type, values: values().map(v => v[pts]), filters: P()?.table?.filters, sorts: P()?.table?.sorts })
+
+    // Resize the Title column by +60 px, then undo it.
+    const rz = W().querySelector('[role="columnheader"] [title="Drag to resize"]')
+    const rr = rz.getBoundingClientRect(), x = rr.left + 3, y = rr.top + 5
+    rz.dispatchEvent(ptr('pointerdown', x, y))
+    for (let i = 1; i <= 10; i++) { await frame(); rz.dispatchEvent(ptr('pointermove', x + i * 6 * stage.scaleX(), y)) }
+    rz.dispatchEvent(ptr('pointerup', x + 60 * stage.scaleX(), y)); await sleep(400)
+    const widths = P()?.table?.widths
+    key('z', { ctrlKey: true }); await sleep(400)
+    await step('resized', { widths, afterUndo: P()?.table?.widths || null })
+
+    // Wheel over the table scrolls it, not the board.
+    const sc = W().querySelector('[role="grid"]'), z0 = stage.scaleX()
+    const sr = sc.getBoundingClientRect()
+    sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, shiftKey: true, clientX: sr.left + 20, clientY: sr.top + 20, bubbles: true, cancelable: true }))
+    await sleep(200)
+    await step('wheel', { zoomSame: stage.scaleX() === z0, scrollLeft: sc.scrollLeft, wide: sc.scrollWidth > sc.clientWidth })
+
+    // Linked to the Bag's tasks: task columns, no "+ field", the view settings kept.
+    W().querySelector('button[aria-label="Data source"]').click(); await sleep(400)
+    ;[...document.querySelectorAll('[data-sb-handle="true"] button')].find(b => b.textContent.includes('All tasks'))?.click(); await sleep(1200)
+    await step('linked', { heads: heads(), addField: !!W().querySelector('button[aria-label="Add a field"]'), rows: dataRows().length, table: P()?.table })
+    W().querySelector('button[aria-label="Data source"]').click(); await sleep(400)
+    ;[...document.querySelectorAll('[data-sb-handle="true"] button')].find(b => b.textContent.includes('Own records'))?.click(); await sleep(800)
+    await step('own-again', { records: P()?.records?.length, heads: heads() })
+    send('done', true)
+}
+
+if (spec.startsWith('table:') && boardId) runTable().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('top:') && boardId) runTop().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('frames:') && boardId) runFrames().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', {
