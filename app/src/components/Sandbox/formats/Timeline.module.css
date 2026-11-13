@@ -1,0 +1,232 @@
+/* The Timeline. Everything is in em off the widget's text size (positions
+   too: a day is `ppd` em), so it grows with the text like the Table. The
+   rail stays put while the axis scrolls across; the axis head stays put
+   while the rows scroll down. No transforms at rest (they blur on the
+   user's 0.83-scaled display): the milestone diamond is a clip-path. */
+
+.scroll {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    outline: none;
+    border: 1px solid var(--tbl-line);
+    border-radius: 7px;
+}
+.canvas { position: relative; min-width: 100%; }
+
+/* ── head: the rail's corner and the axis ── */
+.head {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: flex;
+    background-color: var(--bg-surface-alt);
+    border-bottom: 1px solid var(--tbl-line);
+}
+.railHead {
+    position: sticky;
+    left: 0;
+    z-index: 7;
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    box-sizing: border-box;
+    padding: 0 0.6em 0.4em;
+    background-color: var(--bg-surface-alt);
+    border-right: 1px solid var(--tbl-line);
+    font: 600 0.72em var(--font-body);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.axis { flex: none; position: relative; }
+.tier { position: relative; height: 1.55em; }
+.upper, .lower {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.upper { border-left: 1px solid var(--border-strong); font: 600 0.74em var(--font-display); color: var(--text-primary); }
+/* The month / year name stays in view while its span scrolls past. */
+.stickyLabel { position: sticky; left: 14.9em; padding: 0 0.5em; }   /* the rail (11em at the body size) in this label's 0.74em */
+.lower { justify-content: center; border-left: 1px solid var(--tbl-line); font: 0.7em var(--font-mono); color: var(--text-secondary); }
+.todayTag {
+    position: absolute;
+    bottom: 0.1em;
+    padding: 0 0.35em;
+    border-radius: 0.3em;
+    background-color: var(--accent-danger);
+    color: #fff;
+    font: 600 0.62em var(--font-body);
+    translate: -50% 0;
+    pointer-events: none;
+}
+
+/* ── body ── */
+.body { position: relative; }
+.bg { position: absolute; top: 0; bottom: 0; }
+.weekend { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+.gridLine { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid color-mix(in srgb, var(--tbl-line) 55%, transparent); }
+.gridStrong { border-left-color: var(--tbl-line); }
+.today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent-danger); opacity: 0.75; }
+.dropDay { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--accent-warning) 22%, transparent); }
+
+.links { position: absolute; top: 0; z-index: 1; overflow: visible; pointer-events: none; }
+.link { fill: none; stroke: var(--text-secondary); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.linkLate { stroke: var(--accent-danger); }
+.linkSel { stroke: var(--accent-warning); stroke-width: 2.5; }
+.linkDraft { stroke: var(--accent-warning); stroke-dasharray: 5 4; }
+.linkHit { fill: none; stroke: transparent; stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
+
+.row { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.rail {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    box-sizing: border-box;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 0.6em;
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--tbl-line);
+    border-bottom: 1px solid color-mix(in srgb, var(--tbl-line) 50%, transparent);
+    pointer-events: auto;
+    cursor: default;
+}
+.rail:hover { background-color: color-mix(in srgb, var(--bg-hover) 70%, var(--bg-surface)); }
+.rowSel .rail { box-shadow: inset 3px 0 0 var(--accent-warning); }
+.railTitle { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.85em; }
+.railInput {
+    flex: 1;
+    min-width: 0;
+    padding: 0.15em 0.3em;
+    border: 1px solid var(--accent-warning);
+    border-radius: 0.3em;
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    font: 0.85em var(--font-body);
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.lane { position: absolute; top: 0; bottom: 0; }
+
+.bar {
+    --bar: hsl(210, 55%, 52%);
+    position: absolute;
+    top: 20%;
+    bottom: 20%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-width: 0.45em;
+    padding: 0 0.5em;
+    border-radius: 0.35em;
+    background-color: color-mix(in srgb, var(--bar) 70%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--bar) 85%, var(--text-primary));
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+.barLabel {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font: 600 0.78em var(--font-body);
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+.milestone {
+    --bar: hsl(265, 50%, 58%);
+    position: absolute;
+    top: 50%;
+    width: 1.05em;
+    height: 1.05em;
+    margin: -0.525em 0 0 -0.525em;
+    background-color: var(--bar);
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+.barSel { outline: 2px solid var(--accent-warning); outline-offset: 1px; }
+.milestone.barSel { background-color: var(--accent-warning); }
+.barLifted { cursor: grabbing; opacity: 0.85; }
+.barTarget { outline: 2px dashed var(--accent-warning); outline-offset: 2px; }
+.edge { position: absolute; top: 0; bottom: 0; width: 0.45em; cursor: ew-resize; }
+.edgeL { left: -0.15em; }
+.edgeR { right: -0.15em; }
+.sideLabel {
+    position: absolute;
+    top: 50%;
+    translate: 0 -50%;
+    font-size: 0.78em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+}
+.linkDot {
+    position: absolute;
+    top: 50%;
+    width: 0.62em;
+    height: 0.62em;
+    margin: -0.31em 0 0 0.1em;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-secondary);
+    background-color: var(--bg-surface);
+    pointer-events: auto;
+    cursor: crosshair;
+    opacity: 0;
+    transition: opacity 120ms;
+}
+.row:hover .linkDot, .rowSel .linkDot { opacity: 1; }
+.linkDot:hover { border-color: var(--accent-warning); }
+
+.groupRow { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.groupHead {
+    position: sticky;
+    left: 0;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0 0.5em;
+    border: none;
+    border-bottom: 1px solid var(--tbl-line);
+    background-color: var(--bg-surface-alt);
+    color: var(--text-primary);
+    font: 600 0.84em var(--font-display);
+    pointer-events: auto;
+    cursor: pointer;
+}
+.groupHead:hover { background-color: var(--bg-hover); }
+.emptyNote { position: absolute; top: 0.8em; font-size: 0.82em; font-style: italic; color: var(--text-muted); }
+.addRow {
+    position: sticky;
+    left: 0;
+    display: flex;
+    align-items: center;
+    min-height: 2.2em;
+    padding: 0 0.3em;
+    box-sizing: border-box;
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--tbl-line);
+}
+
+/* ── toolbar bits and the tray ── */
+.zooms { display: flex; gap: 0.1em; }
+.zoomBtn { padding: 0 0.5em; }
+.tray { flex: none; margin-top: 0.5em; max-height: 7.5em; overflow: auto; }
+.trayItems { display: flex; flex-wrap: wrap; gap: 0.4em; align-items: center; }
+.chip { flex-direction: row; align-items: center; gap: 0.3em; padding: 0.3em 0.3em 0.3em 0.6em; max-width: 16em; }

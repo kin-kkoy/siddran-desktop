@@ -189,9 +189,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 ## Sections 6–11 — Formats (can run in parallel after section 5)
 
 - [x] **6 · Table:** field types, sort, filter, group (spec §13.4). ✅ built (session 6) — awaiting the user's hands-on check
-- [ ] **7 · Timeline + Kanban + Matrix:** views over the same records
-      (§13.5–13.7). Checkpoint 1 (view switcher, Kanban, Matrix) built by
-      session 7 — awaiting the user's hands-on check; checkpoint 2 = Timeline.
+- [x] **7 · Timeline + Kanban + Matrix:** views over the same records
+      (§13.5–13.7). ✅ built (session 7): checkpoint 1 (view switcher, Kanban,
+      Matrix) checked by the user; checkpoint 2 (Timeline) awaiting the user's
+      hands-on check.
 - [ ] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
 - [ ] **9 · Slides:** frames as slides plus a presentation mode with
@@ -1180,4 +1181,78 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     "All cards"; Bold → `styles.all.bold`, both cards weight 700; Delta
     selected → "This card", + + → `styles.card[Delta].scale` 1.2, Delta
     15.7 px vs 13.05 px. Desktop 709 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · user confirmed checkpoint 1 ("this is good").
+  **Section 7, checkpoint 2 of 2: Timeline** (`views/TimelineView.jsx`,
+  `Timeline.module.css`, pure logic in `formats/timeline.js`, tested).
+  Media → Timeline (860×420; fields Title, Status, Start, End); also in the
+  view switcher.
+  - **Dates:** two date fields, both optional to have — start defaults to one
+    named Start (else the first date field), end to End/Finish, else Due,
+    else none. With no end a record is a milestone (diamond, a clip-path —
+    no transforms at rest); with no dates it waits in the **Unscheduled**
+    tray (R13.43). View → Start / End / "None (milestones)", + New date
+    field. A widget without a date field shows a prompt (adds Start + End).
+  - **Axis:** Day / Week / Month / Quarter / Year (two tiers: month over days
+    or weeks, year over months or quarters), a day is `ppd` em so it grows
+    with the text size; weekends shaded at Day/Week; Today line + tag; the
+    range covers every bar and today, padded. **Today** scrolls to it,
+    **Fit** picks the most detailed zoom that shows every bar and scrolls
+    there; **Ctrl+wheel** zooms at the pointer (the board's zoom is
+    untouched); Shift+wheel scrolls across. Zoom is a view setting
+    (`timeline.zoom`, absent = week).
+  - **Bars:** drag to move (both dates), an edge to change start or end (they
+    never cross, R13.41), a milestone to move its day; snaps to days.
+    Shift+click selects several, they drag together; ← / → nudge the
+    selection a day. Each gesture is ONE undo step (`updateMany`). A bar into
+    the tray clears its dates; a tray card onto the axis schedules it there
+    (start + the zoom's usual length, and the swimlane it was dropped in).
+    Labels inside a wide bar, beside a narrow one. A double-click (or Space)
+    opens the detail panel.
+  - **Rail:** titles stay put while the axis scrolls; your Table rule (one
+    click edits an empty title, a double-click a filled one). "New, from
+    today" adds records that start today; Enter keeps adding.
+  - **Dependencies** (`timeline.links: [{ from, to }]` — a view setting, as
+    there is no relation field type): drag a bar's end dot (shown on hover)
+    onto another bar. Orthogonal arrows, in em so they follow zoom; red when
+    the second starts before the first ends. Click an arrow, Delete removes
+    it. A deleted record takes its links (and card looks) with it.
+  - Swimlanes by a select field (collapsible), Colour by a select field, row
+    height compact/default/tall, Filter/Sort, and the same style bar as
+    Kanban/Matrix (fill sets the bar's colour; looks on the rail title and
+    bar label).
+  - **Linked tasks:** Due is the start, no end → milestones; tasks without a
+    due date wait in the tray; dragging one sets its due date (through the
+    tasks store). Project tasks have no dates → the prompt.
+  - **CLI:** `layout` for a Timeline: `starts_by`, `ends_by`, `lanes_by`,
+    and `links` (`to` waits for `from`).
+  - Not built: baseline bars, configurable working days, PNG/PDF export
+    (R13.44), the side table panel (the view switcher covers it), dragging a
+    bar between swimlanes, virtualized rows (fine at hundreds).
+  - Checked in a hidden window (`timeline:` walk, Bag copy, localStorage
+    backed up and restored): insert → week zoom, Today on screen; rail adds
+    Design/Build (today..+6), the tray adds Launch (no dates); Design dragged
+    +3 days → 3..9, Ctrl+Z → 0..6 in one step; end edge +2 → 0..8; start
+    edge dragged past the end → 8..8; Launch from the tray to today+14 →
+    14..20; a link Design → Launch drawn (not late); Shift+click both, → →
+    both +1, one undo; click the arrow + Delete → gone; one click on a filled
+    rail title selected only, a double-click edited it; a bar's double-click
+    opened the panel on screen; Launch into the tray → dates cleared; Month,
+    Ctrl+wheel back to Week (board zoom unchanged), Fit → Day; linked to All
+    tasks → "Due", milestones, undated tasks in the tray. The `cards:` walk
+    still passes. Desktop 723 tests, lint 25, build and `cargo check` pass;
+    CLI 87 tests, clippy unchanged.
+  - **Please try:**
+    1. Media → Timeline. "New, from today" a few records; drag bars, their
+       edges, and Ctrl+Z.
+    2. Add one in Unscheduled and drag it onto the axis; drag a bar back.
+    3. Hover a bar, drag its end dot onto another: an arrow. Move the second
+       before the first — red? Click the arrow, Delete.
+    4. Day … Year, Ctrl+wheel over the axis, Today, Fit. Do the labels read
+       at every zoom?
+    5. Shift+click two bars, ← / →.
+    6. View: swimlanes by Status, Colour by, row height; the style bar's fill
+       on a bar.
+    7. Switch a Kanban to Timeline (its Due becomes milestones); link one to
+       All tasks.
+    8. Full screen and the text size.
 

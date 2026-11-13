@@ -19,6 +19,7 @@
  *   records: [{ id, values: { [fieldId]: value }, updated_at }],
  *   table:   { filters, match, sorts, groupBy, hidden, widths, calcs, wrap },  // the Table view's settings (query.js)
  *   kanban, matrix: { … },                               // those views' settings (boards.js)
+ *   timeline: { … },                                     // the Timeline's (timeline.js)
  * }
  *
  * `fields` and `records` are only used by an own-records widget; a linked one
@@ -54,7 +55,7 @@ export function defaultFields() {
 
 export const FORMAT_SIZE = { w: 420, h: 320 }
 /** A new widget's size by view: a Kanban wants width for its columns, a Matrix room for its cells. */
-export const formatSize = (view) => (view === 'kanban' ? { w: 920, h: 420 } : view === 'matrix' ? { w: 600, h: 540 } : FORMAT_SIZE)
+export const formatSize = (view) => (view === 'kanban' ? { w: 920, h: 420 } : view === 'matrix' ? { w: 600, h: 540 } : view === 'timeline' ? { w: 860, h: 420 } : FORMAT_SIZE)
 
 /** A new Matrix's axes: impact × effort, with the usual quadrant names (view settings, R13.52). */
 export const MATRIX_FIELDS = [
@@ -72,6 +73,9 @@ export function formatPayload(view = 'table', title) {
         source: { type: 'own' },
         fields: defaultFields(),
         records: [],
+    }
+    if (view === 'timeline') {
+        out.fields = [out.fields[0], out.fields[1], { id: 'start', name: 'Start', type: 'date' }, { id: 'end', name: 'End', type: 'date' }]
     }
     if (view === 'matrix') {
         out.fields = [out.fields[0], ...MATRIX_FIELDS.map(f => ({ ...f, options: [...f.options] }))]
@@ -110,12 +114,16 @@ export function updateRecord(payload, id, patch, { at = nowISO() } = {}) {
 export function removeRecord(payload, id) {
     const out = { ...payload, records: (payload.records || []).filter(r => r.id !== id) }
     if (payload.table?.styles) out.table = { ...payload.table, styles: pruneStyles(payload.table.styles, { rid: id }) }
-    // A card's own look in the Kanban / Matrix goes with it.
-    for (const v of ['kanban', 'matrix']) {
+    // Timeline links naming it go with it.
+    if (payload.timeline?.links?.some(l => l.from === id || l.to === id)) {
+        out.timeline = { ...(out.timeline || payload.timeline), links: payload.timeline.links.filter(l => l.from !== id && l.to !== id) }
+    }
+    // A card's own look in the Kanban / Matrix / Timeline goes with it.
+    for (const v of ['kanban', 'matrix', 'timeline']) {
         if (!payload[v]?.styles?.card?.[id]) continue
         const card = { ...payload[v].styles.card }
         delete card[id]
-        out[v] = { ...payload[v], styles: { ...payload[v].styles, card } }
+        out[v] = { ...(out[v] || payload[v]), styles: { ...payload[v].styles, card } }
     }
     return out
 }

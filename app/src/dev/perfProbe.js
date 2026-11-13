@@ -1101,6 +1101,143 @@ async function runCards() {
     send('done', true)
 }
 
+// Timeline (section 7, checkpoint 2): bars, edges, the tray, links, multi-select, zoom, fit, edit rules, linked tasks.
+async function runTimeline() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const { dayNum, dayStr, todayNum } = await import('../components/Sandbox/formats/timeline')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Timeline')?.click(); await sleep(1200)
+    const id = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const P = () => live().find(i => i.id === id)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${id}"]`)
+    const T = todayNum()
+    const rel = (s) => (s ? dayNum(s) - T : null)
+    const recBy = (title) => P().records.find(r => r.values.title === title)
+    const span = (title) => { const r = recBy(title); return r && [rel(r.values.start), rel(r.values.end)] }
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const setArea = (el, v) => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }
+    const center = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] }
+    const onScreen = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1 }
+    const bar = (title) => W().querySelector(`[data-bar="${recBy(title)?.id}"]`)
+    const bgRect = () => W().querySelector('[data-tl-lanes]').getBoundingClientRect()
+    const pxDay = () => { const r = bgRect(); const d = W().querySelector('[data-tl-lanes]').style.width; return r.width / (parseFloat(d) / ({ day: 2.4, week: 0.9, month: 0.26, quarter: 0.1, year: 0.035 }[P().timeline?.zoom || 'week'])) }
+    const drag = async (el, dx, dy = 0, o = {}) => {
+        const [x0, y0] = typeof el.length === 'number' ? el : center(el)
+        const target = typeof el.length === 'number' ? document.elementFromPoint(x0, y0) : el
+        target.dispatchEvent(ptr('pointerdown', x0, y0, o)); await sleep(30)
+        for (let i = 1; i <= 8; i++) { window.dispatchEvent(ptr('pointermove', x0 + dx * i / 8, y0 + dy * i / 8, o)); await sleep(30) }
+        await sleep(80); window.dispatchEvent(ptr('pointerup', x0 + dx, y0 + dy, o)); await sleep(400)
+    }
+    const undo = async () => { key('z', { ctrlKey: true }); await sleep(450) }
+
+    const axisLabels = [...W().querySelectorAll('[class*="lower"]')].slice(0, 3).map(x => x.textContent)
+    const todayTag = W().querySelector('[class*="todayTag"]')
+    await step('tl-insert', { w: live().find(i => i.id === id)?.w, fields: P().fields.map(f => f.id), zoom: P().timeline?.zoom || 'week', axisLabels, todayOnScreen: onScreen(todayTag) })
+
+    // A new record from the rail starts today; one in the tray has no dates.
+    ;[...W().querySelectorAll('button')].find(b => b.textContent.includes('New, from today')).click(); await sleep(250)
+    let ri = W().querySelector('input[aria-label="Title"]'); setInput(ri, 'Design'); kd(ri, 'Enter'); await sleep(300)
+    ri = W().querySelector('input[aria-label="Title"]'); setInput(ri, 'Build'); kd(ri, 'Enter'); await sleep(300)
+    ri = W().querySelector('input[aria-label="Title"]'); if (ri) { kd(ri, 'Escape'); await sleep(200) }
+    ;[...W().querySelector('[data-tl-tray]').querySelectorAll('button')].find(b => b.textContent.includes('Add')).click(); await sleep(250)
+    const ta = W().querySelector('textarea[aria-label="New card"]'); setArea(ta, 'Launch'); kd(ta, 'Enter'); await sleep(300)
+    kd(W().querySelector('textarea[aria-label="New card"]'), 'Escape'); await sleep(250)
+    await step('tl-added', { design: span('Design'), build: span('Build'), launch: span('Launch'), bars: W().querySelectorAll('[data-bar]').length, tray: W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]').length, barOnScreen: onScreen(bar('Design')) })
+
+    // Move Design 3 days right; Ctrl+Z puts both dates back in one step.
+    await drag(bar('Design'), 3 * pxDay())
+    const moved = span('Design')
+    await undo()
+    const undone = span('Design')
+    // Edges: the end +2; the start dragged past the end stops at the end.
+    const br = bar('Design').getBoundingClientRect()
+    await drag([br.right - 2, br.top + br.height / 2], 2 * pxDay())
+    const endMoved = span('Design')
+    const br2 = bar('Design').getBoundingClientRect()
+    await drag([br2.left + 2, br2.top + br2.height / 2], 20 * pxDay())
+    await step('tl-drag', { moved, undone, endMoved, startClamped: span('Design') })
+
+    // Launch from the tray onto the axis two weeks out.
+    const chip = [...W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]')].find(c => c.textContent.includes('Launch'))
+    const [cx, cy] = center(chip)
+    const todayLine = W().querySelector('[class*="today_"]') || W().querySelector('[class*="today"]:not([class*="todayTag"])')
+    const tl = todayLine.getBoundingClientRect().left
+    const dropX = tl + 14 * pxDay(), dropY = bar('Design').getBoundingClientRect().top + 4
+    await drag(chip, dropX - cx, dropY - cy)
+    await step('tl-schedule', { launch: span('Launch'), tray: W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]').length })
+
+    // A link: Design's end dot onto Launch's bar.
+    const dot = [...W().querySelectorAll('[class*="linkDot"]')][[...W().querySelectorAll('[class*="row_"]')].findIndex(r => r.textContent.includes('Design'))]
+    const [dx0, dy0] = center(dot), [lx, ly] = center(bar('Launch'))
+    await drag(dot, lx - dx0, ly - dy0)
+    const paths = [...W().querySelectorAll('svg path[class*="link_"]')]
+    await step('tl-link', { links: P().timeline?.links?.length, late: paths.some(p => p.getAttribute('class').includes('linkLate')), drawn: paths.length })
+
+    // Shift+click both bars, → moves both a day, one undo step.
+    const before = [span('Design'), span('Launch')]
+    const click = (el, o = {}) => { const [x, y] = center(el); el.dispatchEvent(ptr('pointerdown', x, y, o)); window.dispatchEvent(ptr('pointerup', x, y, o)) }
+    click(bar('Design')); await sleep(200); click(bar('Launch'), { shiftKey: true }); await sleep(200)
+    const root = W().querySelector('[class*="view_"]')
+    kd(root, 'ArrowRight'); await sleep(400)
+    const after = [span('Design'), span('Launch')]
+    await undo()
+    await step('tl-multi', { before, after, undone: [span('Design'), span('Launch')] })
+
+    // The arrow: click it, Delete.
+    const hit = W().querySelector('svg path[class*="linkHit"]')
+    const [hx, hy] = center(hit)
+    hit.dispatchEvent(ptr('pointerdown', hx, hy)); await sleep(200)
+    kd(root, 'Delete'); await sleep(400)
+    await step('tl-unlink', { links: P().timeline?.links?.length ?? 0 })
+
+    // Rail: one click on a filled title selects; a double-click edits. A bar's double-click opens the record.
+    const rail = [...W().querySelectorAll('[class*="rail_"]')].find(r => r.textContent.includes('Build'))
+    rail.click(); await sleep(250)
+    const oneClick = !!W().querySelector('input[aria-label="Title"]')
+    rail.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await sleep(250)
+    const ti = W().querySelector('input[aria-label="Title"]'); const dblEdit = !!ti
+    if (ti) { setInput(ti, 'Build it'); kd(ti, 'Enter'); await sleep(300) }
+    bar('Design').dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await sleep(400)
+    const panel = document.querySelector('[role="dialog"][aria-label^="Record:"]')
+    const panelInfo = { label: panel?.getAttribute('aria-label'), onScreen: onScreen(panel) }
+    kd(panel, 'Escape'); await sleep(300)
+    await step('tl-edit', { oneClick, dblEdit, renamed: !!recBy('Build it'), panelInfo })
+
+    // Launch into the tray clears its dates.
+    const tray = W().querySelector('[data-tl-tray]'), [tx2, ty2] = center(tray), [bx, by] = center(bar('Launch'))
+    await drag(bar('Launch'), tx2 - bx, ty2 - by)
+    await step('tl-unschedule', { launch: span('Launch') })
+
+    // Zoom: Month button; Ctrl+wheel back in (the board's zoom stays put); Fit.
+    const stage = window.Konva.stages.find(s => s.container()?.isConnected)
+    const boardScale = stage.scaleX()
+    ;[...W().querySelectorAll('button')].find(b => b.textContent.trim() === 'Month').click(); await sleep(400)
+    const z1 = P().timeline?.zoom
+    const sc = W().querySelector('[class*="scroll_"][data-sb-scroll]')
+    const [sx, sy] = center(sc)
+    sc.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, clientX: sx, clientY: sy, bubbles: true, cancelable: true })); await sleep(400)
+    const z2 = P().timeline?.zoom || 'week'
+    ;[...W().querySelectorAll('button')].find(b => b.textContent.trim() === 'Fit').click(); await sleep(500)
+    await step('tl-zoom', { z1, z2, fit: P().timeline?.zoom || 'week', boardScaleSame: stage.scaleX() === boardScale, scrollLeft: Math.round(sc.scrollLeft) })
+
+    // Linked: All tasks → due dates as milestones.
+    W().querySelector('button[aria-label="Data source"]').click(); await sleep(400)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('All tasks'))?.click(); await sleep(800)
+    await step('tl-linked', { head: W().querySelector('[class*="railHead"]')?.textContent, milestones: W().querySelectorAll('[class*="milestone"]').length, tray: W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]').length })
+    send('done', true)
+}
+
+if (spec.startsWith('timeline:') && boardId) runTimeline().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('cards:') && boardId) runCards().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('grid:') && boardId) runGrid().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

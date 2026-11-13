@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2 } from 'react-icons/lu'
+import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt } from 'react-icons/lu'
 import styles from './ShapePicker.module.css'
 
 /**
@@ -49,6 +49,7 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
         ...(onPickFormat ? [
             { label: 'Table', Icon: LuTable2, onClick: () => onPickFormat('table') },
             { label: 'Kanban', Icon: LuSquareKanban, onClick: () => onPickFormat('kanban') },
+            { label: 'Timeline', Icon: LuChartGantt, onClick: () => onPickFormat('timeline') },
             { label: 'Matrix', Icon: LuGrid2X2, onClick: () => onPickFormat('matrix') },
         ] : []),
     ]

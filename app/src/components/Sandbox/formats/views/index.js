@@ -3,6 +3,7 @@ import ListView from './ListView'
 import TableView from './TableView'
 import KanbanView from './KanbanView'
 import MatrixView from './MatrixView'
+import TimelineView from './TimelineView'
 import { VIEWS } from '../formats'
 
 /**
@@ -12,7 +13,7 @@ import { VIEWS } from '../formats'
  * each). A view not built yet renders as the plain list, so a board made with
  * a newer build still opens.
  */
-const VIEW_COMPONENTS = { table: TableView, kanban: KanbanView, matrix: MatrixView }
+const VIEW_COMPONENTS = { table: TableView, kanban: KanbanView, timeline: TimelineView, matrix: MatrixView }
 
 export const viewComponent = (id) => VIEW_COMPONENTS[id] || ListView
 export const VIEW_ICONS = { table: LuTable2, kanban: LuSquareKanban, matrix: LuGrid2X2, timeline: LuChartGantt }
