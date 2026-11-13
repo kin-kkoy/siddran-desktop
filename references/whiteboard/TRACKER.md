@@ -1458,4 +1458,28 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
        with no black bars? Is the fade noticeable now, and not too slow?
     6. Panel → Export PDF: pick a file, watch it step through, open the PDF.
        Are the cards and Tables there?
+- 2026-11-13 · session 9 · user feedback on checkpoint 2: "this is good".
+  One change: the transition should be a **dissolve**, not a fade through
+  black. Built:
+  - On each slide change, the shell takes a picture of the slide on screen (a
+    new `slides_snapshot_png` in src-tauri slides.rs, the same WebKitGTK
+    snapshot the PDF export uses, as a PNG; cairo-rs gets the `png` feature).
+  - The picture is laid over the slide, and the board moves to the next
+    slide underneath. After 90 ms it fades out over 480 ms.
+  - Keys pressed during a dissolve skip straight ahead.
+  - Without the desktop shell, it falls back to the fade through black.
+  - Checked in the hidden-window walk: the picture covered the screen at the
+    slide's size while the board was already on slide 2; the screen never
+    went black; the picture faded (`opacity 480ms`) and was removed.
+    Lint 25, 747 tests and the build pass. **Section 9 is finished as far as
+    the user wants it.** Speaker notes and view, and "present selected", are
+    deferred ("when needed").
+  - For the merge into `whiteboard`, shared files touched (all additive):
+    - SandBoxPage.jsx, SandboxCanvas.jsx (`plain`), ContextToolbar.jsx
+      (`slideActions`), InsertMenu.jsx / SandboxToolbar.jsx (`onPickSlides` /
+      `onInsertSlides`), ShortcutsModal.jsx, SandBoxPage.module.css,
+      perfProbe.js (`slides:`);
+    - src-tauri main.rs (`mod slides`, 6 commands), Cargo.toml (webkit2gtk,
+      cairo-rs);
+    - CLI sandbox.rs (appended blocks).
 

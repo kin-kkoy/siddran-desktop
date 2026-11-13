@@ -1325,10 +1325,14 @@ async function runSlides() {
     const where = () => ({ slide: countEl()?.dataset.slide, of: countEl()?.dataset.of, hole: hole(), win: [window.innerWidth, window.innerHeight] })
     const veil = () => root()?.querySelector('[class*="veil"]')
     await step('present', { on: !!root(), ...where() })
-    key('ArrowRight'); await sleep(120)
-    const mid = { opacity: veil()?.style.opacity, transition: veil()?.style.transition, slide: countEl()?.dataset.slide }
+    // The dissolve: a picture of the slide we leave lies over the next one, then fades.
+    key('ArrowRight')
+    const shown = await waitFor(() => root()?.querySelector('[data-dissolve]'), 3000)
+    const d0 = shown && { state: shown.dataset.dissolve, rect: [Math.round(shown.getBoundingClientRect().width), Math.round(shown.getBoundingClientRect().height)], natural: [shown.naturalWidth, shown.naturalHeight], slide: countEl()?.dataset.slide, veil: veil()?.style.opacity }
+    const fading = await waitFor(() => root()?.querySelector('[data-dissolve="fading"]'), 3000)
+    const d1 = fading && { opacity: fading.style.opacity, transition: fading.style.transition }
     await sleep(900)
-    await step('fade', { mid, after: { opacity: veil()?.style.opacity, ...where() } })
+    await step('dissolve', { d0, d1, gone: !root()?.querySelector('[data-dissolve]'), veil: veil()?.style.opacity, ...where() })
     key('Escape'); await sleep(800)
     const after = { x: stage.x(), y: stage.y(), s: stage.scaleX() }
     await step('exit', { on: !!root(), restored: before.x === after.x && before.y === after.y && before.s === after.s, boardUntouched: JSON.stringify(live()) === itemsBefore })

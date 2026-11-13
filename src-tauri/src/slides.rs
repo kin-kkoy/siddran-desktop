@@ -109,6 +109,35 @@ pub fn slides_pdf_begin() {
 #[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn slides_pdf_capture(window: tauri::WebviewWindow, x: f64, y: f64, w: f64, h: f64, view_width: f64) -> Result<usize, String> {
+    let page = snap(&window, x, y, w, h, view_width).await?;
+    let mut pages = PAGES.lock().unwrap();
+    pages.push(page);
+    Ok(pages.len())
+}
+
+/// The slide on screen as a PNG data URL — the dissolve between slides lays
+/// it over the board while the board moves to the next slide, then fades it.
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub async fn slides_snapshot_png(window: tauri::WebviewWindow, x: f64, y: f64, w: f64, h: f64, view_width: f64) -> Result<String, String> {
+    use base64::Engine;
+    let p = snap(&window, x, y, w, h, view_width).await?;
+    let img = cairo::ImageSurface::create_for_data(p.data, cairo::Format::ARgb32, p.width, p.height, p.stride).map_err(|e| e.to_string())?;
+    let mut png = Vec::new();
+    img.write_to_png(&mut png).map_err(|e| e.to_string())?;
+    Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub async fn slides_snapshot_png(x: f64, y: f64, w: f64, h: f64, view_width: f64) -> Result<String, String> {
+    let _ = (x, y, w, h, view_width);
+    Err("needs the Linux build".into())
+}
+
+/// WebKitGTK's own picture of the visible webview, cropped to the CSS-pixel rect.
+#[cfg(target_os = "linux")]
+async fn snap(window: &tauri::WebviewWindow, x: f64, y: f64, w: f64, h: f64, view_width: f64) -> Result<Page, String> {
     use webkit2gtk::{SnapshotOptions, SnapshotRegion, WebViewExt};
     let (tx, rx) = std::sync::mpsc::channel::<Result<Page, String>>();
     window
@@ -125,9 +154,7 @@ pub async fn slides_pdf_capture(window: tauri::WebviewWindow, x: f64, y: f64, w:
         .await
         .map_err(|e| e.to_string())?
         .map_err(|_| "the snapshot never came back".to_string())??;
-    let mut pages = PAGES.lock().unwrap();
-    pages.push(page);
-    Ok(pages.len())
+    Ok(page)
 }
 
 #[cfg(not(target_os = "linux"))]

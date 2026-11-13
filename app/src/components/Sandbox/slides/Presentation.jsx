@@ -4,7 +4,11 @@ import { fitFrameViewport, stepIndex } from './slides'
 import { setFullscreen, invokeShell } from './usePresentation'
 import styles from './Presentation.module.css'
 
-// Fade through black between slides: out, a beat of black, back in.
+// Between slides: a dissolve — the slide you leave fades out over the one
+// you arrive at. The fallback (no desktop shell to take the picture) fades
+// through black. The veil timings also serve blanking and the opening.
+const DISSOLVE_MS = 480
+const DISSOLVE_SETTLE_MS = 90   // the board paints the new slide under the picture first
 const FADE_OUT_MS = 280
 const FADE_IN_MS = 380
 // Export: time for the board to paint a slide before its picture is taken.
@@ -76,17 +80,41 @@ export default function Presentation({ frames, start = 0, canvas, onExit, export
     // Lift the opening veil once the first slide has been placed.
     useEffect(() => { later(() => setVeil(false), 60) }, [later])
 
-    const go = useCallback((i) => {
+    // The dissolve: the shell photographs the slide on screen (WebKitGTK's
+    // snapshot, src-tauri slides.rs), the picture covers it, the board moves to
+    // the next slide underneath, and the picture fades away.
+    const [dissolve, setDissolve] = useState(null)   // { src, rect, fading } | null
+    const busy = useRef(false)
+    const go = useCallback(async (i) => {
         if (!count) return
         if (i >= count) { setEnded(true); return }
         const target = frames[Math.max(0, i)]
         if (ended) setEnded(false)
         if (!target || (target.id === at && !ended)) return
-        setVeil(true)
-        later(() => {
-            setAt(target.id)
-            later(() => setVeil(false), 60)
-        }, FADE_OUT_MS)
+        // Keys pressed mid-transition skip straight ahead.
+        if (busy.current) { setAt(target.id); return }
+        busy.current = true
+        let shot = null
+        const r = holeRef.current?.getBoundingClientRect()
+        if (r && r.width > 0 && !ended) {
+            try {
+                const src = await invokeShell('slides_snapshot_png', { x: r.left, y: r.top, w: r.width, h: r.height, viewWidth: window.innerWidth })
+                const img = new Image()
+                img.src = src
+                await img.decode()
+                shot = { src, rect: { left: r.left, top: r.top, width: r.width, height: r.height } }
+            } catch { shot = null }
+        }
+        if (!shot) {
+            setVeil(true)
+            later(() => { setAt(target.id); later(() => setVeil(false), 60) }, FADE_OUT_MS)
+            later(() => { busy.current = false }, FADE_OUT_MS + 60)
+            return
+        }
+        setDissolve({ ...shot, fading: false })
+        setAt(target.id)
+        later(() => setDissolve(d => d && { ...d, fading: true }), DISSOLVE_SETTLE_MS)
+        later(() => { setDissolve(null); busy.current = false }, DISSOLVE_SETTLE_MS + DISSOLVE_MS + 40)
     }, [count, frames, at, ended, later])
 
     const next = useCallback(() => {
@@ -207,6 +235,10 @@ export default function Presentation({ frames, start = 0, canvas, onExit, export
                     <span>End of slides</span>
                     <small>Click or press → to leave · ← to go back</small>
                 </div>
+            )}
+            {dissolve && (
+                <img src={dissolve.src} alt="" data-dissolve={dissolve.fading ? 'fading' : 'shown'} className={styles.dissolve}
+                    style={{ ...dissolve.rect, opacity: dissolve.fading ? 0 : 1, transition: dissolve.fading ? `opacity ${DISSOLVE_MS}ms ease-in-out` : 'none' }} />
             )}
             <div className={styles.veil} style={{ opacity: veil || blank ? 1 : 0, transition: `opacity ${veil || blank ? FADE_OUT_MS : FADE_IN_MS}ms ease` }} />
 

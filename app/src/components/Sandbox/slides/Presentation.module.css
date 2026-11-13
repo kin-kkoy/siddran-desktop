@@ -28,6 +28,12 @@
     transition: opacity 280ms ease;
 }
 
+.dissolve {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+}
+
 .click {
     position: absolute;
     inset: 0;

@@ -800,6 +800,7 @@ fn main() {
             slides::slides_pdf_begin,
             slides::slides_pdf_capture,
             slides::slides_pdf_finish,
+            slides::slides_snapshot_png,
             bag_allow_asset,
             viewer_set_bag,
             viewer_set_fonts,

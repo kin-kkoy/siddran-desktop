@@ -28,10 +28,10 @@ base64 = "0.22"             # decode attachment bytes sent from the frontend
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk-sys = "2"
 # Sandbox slides' PDF export (src/slides.rs): WebKitGTK's snapshot and cairo's
-# PDF writer. Both already in the tree through Tauri; `pdf` turns on cairo's
-# PDF surface (system cairo ships it).
+# PDF writer. Both already in the tree through Tauri; `pdf` and `png` turn on
+# cairo's PDF surface and PNG encoder (system cairo ships both).
 webkit2gtk = "2"
-cairo-rs = { version = "0.18", features = ["pdf"] }
+cairo-rs = { version = "0.18", features = ["pdf", "png"] }
 
 [profile.release]
 codegen-units = 1
