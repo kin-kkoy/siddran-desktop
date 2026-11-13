@@ -686,9 +686,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         act.updateItem(id, { payload: fn(it.payload) })
         bump()
     }, [base, act, bump])
-    // Press on a widget's title bar: select it and drag it in the same motion,
-    // carrying what sits on it — the same move a frame makes.
-    const onGrabFormat = useCallback((e, id, locked) => {
+    // Press on a widget's title bar or on a card: select it and drag it in the
+    // same motion, through the board's own move (snapping, groups, riders).
+    const onGrabItem = useCallback((e, id, locked) => {
         const wasSelected = canvas.selectedIds.has(id)
         if (!wasSelected || e.shiftKey) onSelect(id, e.shiftKey)
         if (e.shiftKey || locked) return
@@ -894,13 +894,13 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             return <FormatWidget item={item} tool={canvas.tool}
                 selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
                 cut={cutOn.get(item.id)}
-                onSelect={onSelect} onGrab={onGrabFormat} onRemove={onErase} onCommit={onCommitFormat}
+                onSelect={onSelect} onGrab={onGrabItem} onRemove={onErase} onCommit={onCommitFormat}
                 onOpenFocus={openFormatFocus} onRenameDone={endFormatRename} />
         }
         const shared = {
             item, zoom: canvas.viewport.zoom, tool: canvas.tool,
             selected: canvas.selectedIds.has(item.id), onSelect,
-            onUpdate: act.updateItem, onRemove: onErase, beginTransaction, endTransaction, onMoveEnd,
+            onUpdate: act.updateItem, onRemove: onErase, beginTransaction, endTransaction, onMoveEnd, onGrab: onGrabItem,
         }
         if (item.type === 'note') return <AttachedNoteCard {...shared} notes={notes} />
         if (item.type === 'task') return <AttachedTaskCard {...shared} tasks={tasks} onToggleTask={toggleTaskCompletion} />

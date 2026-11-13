@@ -723,3 +723,27 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     tests pass, clippy unchanged. How it looks is unseen (the user is at the
     computer).
 
+- 2026-11-13 · session 5 · user feedback:
+  - **Sub-frames attach by centre, the smaller only** (user's choice). Was
+    "fits wholly inside". Now a frame attaches to another when its centre is
+    inside and it is the smaller, so two frames never hold each other. The
+    CLI's `frame_of` has the same rule. Frames inside widgets: no (user
+    agreed).
+  - **Snapping everywhere the magnet is on:**
+    - Cards (text, note, task, PDF) now move through the board's own move
+      (`useCardPointer` → `onGrab` → SelectionOverlay `beginMove`), as
+      widgets already did. So they snap to edges, centres and the grid, show
+      guides, move with the group, carry what's attached and get the drag
+      shield. Their own drag remains only as a fallback.
+    - **Resizing snaps too:** the dragged edge snaps to other items' edges
+      and centres (a frame's or widget's, so things line up inside them) and
+      to the grid. Unrotated boxes only (`snapping.js` `snapEdge`, tested).
+    - Connectors are no longer snap targets: their stored 0×0 box at the
+      origin made a phantom line at 0.
+  - Checked in a hidden window. The attach and frames walks still pass in
+    full. A card dragged to 3 px from a widget's edge snapped to the NEAREST
+    line: a pen stroke's edge 0.9 units away, which is correct. The drag
+    shield isn't observable in a hidden window: moves apply only on release
+    there, as no frames come.
+  - Answered, not built: the cost of a top canvas for shapes and strokes on
+    widgets (see the reply in session 5).

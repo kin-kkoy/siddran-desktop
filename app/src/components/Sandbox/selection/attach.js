@@ -14,8 +14,9 @@
  *   - a widget takes only DOM things above it (cards, smaller widgets) —
  *     board shapes paint beneath the DOM, and a widget doesn't carry what's
  *     underneath it (decided);
- *   - a frame takes anything but connectors (they follow their ends); another
- *     frame only if it fits wholly inside.
+ *   - a frame takes anything but connectors (they follow their ends) whose
+ *     centre is inside it; another frame only if it is the smaller of the two
+ *     (so two frames can never hold each other).
  * A widget on top wins over the frame beneath; among frames, the smallest.
  *
  * Boards from before attachment have things in frames with no `attachedTo`.
@@ -35,13 +36,13 @@ export const crops = (c) => c?.payload?.overflow === 'clip'
 
 const centre = (it) => { const b = itemAABB(it); return { x: b.x + b.w / 2, y: b.y + b.h / 2 } }
 const holds = (c, p) => p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h
-const inside = (a, c) => a.x >= c.x && a.y >= c.y && a.x + a.w <= c.x + c.w && a.y + a.h <= c.y + c.h
+const area = (b) => (b.w || 0) * (b.h || 0)
 
 /** Could `item` attach to `c` where they both are now? */
 function fits(item, c) {
     if (!item || item.id === c.id || item.type === 'connector') return false
     if (isFormat(c)) return isDomItem(item) && (item.z_index ?? 0) > (c.z_index ?? 0) && holds(c, centre(item))
-    if (isFrame(c)) return isFrame(item) ? inside(item, c) : holds(c, centre(item))
+    if (isFrame(c)) return holds(c, centre(item)) && (!isFrame(item) || area(item) < area(c))
     return false
 }
 

@@ -10,7 +10,7 @@ import { useRef } from 'react'
  * Children that should NOT start a drag/select (links, buttons, edit areas)
  * carry `data-sb-card-title`, a <button>, or `data-sb-noedit`.
  */
-export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd }) {
+export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const elRef = useRef(null)
     const dragRef = useRef(null)
 
@@ -18,6 +18,10 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         if (e.target.closest('button') || e.target.closest('[data-sb-card-title]') || e.target.closest('[data-sb-noedit]')) return
         if (tool === 'eraser') { e.stopPropagation(); onRemove?.(item.id); return }
         e.stopPropagation()
+        // The board's own move (SelectionOverlay): the same drag shapes get —
+        // snapping and guides, groups, what's attached riding along, the drag
+        // shield over PDFs. The card's own drag below is the fallback.
+        if (onGrab) { onGrab(e, item.id, !!item.payload?.locked); return }
         onSelect?.(item.id, e.shiftKey)
         if (item.payload?.locked) return   // locked: selectable, not movable
         beginTransaction?.()

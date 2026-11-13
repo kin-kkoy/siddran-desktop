@@ -72,3 +72,32 @@ export function unionAABB(items) {
     if (!isFinite(minX)) return null
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
+
+/** Every snap line of `items` (edges and centres) — the targets for a resize. */
+export function snapLines(items) {
+    const xs = [], ys = []
+    for (const it of items) {
+        const b = itemAABB(it)
+        xs.push(...xLines(b))
+        ys.push(...yLines(b))
+    }
+    return { xs, ys }
+}
+
+/**
+ * Resize-time snapping for ONE moving edge: the nearest line (another item's
+ * edge or centre, or the grid) within `threshold` of `v`. Returns the line, or
+ * null when nothing is close enough.
+ */
+export function snapEdge(v, lines, gridSize, threshold) {
+    let best = null, bestDist = threshold
+    for (const t of lines) {
+        const dist = Math.abs(t - v)
+        if (dist <= bestDist) { bestDist = dist; best = t }
+    }
+    if (gridSize > 0) {
+        const g = Math.round(v / gridSize) * gridSize
+        if (Math.abs(g - v) < bestDist || (best == null && Math.abs(g - v) <= threshold)) best = g
+    }
+    return best
+}

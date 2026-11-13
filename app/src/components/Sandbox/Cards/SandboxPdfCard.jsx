@@ -15,11 +15,11 @@ import { resolveImageUrl } from '../../../utils/imageUpload'
  * can skip re-rendering the PDF to every intermediate size (the pages re-render
  * once, crisply, when the drag settles) — keeps resize smooth.
  */
-function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd }) {
+function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const p = item.payload || {}
     const src = p.path ? resolveImageUrl(p.path) : ''
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
-        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd,
+        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
     })
 
     // Detect an in-progress resize (body size changing) and cover the iframe until

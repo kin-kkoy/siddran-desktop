@@ -9,10 +9,10 @@ import { useCardPointer, cardBoxStyle } from './useCardPointer'
  * title, then a footer with a priority pill and (if set) a due chip. The left
  * edge is tinted by priority. The whole card drags (the check is data-sb-noedit).
  */
-function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd }) {
+function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const task = tasks?.find(t => String(t.id) === String(item.payload.taskId))
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
-        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd,
+        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
     })
 
     const common = {

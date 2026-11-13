@@ -11,12 +11,12 @@ import { markdownToHtml } from '../../Editor/utils/markdownToHtml'
  * rendered (a mini reading view) in a scrollable pane so the card actually shows
  * the note's contents; the header title opens the note. Drag by the header.
  */
-function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd }) {
+function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const note = notes?.find(n => n.id === item.payload.noteId)
     const navigate = useNavigate()
     const html = useMemo(() => (note?.body?.trim() ? markdownToHtml(note.body) : ''), [note?.body])
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
-        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd,
+        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
     })
 
     const common = {

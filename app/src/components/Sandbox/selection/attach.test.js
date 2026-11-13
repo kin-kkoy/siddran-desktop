@@ -47,12 +47,14 @@ describe('sticky attachment — widgets', () => {
 describe('sticky attachment — frames', () => {
   const F = frame('F', 0, 0, 600, 400)
 
-  it('a frame takes anything but connectors, and a frame only if it fits wholly inside', () => {
+  it('a frame takes anything but connectors, and a smaller frame whose centre is inside', () => {
     expect(attachTarget(shape('S', 100, 100, 50, 50), [F])?.id).toBe('F')
     expect(attachTarget({ id: 'K', type: 'stroke', x: 10, y: 10, w: 5, h: 5, payload: {} }, [F])?.id).toBe('F')
     expect(attachTarget({ id: 'C', type: 'connector', x: 0, y: 0, w: 0, h: 0, payload: {} }, [F])).toBeNull()
     expect(attachTarget(frame('G', 50, 50, 100, 100), [F])?.id).toBe('F')
-    expect(attachTarget(frame('G', 500, 50, 300, 100), [F])).toBeNull()   // only partly inside
+    expect(attachTarget(frame('G', 400, 50, 300, 100), [F])?.id).toBe('F')   // pokes out, centre inside (550)
+    expect(attachTarget(frame('G', 500, 50, 300, 100), [F])).toBeNull()      // centre outside (650)
+    expect(attachTarget(frame('B', -100, -100, 900, 700), [F, frame('B', -100, -100, 900, 700)])).toBeNull()   // bigger never goes in a smaller one
   })
 
   it('the smallest frame wins, and a widget on top wins over the frame beneath', () => {
@@ -107,5 +109,17 @@ describe('crop or hang', () => {
     expect(cut.get('F')).toEqual({ cropped: 1, hidden: 1 })
     expect(cutLabel(cut.get('F'))).toBe('1 cropped · 1 out of view')
     expect(cutLabel(undefined)).toBe('')
+  })
+})
+
+import { snapEdge, snapLines } from './snapping'
+describe('resize snapping', () => {
+  it('snaps a dragged edge to the nearest edge or centre, else the grid, within the threshold', () => {
+    const { xs } = snapLines([{ id: 'F', type: 'shape', x: 100, y: 0, w: 200, h: 100, rotation: 0, payload: { kind: 'frame' } }])
+    expect(xs).toEqual([100, 200, 300])
+    expect(snapEdge(296, xs, 24, 6)).toBe(300)   // a frame's inner edge
+    expect(snapEdge(203, xs, 24, 6)).toBe(200)   // its centre
+    expect(snapEdge(239, xs, 24, 6)).toBe(240)   // nothing near: the grid
+    expect(snapEdge(250, xs, 0, 6)).toBeNull()
   })
 })

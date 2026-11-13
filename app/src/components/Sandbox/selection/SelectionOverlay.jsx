@@ -4,7 +4,7 @@ import {
     getItemBounds, getSelectionBounds, getOrientedAnchors, boxCenter,
     boxUpVector, rotatePoint,
 } from './itemBounds'
-import { computeSnap, unionAABB } from './snapping'
+import { computeSnap, unionAABB, snapLines, snapEdge } from './snapping'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameTitleRect } from '../frames/frames'
@@ -232,6 +232,17 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         // resize — work in a frame rotated by -θ about the fixed anchor A.
         const θ = d.groupRotation
         const A = d.anchorWorld
+        // Magnet on: the edge being dragged snaps to other items' edges and
+        // centres (a frame's or widget's included — so things line up inside
+        // them) and to the grid. Unrotated boxes only.
+        if (canvas.snapEnabled && d.lines && Math.abs(θ % 360) < 0.01) {
+            const thr = SNAP_PX / viewport.zoom
+            const g = []
+            const ex = d.handleWorld.x + (p.x - d.startWorld.x), ey = d.handleWorld.y + (p.y - d.startWorld.y)
+            if (d.scaleX) { const t = snapEdge(ex, d.lines.xs, SNAP_GRID, thr); if (t != null) { p.x += t - ex; g.push({ type: 'v', pos: t }) } }
+            if (d.scaleY) { const t = snapEdge(ey, d.lines.ys, SNAP_GRID, thr); if (t != null) { p.y += t - ey; g.push({ type: 'h', pos: t }) } }
+            setGuides(g)
+        }
         const pLocal = rotatePoint(p.x, p.y, A.x, A.y, -θ)
         const h0Local = rotatePoint(d.handleWorld.x, d.handleWorld.y, A.x, A.y, -θ)
         const aLocal = A // pivot maps to itself
@@ -290,7 +301,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         startGesture(e, {
             mode: 'move',
             baseAABB: unionAABB(moving),
-            others: (items || []).filter(it => !selIds.has(it.id)),
+            // Snap targets — not connectors: their stored box is a 0×0 at the origin.
+            others: (items || []).filter(it => !selIds.has(it.id) && it.type !== 'connector'),
             riders,
         }, moving)
         return true
@@ -454,6 +466,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             groupRotation: box.rotation || 0,
             scaleX: HANDLES[key].sx,
             scaleY: HANDLES[key].sy,
+            // Snap targets: everything not being resized (connectors have no box).
+            lines: snapLines((items || []).filter(it => it.type !== 'connector' && !boxItems.some(b => b.id === it.id))),
         })
     }
 

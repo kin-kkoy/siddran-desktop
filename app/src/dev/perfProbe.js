@@ -293,6 +293,22 @@ async function runAttach() {
     const text = () => cached().filter(i => i.type === 'text').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
     await step('placed', { attachedTo: text()?.payload?.attachedTo, widget: fmt()?.id })
 
+    // Magnet: drag the card so its left edge lands 3 screen px right of the widget's left edge.
+    {
+        const z = stage.scaleX()
+        const T = text(), W = fmt()
+        const el = document.querySelector(`[data-sb-id="${T.id}"]`)
+        const r = el.getBoundingClientRect()
+        const dxs = (W.x + 3 / z - T.x) * z
+        // Watch for the board's drag shield: proof the card moved through the board's own move.
+        let shield = false
+        const mo = new MutationObserver(() => { if ([...document.body.children].some(c => c.style?.zIndex === '9998')) shield = true })
+        mo.observe(document.body, { childList: true })
+        await dragEl(el, r.left + 20, r.top + 10, dxs, 12)
+        mo.disconnect()
+        await step('snapped', { zoom: z, before: [T.x, T.y, T.w, T.h], wanted: W.x + 3 / z, cardX: Math.round(text().x * 100) / 100, cardY: text().y, widget: [W.x, W.y, W.w, W.h], shield, stillAttached: text()?.payload?.attachedTo === W.id })
+    }
+
     // Shrink the widget from its bottom-right corner past the card.
     widget().querySelector('header').dispatchEvent(ptr('pointerdown', wr.left + 60, wr.top + 10)); window.dispatchEvent(ptr('pointerup', wr.left + 60, wr.top + 10))
     await sleep(500)
