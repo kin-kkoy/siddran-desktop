@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt } from 'react-icons/lu'
+import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt, LuFilePen } from 'react-icons/lu'
 import styles from './ShapePicker.module.css'
 
 /**
@@ -51,6 +51,8 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
             { label: 'Kanban', Icon: LuSquareKanban, onClick: () => onPickFormat('kanban') },
             { label: 'Timeline', Icon: LuChartGantt, onClick: () => onPickFormat('timeline') },
             { label: 'Matrix', Icon: LuGrid2X2, onClick: () => onPickFormat('matrix') },
+            // A page of text (formats/doc): kept in the board, or a note.
+            { label: 'Doc', Icon: LuFilePen, onClick: () => onPickFormat('doc') },
         ] : []),
     ]
 

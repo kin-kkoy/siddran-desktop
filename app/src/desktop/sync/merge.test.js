@@ -244,3 +244,25 @@ describe('mergeSandboxItems — a Format merges record by record', () => {
     expect(rows[0].x).toBe(1)
   })
 })
+
+describe('mergeSandboxItems — a Doc merges its text line by line', () => {
+  const doc = (body, extra = {}) => ({ id: 'D', type: 'shape', x: 0, y: 0, w: 500, h: 600, payload: { kind: 'format', view: 'doc', title: 'Doc', source: { type: 'own' }, body, ...extra } })
+  const base = [doc('one\ntwo\nthree')]
+
+  it('keeps edits to different lines from both sides', () => {
+    const local = [doc('ONE\ntwo\nthree')]
+    const remote = [doc('one\ntwo\nTHREE')]
+    const { rows, conflicts } = mergeSandboxItems(base, local, remote)
+    expect(rows[0].payload.body).toBe('ONE\ntwo\nTHREE')
+    expect(conflicts).toEqual([])
+  })
+
+  it('the same line edited on both sides: one answer either way round, reported', () => {
+    const local = [doc('mine\ntwo\nthree')]
+    const remote = [doc('theirs\ntwo\nthree')]
+    const a = mergeSandboxItems(base, local, remote)
+    const b = mergeSandboxItems(base, remote, local)
+    expect(a.rows[0].payload.body).toBe(b.rows[0].payload.body)
+    expect(a.conflicts).toHaveLength(1)
+  })
+})

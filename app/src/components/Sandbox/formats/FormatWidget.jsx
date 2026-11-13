@@ -12,6 +12,7 @@ import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
 import { cutLabel } from '../selection/attach'
 import { stepFontSize } from '../text/textStyle'
+import DocWidget, { DocFocus } from './doc/DocWidget'
 
 /**
  * A Format widget's chrome and body — used on the board (a window you move by
@@ -118,7 +119,7 @@ const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_F
 // Full screen: its own size once set, else 15% over the widget's.
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || FORMAT_FONT) * 1.15)
 
-function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
+function RecordWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
@@ -164,7 +165,7 @@ function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, o
 }
 
 /** Focus mode: the widget over the whole window. Esc (or the button) goes back. */
-export function FormatFocus({ item, onClose, onCommit }) {
+function RecordFocus({ item, onClose, onCommit }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const size = focusFont(item)
@@ -196,5 +197,9 @@ export function FormatFocus({ item, onClose, onCommit }) {
         document.body,
     )
 }
+
+// A Doc (view 'doc', doc/doc.js) is a page of text, not a view of records: its own chrome.
+const FormatWidget = (props) => (props.item.payload?.view === 'doc' ? <DocWidget {...props} /> : <RecordWidget {...props} />)
+export const FormatFocus = (props) => (props.item.payload?.view === 'doc' ? <DocFocus {...props} /> : <RecordFocus {...props} />)
 
 export default memo(FormatWidget)

@@ -11,6 +11,7 @@
  * payload = {
  *   kind: 'format',
  *   view: 'table' | 'kanban' | 'timeline' | 'matrix',   // how it's shown
+ *         | 'doc',                                       // not records: a page of text (doc/doc.js)
  *   title: string,
  *   source: { type: 'own' }                              // records below
  *         | { type: 'tasks', show: 'open'|'all'|'done' }  // the Bag's tasks
@@ -29,6 +30,7 @@
  */
 
 import { pruneStyles } from './layout'
+import { DOC_VIEW, DOC_SIZE, docPayload } from './doc/doc'
 
 export const FORMAT_KIND = 'format'
 export const isFormat = (it) => it?.type === 'shape' && it.payload?.kind === FORMAT_KIND
@@ -40,7 +42,7 @@ export const VIEWS = [
     { id: 'timeline', label: 'Timeline' },
     { id: 'matrix', label: 'Matrix' },
 ]
-export const viewLabel = (id) => VIEWS.find(v => v.id === id)?.label || 'Table'
+export const viewLabel = (id) => (id === DOC_VIEW ? 'Doc' : VIEWS.find(v => v.id === id)?.label || 'Table')
 
 export const STATUS_OPTIONS = ['To do', 'Doing', 'Done']
 
@@ -55,7 +57,7 @@ export function defaultFields() {
 
 export const FORMAT_SIZE = { w: 420, h: 320 }
 /** A new widget's size by view: a Kanban wants width for its columns, a Matrix room for its cells. */
-export const formatSize = (view) => (view === 'kanban' ? { w: 920, h: 420 } : view === 'matrix' ? { w: 600, h: 540 } : view === 'timeline' ? { w: 860, h: 420 } : FORMAT_SIZE)
+export const formatSize = (view) => (view === DOC_VIEW ? DOC_SIZE : view === 'kanban' ? { w: 920, h: 420 } : view === 'matrix' ? { w: 600, h: 540 } : view === 'timeline' ? { w: 860, h: 420 } : FORMAT_SIZE)
 
 /** A new Matrix's axes: impact × effort, with the usual quadrant names (view settings, R13.52). */
 export const MATRIX_FIELDS = [
@@ -68,6 +70,7 @@ export const MATRIX_CELLS = {
 }
 
 export function formatPayload(view = 'table', title) {
+    if (view === DOC_VIEW) return docPayload(title || 'Doc')
     const out = {
         kind: FORMAT_KIND, view, title: title || viewLabel(view),
         source: { type: 'own' },

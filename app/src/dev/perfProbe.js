@@ -9,6 +9,8 @@
 //   table:<boardId>  — the Table view: fields, cells, sort, filter, group (runTable)
 //   grid:<boardId>   — Table selection, cell fonts, row/column drag, long tables (runGrid)
 //   extras:<boardId> — formulas, totals, detail panel, paste, CSV import, attachments (runExtras)
+//   doc:<boardId>    — a Doc: template, typing + autosave, undo, slash menu, find, note link, full screen (runDoc)
+//   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -1237,6 +1239,229 @@ async function runTimeline() {
     send('done', true)
 }
 
+async function runDoc() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const { EditorView } = await import('@codemirror/view')
+    const live = () => store.getSnapshot(boardId)
+    const onScreen = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1 }
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const undo = async () => { document.activeElement?.blur?.(); key('z', { ctrlKey: true }); await sleep(450) }
+    const redo = async () => { key('y', { ctrlKey: true }); await sleep(450) }
+
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Doc')?.click(); await sleep(1200)
+    const id = live().filter(i => i.payload?.view === 'doc').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const P = () => live().find(i => i.id === id)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${id}"]`)
+    const V = (root = W()) => { const el = root?.querySelector('.cm-content'); return el && EditorView.findFromDOM(el) }
+    const it0 = live().find(i => i.id === id)
+    await step('doc-insert', { view: P()?.view, title: P()?.title, size: [it0?.w, it0?.h], source: P()?.source, body: P()?.body, editor: !!V(), templates: [...W().querySelectorAll('button')].map(b => b.textContent).filter(t => /notes|brief|log/.test(t)), onScreen: onScreen(W()), footer: W().querySelector('footer')?.textContent, textOffset: V() && Math.round(V().coordsAtPos(0).left - V().scrollDOM.getBoundingClientRect().left) })
+
+    // A template fills the text and names the Doc.
+    ;[...W().querySelectorAll('button')].find(b => b.textContent === 'Meeting notes').click(); await sleep(600)
+    await step('doc-template', { title: P().title, head: P().body.split('\n')[0], editorHead: V().state.doc.line(1).text, templatesGone: ![...W().querySelectorAll('button')].some(b => b.textContent === 'Project brief') })
+
+    // Typing saves into the board half a second after the last key — one undo step.
+    const v = V()
+    v.focus()
+    v.dispatch({ changes: { from: v.state.doc.length, insert: '\nHello board' }, userEvent: 'input.type' })
+    const savedEarly = P().body.includes('Hello board')
+    await sleep(900)
+    const saved = P().body.includes('Hello board')
+    const footer = W().querySelector('footer')?.textContent
+    await undo()
+    const undone = !P().body.includes('Hello board') && !V().state.doc.toString().includes('Hello board')
+    await redo()
+    const redone = P().body.includes('Hello board') && V().state.doc.toString().includes('Hello board')
+    await step('doc-type', { savedEarly, saved, footer, undone, redone })
+
+    // The slash menu: "/h2" at a line start, Enter.
+    const v2 = V(); v2.focus()
+    v2.dispatch({ changes: { from: v2.state.doc.length, insert: '\n/h2' }, selection: { anchor: v2.state.doc.length + 4 }, userEvent: 'input.type' })
+    await sleep(300); for (let i = 0; i < 4; i++) { v2.measure?.(); await sleep(60) }
+    const tip = document.querySelector('.cm-slash-menu')
+    const firstOpt = tip?.querySelector('li[aria-selected="true"]')?.textContent
+    v2.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await sleep(200)
+    const lastLine = v2.state.doc.line(v2.state.doc.lines).text
+    v2.dispatch({ changes: { from: v2.state.doc.length, insert: 'Next steps' }, userEvent: 'input.type' })
+    await sleep(900)
+    await step('doc-slash', { tipOnScreen: onScreen(tip), firstOpt, lastLine, savedHeading: P().body.includes('## Next steps') })
+
+    // Esc in the text leaves it; the board's keys work again.
+    kd(v2.contentDOM, 'Escape'); await sleep(200)
+    const blurred = !v2.hasFocus
+    // Ctrl+F inside: the find bar.
+    v2.focus(); kd(v2.contentDOM, 'f', { ctrlKey: true }); await sleep(400)
+    const findInput = W().querySelector('input[placeholder^="Search"]')
+    if (findInput) { setInput(findInput, 'board'); await sleep(500) }
+    const hits = W().querySelectorAll('.cm-search-match, [class*="search"] mark, .cm-searchMatch').length
+    const findCount = W().querySelector('[class*="count"]')?.textContent
+    if (findInput) kd(findInput, 'Escape'); await sleep(300)
+    await step('doc-keys', { blurred, findBar: !!findInput, findCount, hits, findClosed: !W().querySelector('input[placeholder^="Search"]') })
+
+    // Wheel over the text scrolls it, not the board.
+    const stage = window.Konva.stages.find(s => s.container()?.isConnected)
+    const scale = stage.scaleX()
+    const body = W().querySelector('[data-sb-scroll]')
+    const br = body.getBoundingClientRect()
+    body.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: br.left + 40, clientY: br.top + 40, bubbles: true, cancelable: true })); await sleep(300)
+    await step('doc-wheel', { boardScaleSame: stage.scaleX() === scale })
+
+    // Save as a new note: the text moves to the note; the board keeps the link.
+    W().querySelector('button[aria-label="Where the text lives"]').click(); await sleep(400)
+    const menuOnScreen = onScreen(document.querySelector('[role="dialog"][aria-label="Where the text lives"]'))
+    ;[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent.includes('Save as a new note')).click()
+    await waitFor(() => P()?.source?.type === 'note', 8000); await sleep(1200)
+    const noteId = P().source.noteId
+    const linkedText = V()?.state.doc.toString() || ''
+    await step('doc-to-note', { menuOnScreen, source: P().source, bodyCleared: P().body === '', chip: W().querySelector('button[aria-label="Where the text lives"]')?.textContent, editorKeepsText: linkedText.includes('Hello board') })
+
+    // Typing now saves to the note (checked in the Bag copy's note file afterwards).
+    const v3 = V(); v3.focus()
+    v3.dispatch({ changes: { from: v3.state.doc.length, insert: '\nWritten through the note' }, userEvent: 'input.type' })
+    await sleep(1500)
+    await step('doc-note-typed', { noteId, boardBodyStillEmpty: P().body === '' })
+
+    // Back to the board: the note's text is copied in.
+    W().querySelector('button[aria-label="Where the text lives"]').click(); await sleep(400)
+    ;[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent.includes('In this board')).click(); await sleep(800)
+    await step('doc-unlink', { source: P().source, copied: P().body.includes('Written through the note') })
+
+    // Full screen with Enter on the selected Doc; Esc leaves the text, then full screen.
+    W().querySelector('header').dispatchEvent(ptr('pointerdown', W().getBoundingClientRect().left + 60, W().getBoundingClientRect().top + 10)); window.dispatchEvent(ptr('pointerup', 0, 0)); await sleep(300)
+    key('Enter'); await sleep(600)
+    const panel = document.querySelector('[role="dialog"][aria-label="Meeting notes"]')
+    const fv = panel && V(panel)
+    const panelInfo = { open: !!panel, onScreen: onScreen(panel), editor: !!fv, width: Math.round(panel?.getBoundingClientRect().width || 0) }
+    if (fv) { fv.focus(); kd(fv.contentDOM, 'Escape'); await sleep(200) }
+    const stillOpen = !!document.querySelector('[role="dialog"][aria-label="Meeting notes"]')
+    key('Escape'); await sleep(400)
+    await step('doc-focus', { panelInfo, stillOpenAfterFirstEsc: stillOpen, closed: !document.querySelector('[role="dialog"][aria-label="Meeting notes"]') })
+    send('done', true)
+}
+
+// doc2:<boardId> — the Doc's second round: the slash list at a line start, export, your own templates, image paste.
+async function runDoc2() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const { EditorView } = await import('@codemirror/view')
+    const live = () => store.getSnapshot(boardId)
+    const onScreen = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1 }
+    const insertDoc = async () => {
+        document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+        ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Doc')?.click(); await sleep(1200)
+        return live().filter(i => i.payload?.view === 'doc').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    }
+    const id = await insertDoc()
+    const P = () => live().find(i => i.id === id)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${id}"]`)
+    const v = EditorView.findFromDOM(W().querySelector('.cm-content'))
+    const flush = async () => { for (let i = 0; i < 4; i++) { v.measure?.(); await sleep(60) } }
+
+    // "/" on an empty line, and on a new line after text: the list is on screen, and Enter makes the block.
+    const slashAt = async (text, pick) => {
+        v.focus()
+        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text }, selection: { anchor: text.length } })
+        v.dispatch({ changes: { from: v.state.doc.length, insert: '/' }, selection: { anchor: v.state.doc.length + 1 }, userEvent: 'input.type' })
+        await sleep(200); await flush()
+        const tip = W().ownerDocument.querySelector('.cm-slash-menu')
+        const on = onScreen(tip)
+        const style = tip?.closest('.cm-tooltip')?.getAttribute('style')
+        v.dispatch({ changes: { from: v.state.doc.length, insert: pick }, selection: { anchor: v.state.doc.length + pick.length }, userEvent: 'input.type' })
+        await sleep(200); await flush()
+        const first = document.querySelector('.cm-slash-menu li[aria-selected="true"]')?.textContent
+        const highlighted = document.querySelectorAll('.cm-slash-menu li[aria-selected]').length
+        v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
+        v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
+        v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+        await sleep(200)
+        return { onScreen: on, style, first, highlighted, doc: v.state.doc.toString(), closed: !document.querySelector('.cm-slash-menu') }
+    }
+    // Order matters for the check: after a word FIRST, then the line starts (the earlier run had them the other way).
+    const afterWord = await slashAt('Intro ', 'quote'), empty = await slashAt('', 'check'), afterText = await slashAt('Intro\n', 'h2')
+    await step('d2-slash', { afterWord, empty, afterText })
+
+    // Some text, then the ⋯ menu.
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: '# Weekly review\n\n## Wins\n\n- \n\n## Next\n\n- [ ] ' } })
+    await sleep(900)
+    W().querySelector('button[aria-label="More"]').click(); await sleep(400)
+    const menu = document.querySelector('[role="dialog"][aria-label="Doc menu"]')
+    const items = [...(menu?.querySelectorAll('button') || [])].map(b => b.textContent.trim())
+
+    // Export as Markdown: catch the download link instead of saving.
+    const origClick = HTMLAnchorElement.prototype.click
+    let dl = null
+    HTMLAnchorElement.prototype.click = function () { dl = { name: this.download, href: this.href } }
+    const origCreate = URL.createObjectURL, blobs = new Map()
+    URL.createObjectURL = (b) => { const u = origCreate(b); blobs.set(u, b); return u }
+    ;[...menu.querySelectorAll('button')].find(b => b.textContent.includes('Markdown')).click(); await sleep(300)
+    const mdText = dl && blobs.get(dl.href) ? await blobs.get(dl.href).text() : null
+    HTMLAnchorElement.prototype.click = origClick; URL.createObjectURL = origCreate
+
+    // Export as PDF: the print page is built in a hidden frame (print() itself is stubbed out).
+    W().querySelector('button[aria-label="More"]').click(); await sleep(400)
+    // Stub print() on the frame the moment it's attached — a real print dialog would block the walk.
+    const origAppend = Node.prototype.appendChild
+    let frame = null
+    Node.prototype.appendChild = function (child) {
+        const r = origAppend.call(this, child)
+        if (child?.tagName === 'IFRAME') { frame = child; try { child.contentWindow.print = () => { frame.__printed = true } } catch { /* cross-origin */ } }
+        return r
+    }
+    ;[...document.querySelectorAll('[role="dialog"][aria-label="Doc menu"] button')].find(b => b.textContent.includes('PDF')).click()
+    Node.prototype.appendChild = origAppend
+    await sleep(600)
+    const pdf = frame ? { title: frame.contentDocument?.querySelector('.doc-title')?.textContent, h2: frame.contentDocument?.querySelectorAll('h2').length, printed: !!frame.__printed } : null
+    await step('d2-export', { menuOnScreen: onScreen(menu), menuRect: menu && [...Object.values(menu.getBoundingClientRect().toJSON())].map(Math.round), items, md: dl && { name: dl.name, head: mdText?.split('\n').slice(0, 2), hasBody: mdText?.includes('## Wins') }, pdf })
+
+    // Save as a template; a new Doc offers it; using it fills the text and the title.
+    W().querySelector('button[aria-label="More"]').click(); await sleep(400)
+    const nameIn = document.querySelector('input[aria-label="Template name"]')
+    setInput(nameIn, 'Weekly review'); await sleep(100)
+    ;[...document.querySelectorAll('[role="dialog"][aria-label="Doc menu"] button')].find(b => b.textContent === 'Save').click(); await sleep(600)
+    const id2 = await insertDoc()
+    const W2 = document.querySelector(`[data-sb-id="${id2}"]`)
+    const chips = [...W2.querySelectorAll('button')].map(b => b.textContent).filter(Boolean)
+    ;[...W2.querySelectorAll('button')].find(b => b.textContent === 'Weekly review')?.click(); await sleep(600)
+    const P2 = live().find(i => i.id === id2)?.payload
+    await step('d2-template', { chips, title: P2?.title, head: P2?.body?.split('\n')[0] })
+
+    // A third Doc: remove the template from its chips.
+    const id3 = await insertDoc()
+    const W3 = document.querySelector(`[data-sb-id="${id3}"]`)
+    W3.querySelector('button[aria-label="Remove template Weekly review"]')?.click(); await sleep(600)
+    await step('d2-template-removed', { chipGone: ![...W3.querySelectorAll('button')].some(b => b.textContent === 'Weekly review') })
+
+    // Image paste into the first Doc: uploaded to the Bag, linked in the text.
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='), c => c.charCodeAt(0))
+    const dt = new DataTransfer(); dt.items.add(new File([png], 'dot.png', { type: 'image/png' }))
+    v.focus(); v.dispatch({ selection: { anchor: v.state.doc.length } })
+    const imagesBefore = live().filter(i => i.type === 'image').length
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })
+    v.contentDOM.dispatchEvent(ev); await sleep(2500)
+    const imgLine = v.state.doc.toString().split('\n').find(l => l.includes('!['))
+    await step('d2-image', { clipboardDataKept: !!ev.clipboardData?.files?.length, imgLine, saved: (P()?.body || '').includes(imgLine || '@@'), boardImages: [imagesBefore, live().filter(i => i.type === 'image').length] })
+    send('done', true)
+}
+
+if (spec.startsWith('doc2:') && boardId) runDoc2().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+if (spec.startsWith('doc:') && boardId) runDoc().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('timeline:') && boardId) runTimeline().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('cards:') && boardId) runCards().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

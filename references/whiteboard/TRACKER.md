@@ -193,8 +193,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       (§13.5–13.7). ✅ built (session 7): checkpoint 1 (view switcher, Kanban,
       Matrix) checked by the user; checkpoint 2 (Timeline) awaiting the user's
       hands-on check.
-- [ ] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
+- [x] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
+      ✅ built (session 8, branch `whiteboard-doc`). Round 1 checked by the user;
+      round 2 (slash fix, export, your templates, image folder) awaiting their check.
 - [ ] **9 · Slides:** frames as slides plus a presentation mode with
       F5/arrows/Esc (§11.8, §13.10).
 - [ ] **10 · Prototype:** screens with click-through hotspots and a preview
@@ -1255,4 +1257,148 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     7. Switch a Kanban to Timeline (its Due becomes milestones); link one to
        All tasks.
     8. Full screen and the text size.
-
+- 2026-11-13 · session 8 · **section 8 built (Doc)**, on its own branches so
+  it runs alongside sections 7 and 9: desktop `whiteboard-doc` in worktree
+  `../Siddran-Desktop-wb8`, CLI `whiteboard-doc` in `../Siddran-CLI-wb8`
+  (both off `whiteboard` at 53d5e84 / 0d1443e). Section 9 is in `-wb9` /
+  `whiteboard-slides`. The user will have one session merge all three.
+  - **User's decisions:** a Doc's text lives **per Doc, either in the board
+    or in a real note** (like decision 3 for records). First pass = editor +
+    4 templates + the `/` menu; export (.md/PDF) and suggestion mode wait
+    for their check. (The user asked what a Doc is for: a long-form page
+    on the board — meeting notes, a brief, a decision log.)
+  - **Model** (`formats/doc/doc.js`, tested): a Format widget with
+    `payload.view: 'doc'`, `source: {type:'own'} | {type:'note', noteId}`,
+    `body` (Markdown). No new kind: attach, riders, crop/hang, the floating
+    bar's text size, full screen and flowchart exclusion all come with
+    `kind:'format'`. An older whiteboard build shows it as an empty list.
+    `formats.js` `formatPayload/formatSize/viewLabel` know `doc`; it is
+    not in VIEWS, so no view switcher offers it.
+  - **Widget** (`formats/doc/DocWidget.jsx`, `Doc.module.css`;
+    FormatWidget.jsx sends view 'doc' there): the notes editor
+    (CodeMirrorEditor, live preview) inside the window chrome. Text follows
+    the widget's text size. A click in the text doesn't select the widget
+    (no floating bar over your writing); the title bar does. Esc leaves
+    the text; in full screen (a 900 px reading page) the first Esc leaves
+    the text, the second closes. Ctrl+F opens the Notes find bar inside the
+    Doc. The footer shows words + reading time, and the count against
+    80,000 characters past 90 %. Never blocks.
+  - **Saving:** own text saves into the board 500 ms after the last key
+    (new `saveDelay` prop on CodeMirrorEditor), one undo step per save;
+    board undo/CLI edits flow back through `externalBody` (merge3). Linked:
+    saves through the notes store (new `contexts/NotesApiContext.js`,
+    `{ editBody, addNote }`, provided in App.jsx), so live sync applies.
+  - **Where the text lives** (chip in the title bar): In this board /
+    a note (search list) / **Save as a new note** (moves the text into a
+    new note, the board keeps the link) / back to the board (copies the
+    note's text in). A deleted note shows "Keep an empty Doc in the board".
+  - **Templates** (data, R13.16): Meeting notes, Project brief, Decision log
+    — chips shown while an own Doc is empty; picking one also names a
+    default-titled Doc. **Slash menu** (`formats/doc/slash.js`, tested):
+    `/` at a line start or after a space — headings, lists, checklist,
+    quote, callout, code, table, divider, diagram; shares the wikilink
+    completion list (new `extraSources` in cm/wikilinks.js).
+  - **Merge:** a Doc's `body` edited on two copies merges line by line
+    (`mergeSandboxItems`, symmetric on clashes, tested).
+  - **CLI:** `sandbox_read` lists a Doc under `formats` with its `text`
+    (or the `noteId`); `sandbox_edit` `update` takes `body` for an own Doc
+    and refuses it for a linked one (tested).
+  - **Shared files touched (small, additive) — mind these when merging:**
+    CodeMirrorEditor.jsx (`saveDelay`, `extraCompletions`), cm/wikilinks.js,
+    App.jsx (NotesApiProvider), formats.js, FormatWidget.jsx (the branch at
+    the bottom), InsertMenu.jsx (a Doc entry), desktop/sync/merge.js,
+    perfProbe.js (`doc:` scenario), CLI sandbox.rs.
+  - Checks: desktop 737 tests, lint 25, build, `cargo check`; CLI tests
+    pass, clippy unchanged. `doc:` walk in a hidden window, all observed:
+    insert (560×640, template chips, footer "Empty"); Meeting notes →
+    title + text; typing saved after the delay, not before; Ctrl+Z undid it
+    in one step, Ctrl+Y redid; `/h2` → "Heading 2" first, Enter → `## `;
+    Esc blurred; Ctrl+F found 1; wheel over the text left the board zoom
+    alone; Save as a new note → linked, board body cleared, text kept;
+    typing then reached the note FILE on disk; back to the board copied it;
+    Enter → full screen on screen, first Esc kept it open, second closed.
+    **Not seen:** where the slash list appears (a hidden window gets no
+    animation frames, so CodeMirror never positions it); the user checks it.
+    **Incident:** session 9 restored its dev-localStorage backup after I
+    seeded, so this walk ran on ~/Documents/Siddran-TestBag (not the real
+    Bag). Its one new note there was deleted and the Doc stripped from
+    the dev cache. Sessions 8 and 9 now share a lock:
+    `mkdir /tmp/claude-1000/siddran-devapp.lock` before seeding/launching,
+    `rmdir` after restoring.
+  - Seen in the walk's console, NOT from the Doc: React warns "<button>
+    cannot contain a nested <button>" inside a records widget's body on
+    board d3bef492 (sections 6/7 code). Left for the merge.
+  - Not built: export (.md/PDF — `printNoteToPdf` exists to reuse),
+    suggestion mode, save-as-template, Doc → Slides/Frame (R13.17, after
+    section 9 merges), images pasted into an own Doc go through the notes'
+    image upload (untested on the board).
+  - **Please try:**
+    1. Media → Doc. Pick "Meeting notes", type under it. Click away and
+       Ctrl+Z: does it undo the last burst of typing?
+    2. Type `/` on a new line: does the block list open right under the
+       caret at any board zoom? Try Checklist, Table, Callout, Diagram.
+    3. Headings, lists, `[[` links, checkboxes — same feel as Notes?
+    4. Chip "In this board" → Save as a new note; open Notes and see it;
+       edit it there and watch the Doc follow. Then back to "In this board".
+    5. Link a Doc to an existing note from the chip's list.
+    6. Enter for full screen; Esc, Esc. Floating bar −/+ text size.
+    7. Ctrl+F inside a Doc; mouse wheel over a long Doc.
+    8. Drop a sticky on a Doc and move the Doc (it should carry it).
+- 2026-11-13 · session 8 · **Doc, round 2** (the user checked round 1: all
+  fine except the slash menu). Suggestion mode, mentions and comments are
+  dropped (user's decision). Doc → Slides waits for the merge with section 9.
+  - **Bug: "/" on a new line showed nothing** (after a word it worked). The
+    list opened but CodeMirror hid it. The notes editor's fold gutter is
+    "fixed", so CodeMirror counts it as a scroll margin and hides any tooltip
+    anchored over it, i.e. the first ~20 px of every line, where the theme
+    pulls the gutter into the padding. Un-fixing the gutter shifted the Notes
+    text 25 px, so it was reverted. The slash menu is now its own tooltip
+    with `clip: false` (`formats/doc/slash.js`: a state field, its keys
+    ↑/↓ Enter Tab Esc, and the completion list's classes), passed in through
+    a new `extraExtensions` prop on CodeMirrorEditor. The Doc no longer adds
+    a completion source, so cm/wikilinks.js is back to the base. Esc closes
+    it until the next "/". **Same trap in Notes:** a `[[` typed at column 0
+    is likely hidden the same way (not fixed here; Notes is untouched).
+  - **⋯ menu** in the Doc's title bar: Export as Markdown (frontmatter:
+    title, exported_at; the Notes download helper), Export as PDF (the Notes
+    `printNoteToPdf`), **Save as a template** (a name, defaulting to the
+    title; the same name replaces it). Your templates live in the Bag's
+    settings (`settings.docTemplates`, saved at once through PUT /settings,
+    since the Settings window only saves on close). Every empty Doc offers
+    them after the built-ins, each with a × to remove it.
+  - **Pasted/dropped images** used to land in `attachments/<the last open
+    note>/`. Now `localStore.setAttachmentTarget` (set while a Doc's text
+    has focus) sends them to `attachments/_boards/` (own Doc) or the linked
+    note's folder.
+  - Not built: board search for Doc text (there is no board/global search
+    over board contents), the "split at 80k" offer (we never block typing).
+  - Checks: desktop 741 tests, lint 25, build. `doc2:` walk (new; it stubs
+    print so no dialog opens): the "/" list on screen after a word, on an
+    empty line and on a new line after text; narrowing picks Checklist /
+    Heading 2 / Quote; Enter inserts `- [ ] ` / `## ` / `> `, and the list
+    closes; .md export file `doc-2.md` with frontmatter and body; the PDF
+    page built with the title and both h2s; a saved template appears in a
+    new Doc and fills title + text; × removes it; a pasted PNG went to
+    `attachments/_boards/…` and was linked, with no image on the board.
+    The `doc:` walk still passes in full. Text offset in the editor -4 px
+    (the Notes layout unchanged).
+  - Coordination: sessions 8 and 9 take the dev-app lock with
+    `locked-walk.sh` (lock, backup, a fresh Bag copy, seed, walk,
+    restore, unlock). The two Docs on board d3bef492 in
+    ~/Documents/Siddran-TestBag are the user's own from their check.
+  - **Please try:**
+    1. `/` on an empty line, on a new line after text, after a word. Then
+       ↑/↓, Enter, Esc (then type on: it stays shut until the next `/`).
+    2. ⋯ → Export as Markdown, and Export as PDF. Where does WebKit put the
+       .md file?
+    3. ⋯ → Save as a template "Weekly". Insert a new Doc and pick Weekly;
+       remove it with ×.
+    4. Paste a screenshot into a Doc: it should show inline and go to
+       attachments/_boards/.
+- 2026-11-13 · session 8 · user checked round 2: everything works.
+  Exports landed in ~/Downloads (`meeting-notes.md`; the PDF is named in
+  the print dialog). One fix: every row of the "/" list showed as selected
+  (blue). The theme colours any `li[aria-selected]`, and the menu set
+  `aria-selected="false"` on the others; now only the chosen row has the
+  attribute, as in CodeMirror's own list (`doc2:` walk: 1 highlighted row in
+  each case). **Section 8 done; ready to merge with 9.**

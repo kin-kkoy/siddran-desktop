@@ -678,6 +678,11 @@ export const getBagPath = () => _bag
 // pasted images land in a per-note folder: attachments/<Note title>/<file>.
 let activeNoteId = null
 export function setActiveNote(id) { activeNoteId = id }
+// A board Doc being typed in (formats/doc) overrides that while it has focus:
+// { dir } for its own text (attachments/_boards, beside the board's other files),
+// { noteId } for a Doc showing a note (that note's folder). null = the active note.
+let attachmentTarget = null
+export function setAttachmentTarget(t) { attachmentTarget = t || null }
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -701,8 +706,9 @@ function attachmentName(file) {
 // the Bag-relative path to embed in the markdown, or null if no Bag is open.
 export async function saveAttachment(file) {
   if (!_fs || !_bag) return null
-  const note = db.notes.find(n => String(n.id) === String(activeNoteId))
-  const relDir = `attachments/${safeName(note?.title || 'Untitled')}`
+  const noteId = attachmentTarget?.noteId ?? activeNoteId
+  const note = db.notes.find(n => String(n.id) === String(noteId))
+  const relDir = attachmentTarget?.dir || `attachments/${safeName(note?.title || 'Untitled')}`
   const filename = attachmentName(file)
   const b64 = await fileToBase64(file)
   await _fs.writeBytes(`${_bag}/${relDir}/${filename}`, b64)
