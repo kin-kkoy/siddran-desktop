@@ -16,13 +16,22 @@ export default function Popover({ anchor: anchorProp, width = 260, onClose, onEs
     const [pos, setPos] = useState(null)
 
     useLayoutEffect(() => {
-        const r = anchorEl()?.getBoundingClientRect?.()
-        if (!r) return
-        const h = panelRef.current?.offsetHeight || 0
-        const left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - width - 8)))
-        const below = r.bottom + 4
-        const top = h && below + h > window.innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below
-        setPos({ top: Math.round(top), left, maxHeight: Math.max(160, window.innerHeight - top - 12) })
+        const place = () => {
+            const r = anchorEl()?.getBoundingClientRect?.()
+            if (!r) return false
+            const h = panelRef.current?.offsetHeight || 0
+            const left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - width - 8)))
+            const below = r.bottom + 4
+            const top = h && below + h > window.innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below
+            setPos({ top: Math.round(top), left, maxHeight: Math.max(160, window.innerHeight - top - 12) })
+            return true
+        }
+        if (place()) return
+        // The anchor can attach after this effect runs (a ref on a parent of the pop-up):
+        // try again once it exists, rather than staying off-screen.
+        let tries = 0
+        const id = setInterval(() => { if (place() || ++tries > 20) clearInterval(id) }, 16)
+        return () => clearInterval(id)
     }, [anchorProp, width])   // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {

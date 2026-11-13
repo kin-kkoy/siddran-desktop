@@ -755,3 +755,8 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .detailExpr { font: 11.5px var(--font-mono); color: var(--text-muted); }
 .detailFiles { margin: 0 -6px; }
 .detailFoot { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border-default); }
+
+/* The record open in the detail panel. */
+.rowCurrent { background-color: color-mix(in srgb, var(--accent-warning) 16%, transparent); box-shadow: inset 3px 0 0 var(--accent-warning); }
+.rowCurrent .gutter { color: var(--accent-warning); }
+.rowCurrent .grip { opacity: 1; color: var(--accent-warning); }

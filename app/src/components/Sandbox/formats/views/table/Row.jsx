@@ -119,11 +119,11 @@ export function CellEditor({ field, value, seed, anchor, canCreate, onOpen, onDo
 const noFocus = (e) => e.preventDefault()   // keep keyboard focus on the grid
 
 function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, selC1 = -1, focusC = -1, rowSel, editable,
-    canRemove, canCreate, drop, dragging, stale, api }) {
+    canRemove, canCreate, drop, dragging, stale, current, api }) {
     const editRef = useRef(null)
     const v = rec.values || {}
     const cls = [styles.trow, dragging && styles.dragging, drop === 'before' && styles.dropBefore, drop === 'after' && styles.dropAfter,
-        rowSel && styles.rowSel, stale && styles.trowStale].filter(Boolean).join(' ')
+        rowSel && styles.rowSel, stale && styles.trowStale, current && styles.rowCurrent].filter(Boolean).join(' ')
     return (
         <div data-vkey={`${gk}|${rec.id}`} data-ri={ri} role="row" className={cls}
             title={stale ? 'Just added — the filter hides it once you change the filter' : undefined}>
@@ -153,9 +153,10 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                 }
                 const href = (f.type === 'url' || f.type === 'email') && !isEmptyValue(val) ? hrefFor(f, val) : null
                 return (
-                    <div key={f.id} role="gridcell" className={wrapCls} ref={editFid === f.id ? editRef : undefined}
+                    <div key={f.id} role="gridcell" className={wrapCls}
                         style={css?.backgroundColor ? { backgroundColor: css.backgroundColor } : undefined}>
                         <button className={`${styles.cell} ${align} ${wrap ? styles.wrap : ''}`} style={css}
+                            ref={editFid === f.id ? editRef : undefined}
                             onMouseDown={noFocus}
                             onPointerDown={(e) => api.cellDown(e, ri, ci)}
                             onPointerEnter={() => api.cellEnter(ri, ci)}

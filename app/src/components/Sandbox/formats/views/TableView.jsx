@@ -3,7 +3,7 @@ import { LuFilter, LuArrowUpDown, LuRows3, LuColumns3, LuPlus, LuChevronRight, L
 import styles from '../Table.module.css'
 import Popover from '../Popover'
 import { tableConfig, tableRows, calculate, activeFilterCount, calcsFor } from '../query'
-import { coerceValue, TEXTLIKE, hasOptions } from '../fields'
+import { coerceValue, TEXTLIKE, hasOptions, isEmptyValue } from '../fields'
 import { toast } from '../../../../utils/toast'
 import { selRange, applyStyle, cellStyle, rangeToTSV, moveColumn, orderRecords } from '../layout'
 import { FilterMenu, SortMenu, GroupMenu, FieldsMenu, FieldMenu, AddFieldMenu, CalcMenu, OptionChip } from './TableMenus'
@@ -75,7 +75,7 @@ function TableView({ source, item, onConfig }) {
     const fileRef = useRef(null)
     const openAttachment = useOpenAttachment(setPreview)
     const rootRef = useRef(null), gridRef = useRef(null), bodyRef = useRef(null), headRef = useRef(null)
-    const dragSel = useRef(false)
+    const dragSel = useRef(null)   // { ri, ci, moved } while a press on a cell is held
 
     const filterSig = JSON.stringify([config.filters || [], config.match || 'all'])
     const keep = useMemo(() => (kept.sig === filterSig ? kept.ids : new Set()), [kept, filterSig])
@@ -308,11 +308,24 @@ function TableView({ source, item, onConfig }) {
             // A finger can't double-tap comfortably: one tap edits (and brings up the on-screen keyboard).
             if (e.pointerType === 'touch' && fields[ci]?.type !== 'check') { startEdit(ri, ci); return }
             selectCell(ri, ci)
-            dragSel.current = true
-            const stop = () => { dragSel.current = false; window.removeEventListener('pointerup', stop, true) }
+            dragSel.current = { ri, ci, moved: false }
+            // An empty cell edits on one click; one with something in it needs a double-click (the user's call).
+            const { row, field } = cellAt(ri, ci)
+            const empty = row && field && isEmptyValue(row.rec.values?.[field.id]) && field.type !== 'check'
+            const stop = () => {
+                const d = dragSel.current
+                dragSel.current = null
+                window.removeEventListener('pointerup', stop, true)
+                if (empty && d && !d.moved) startEdit(ri, ci)
+            }
             window.addEventListener('pointerup', stop, true)
         },
-        cellEnter: (ri, ci) => { if (dragSel.current) setSel(s => s && { ...s, mode: 'cells', b: { ri, ci } }) },
+        cellEnter: (ri, ci) => {
+            const d = dragSel.current
+            if (!d) return
+            if (d.ri !== ri || d.ci !== ci) d.moved = true
+            setSel(s => s && { ...s, mode: 'cells', b: { ri, ci } })
+        },
         startEdit: (ri, ci) => startEdit(ri, ci),
         toggle: (rid, fid, on) => source.update(rid, { [fid]: on || undefined }),
         cellDone: (rid, gk, field, result, nav) => {
@@ -427,6 +440,13 @@ function TableView({ source, item, onConfig }) {
         })
     }
 
+    // The detail panel's record stays in view in the table as you step through.
+    useEffect(() => {
+        if (!detail) return
+        const ri = flatRows.findIndex(x => x.rec.id === detail)
+        if (ri >= 0) requestAnimationFrame(() => ensureVisible(ri, 0))
+    }, [detail])   // eslint-disable-line react-hooks/exhaustive-deps
+
     // A press outside the widget (and outside its menus) ends the selection.
     useEffect(() => {
         if (!sel) return
@@ -493,7 +513,7 @@ function TableView({ source, item, onConfig }) {
                 rowSel={!!(inRange && (sel.mode === 'rows' || sel.mode === 'all'))}
                 editable={source.editable} canRemove={source.canRemove} canCreate={!!source.fieldsEditable}
                 drop={rowDrag?.overKey === it.key && rowDrag.overRid !== rowDrag.rid ? rowDrag.place : null}
-                dragging={rowDrag?.rid === rec.id} stale={!!(filteredIds && !filteredIds.has(rec.id))} api={api} />
+                dragging={rowDrag?.rid === rec.id} stale={!!(filteredIds && !filteredIds.has(rec.id))} current={detail === rec.id} api={api} />
         )
     }
 

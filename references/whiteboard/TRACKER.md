@@ -1056,4 +1056,24 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     files, opening the image/PDF preview, opening a note from a chip.
     Desktop 693 tests, lint 25, build and `cargo check` pass; CLI 87 tests,
     clippy unchanged.
+- 2026-11-13 · session 6 · user feedback on checkpoint 2 (the rest is good):
+  - **An empty cell edits on one click; a filled one needs a double-click.**
+    The edit starts on release, only if the press didn't drag across cells
+    (so drag-selecting from an empty cell still works). Checkboxes toggle
+    as before.
+  - **Bug: double-clicking an attachment cell showed nothing.** Since
+    checkpoint 1, cell pop-ups (attachments, options, long text) were
+    anchored to the cell's wrapper, whose ref React attaches AFTER the
+    pop-up measures itself — so the pop-up stayed off-screen. The probe
+    clicked inside it anyway and missed it. Fixed twice over: the anchor is
+    the cell button again (attached first), and Popover retries for a few
+    frames if its anchor isn't there yet. The walk now checks the pop-up's
+    on-screen position.
+  - **The detail panel's record is highlighted in the table** (accent tint
+    and a bar on the left) and kept in view as ↑/↓ step.
+  - Checked in a hidden window: one click on a filled Title selected it
+    only; one click on an empty Due / Points edited it; one click on an
+    empty attachment cell opened its pop-up ON SCREEN (1568, 579); the
+    panel's row highlighted, and moved with ↓; the `table:`, `grid:` and
+    `extras:` walks pass. Lint 25, 693 tests, build pass.
 

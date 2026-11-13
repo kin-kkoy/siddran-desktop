@@ -539,17 +539,23 @@ async function runTable() {
     const press = (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(ptr('pointerdown', r.left + 4, r.top + 4)); window.dispatchEvent(ptr('pointerup', r.left + 4, r.top + 4)) }
     const dbl = (el) => el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
     const ptsCell = (ri) => cellOf(dataRows()[ri], 'Points').querySelector('button')
-    press(ptsCell(0)); await sleep(150)
+    // A filled cell: one click selects, typing does nothing, a double-click edits (caret at the end).
+    const titleCell = () => cellOf(dataRows()[0], 'Title').querySelector('button')
+    press(titleCell()); await sleep(200)
     kd(grid(), 'Q'); await sleep(200)
-    const typeIgnored = !W().querySelector('input[aria-label="Points"]')
-    dbl(ptsCell(0)); await sleep(200)
-    let inp = W().querySelector('input[aria-label="Points"]')
-    const caretAtEnd = inp && inp.selectionStart === inp.value.length
+    const typeIgnored = !W().querySelector('input[aria-label="Title"]')
+    dbl(titleCell()); await sleep(200)
+    let inp = W().querySelector('input[aria-label="Title"]')
+    const caretAtEnd = !!inp && inp.selectionStart === inp.value.length
+    kd(inp, 'Escape'); await sleep(200)
+    // Empty Points cells: one click edits.
+    press(ptsCell(0)); await sleep(250)
+    inp = W().querySelector('input[aria-label="Points"]')
     setInput(inp, '5'); kd(inp, 'Enter'); await sleep(300)
-    dbl(ptsCell(1)); await sleep(200)
+    press(ptsCell(1)); await sleep(250)
     inp = W().querySelector('input[aria-label="Points"]'); const downOk = dataRows()[1].contains(inp)
     setInput(inp, '1,200'); kd(inp, 'Enter'); await sleep(300)
-    dbl(ptsCell(2)); await sleep(200)
+    press(ptsCell(2)); await sleep(250)
     inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '3'); kd(inp, 'Tab'); await sleep(300)
     kd(grid(), 'Enter'); await sleep(400)
     const picker = pop()
@@ -826,12 +832,14 @@ async function runExtras() {
     rows()[0].querySelector('button[aria-label="Open record"]').click(); await sleep(400)
     const panel = () => document.querySelector('[role="dialog"][aria-label^="Record:"]')
     const title0 = panel()?.getAttribute('aria-label')
+    const highlighted = rows().map(r => r.className.includes('rowCurrent'))
     const qty = panel().querySelector('input[aria-label="Qty"]'); setInput(qty, '4'); blur(qty); await sleep(300)
     const totalInPanel = [...panel().querySelectorAll('[class*="detailRead"]')].map(x => x.textContent.trim())
     kd(panel(), 'ArrowDown'); await sleep(300)
     const title1 = panel()?.getAttribute('aria-label')
+    const highlighted1 = rows().map(r => r.className.includes('rowCurrent'))
     kd(panel(), 'Escape'); await sleep(300)
-    await step('detail', { title0, title1, qtyNow: P().records[0].values[P().fields.find(f => f.name === 'Qty').id], totalInPanel, closed: !panel() })
+    await step('detail', { highlighted, highlighted1, title0, title1, qtyNow: P().records[0].values[P().fields.find(f => f.name === 'Qty').id], totalInPanel, closed: !panel() })
 
     // Paste one value into a selected block (Qty of rows 2–3).
     press(cell(1, 'Qty').querySelector('button')); await sleep(100)
@@ -865,14 +873,22 @@ async function runExtras() {
     W().querySelector('button[aria-label="Add a field"]').click(); await sleep(300)
     setInput(pop().querySelector('input'), 'Files'); await sleep(50)
     popBtn('Attachment').click(); await sleep(400)
-    dbl(cell(0, 'Files').querySelector('button')); await sleep(300)
+    // One click on a filled cell selects it only; one click on an empty cell edits it.
+    press(cell(0, 'Title').querySelector('button')); await sleep(250)
+    const filledOneClick = !!W().querySelector('input[aria-label="Title"]')
+    press(cell(1, 'Due').querySelector('button')); await sleep(250)
+    const emptyOneClick = !!W().querySelector('input[aria-label="Due"]')
+    key('Escape'); await sleep(150)
+    press(cell(0, 'Files').querySelector('button')); await sleep(400)
+    const pr = pop()?.getBoundingClientRect()
+    const onScreen = !!pr && pr.top >= 0 && pr.left >= 0 && pr.bottom <= innerHeight + 1 && pr.width > 0
     popBtn('Attach a note').click(); await sleep(300)
     const noteBtn = [...pop().querySelectorAll('button')].find(b => b.className.includes('popItem'))
     const noteName = noteBtn?.textContent.trim()
     noteBtn?.click(); await sleep(400)
     key('Escape'); await sleep(300)
     const filesF = P().fields.find(f => f.name === 'Files')
-    await step('attach', { type: filesF?.type, value: P().records[0].values[filesF?.id], noteName, chip: cell(0, 'Files')?.textContent.trim() })
+    await step('attach', { filledOneClick, emptyOneClick, popRect: pr && [Math.round(pr.left), Math.round(pr.top)], onScreen, type: filesF?.type, value: P().records[0].values[filesF?.id], noteName, chip: cell(0, 'Files')?.textContent.trim() })
     send('done', true)
 }
 
