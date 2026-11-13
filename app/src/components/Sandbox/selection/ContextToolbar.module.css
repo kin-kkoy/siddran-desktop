@@ -181,6 +181,12 @@
     composes: btn;
     width: 24px;
 }
+/* At a limit (a frame title at 10 or 24): still there, dimmed. */
+.stepBtn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    background: transparent;
+}
 .stepValue {
     font-family: var(--font-mono);
     font-size: 13px;

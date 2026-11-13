@@ -1,6 +1,6 @@
 import { Layer, Group, Rect, Text } from 'react-konva'
 import { memo } from 'react'
-import { FRAME_TITLE_PX, FRAME_TITLE_GAP, FRAME_DEFAULT_FILL } from '../frames/frames'
+import { FRAME_TITLE_GAP, FRAME_DEFAULT_FILL, frameTitlePx } from '../frames/frames'
 
 /**
  * Frames paint first — beneath connectors and shapes — so everything placed on
@@ -9,7 +9,7 @@ import { FRAME_TITLE_PX, FRAME_TITLE_GAP, FRAME_DEFAULT_FILL } from '../frames/f
  */
 const CommittedFrame = memo(function CommittedFrame({ item, zoom, hideTitle, cut = '', clip }) {
     const p = item.payload || {}
-    const fs = FRAME_TITLE_PX / zoom
+    const fs = frameTitlePx(item) / zoom
     return (
         <Group listening={false} {...(clip ? { clipX: clip.x, clipY: clip.y, clipWidth: clip.w, clipHeight: clip.h } : null)}>
             <Rect

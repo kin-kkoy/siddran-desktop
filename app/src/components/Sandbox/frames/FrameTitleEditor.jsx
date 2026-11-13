@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FRAME_TITLE_PX, FRAME_TITLE_GAP } from './frames'
+import { FRAME_TITLE_GAP, frameTitlePx } from './frames'
 
 /**
  * Inline rename for a frame: an input laid exactly over the painted title.
@@ -12,6 +12,7 @@ function FrameTitleEditor({ frame, canvas, onCommit, onClose }) {
     const ref = useRef(null)
     const zoom = canvas.viewport.zoom
     const at = canvas.screenFromWorld({ x: frame.x, y: frame.y })
+    const px = frameTitlePx(frame)
 
     useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
 
@@ -42,11 +43,11 @@ function FrameTitleEditor({ frame, canvas, onCommit, onClose }) {
             style={{
                 position: 'absolute',
                 left: at.x - 4,
-                top: at.y - FRAME_TITLE_PX - FRAME_TITLE_GAP - 4,
+                top: at.y - px - FRAME_TITLE_GAP - 4,
                 width: Math.max(160, Math.min(frame.w * zoom, 420)),
-                height: FRAME_TITLE_PX + 8,
+                height: px + 8,
                 padding: '0 4px',
-                fontSize: FRAME_TITLE_PX,
+                fontSize: px,
                 fontWeight: 600,
                 fontFamily: 'Inter, system-ui, sans-serif',
                 color: 'var(--text-primary)',

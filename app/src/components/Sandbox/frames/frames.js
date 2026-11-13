@@ -16,6 +16,14 @@ import { itemAABB } from '../selection/hitTest'
 export const FRAME_KIND = 'frame'
 export const FRAME_TITLE_PX = 13      // screen px — the title stays legible at any zoom
 export const FRAME_TITLE_GAP = 6      // screen px between title baseline area and the frame
+// A frame's own title size (payload.titleSize, screen px, like the default);
+// the font stays the same. Capped at 24 (the user's call): a label, not a heading.
+export const FRAME_TITLE_MIN = 10
+export const FRAME_TITLE_MAX = 24
+export const frameTitlePx = (frame) => {
+    const n = Number(frame?.payload?.titleSize)
+    return Number.isFinite(n) && n > 0 ? Math.min(FRAME_TITLE_MAX, Math.max(FRAME_TITLE_MIN, n)) : FRAME_TITLE_PX
+}
 export const FRAME_EDGE_PX = 8        // screen px either side of the border that grabs the frame
 export const FRAME_DEFAULT_FILL = 'rgba(128,128,150,0.10)'
 export const FRAME_FILLS = [FRAME_DEFAULT_FILL, '#ffffff', '#fff7b2', '#d9ccff', '#a9d8ff', '#8fd98a', '#ffb84d', '#ff9ec4']
@@ -25,8 +33,9 @@ export const isFrame = (it) => it?.type === 'shape' && it.payload?.kind === FRAM
 /** World-space rect of a frame's title strip at `zoom`. */
 export function frameTitleRect(frame, zoom = 1) {
     const title = frame.payload?.title || 'Frame'
-    const h = (FRAME_TITLE_PX + FRAME_TITLE_GAP + 4) / zoom
-    const w = Math.min(frame.w, (title.length * FRAME_TITLE_PX * 0.62 + 12) / zoom)
+    const px = frameTitlePx(frame)
+    const h = (px + FRAME_TITLE_GAP + 4) / zoom
+    const w = Math.min(frame.w, (title.length * px * 0.62 + 12) / zoom)
     return { x: frame.x, y: frame.y - h, w: Math.max(w, 40 / zoom), h }
 }
 

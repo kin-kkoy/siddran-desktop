@@ -21,7 +21,7 @@ import { LINE_STYLES, lineStyleOf } from '../connectors/lineStyle'
 import { LINK_PALETTE as PALETTE, ROUTINGS, LINE_GLYPH, HEAD_GLYPH } from '../connectors/controls'
 import { SHAPES, SHAPE_GROUPS, shapesInGroup, isLineKind } from '../shapes/registry'
 import { FONT_FAMILIES, FONT_SIZES, TEXT_PRESETS, stepFontSize, STICKY_COLORS } from '../text/textStyle'
-import { isFrame, FRAME_FILLS } from '../frames/frames'
+import { isFrame, FRAME_FILLS, frameTitlePx, FRAME_TITLE_MIN, FRAME_TITLE_MAX } from '../frames/frames'
 import { isFormat } from '../formats/formats'
 import { convertibleLine } from '../connectors/fromLine'
 import { CustomColor } from '../Toolbar/ColorMenu'
@@ -86,7 +86,7 @@ function barPosition(x, anchorY) {
 const CONVERTIBLE = SHAPE_GROUPS.filter(g => g.id !== 'line').flatMap(g => shapesInGroup(g.id))
 
 /** A colour swatch that opens a small palette under itself. */
-function SwatchMenu({ id, open, setOpen, value, colors, title, onPick, allowNone = false, icon = null }) {
+function SwatchMenu({ id, open, setOpen, value, colors, title, onPick, allowNone = false, icon = null, minAlpha }) {
     const isOpen = open === id
     const none = !value || value === 'transparent'
     return (
@@ -117,7 +117,7 @@ function SwatchMenu({ id, open, setOpen, value, colors, title, onPick, allowNone
                                 onClick={() => { onPick(c); setOpen(null) }} />
                         ))}
                     </div>
-                    <CustomColor value={value} onPick={onPick} />
+                    <CustomColor value={value} onPick={onPick} minAlpha={minAlpha} />
                 </div>
             )}
         </span>
@@ -482,8 +482,25 @@ function ContextToolbar({
 
                 {!locked && frames.length > 0 && (
                     <>
+                        {/* A frame can be fully clear: "None", or the opacity slider down to 0 %. */}
                         <SwatchMenu id="frame" open={openMenu} setOpen={setOpenMenu} value={frames[0].payload?.fill} colors={FRAME_FILLS}
+                            allowNone minAlpha={0}
                             title="Frame colour" icon={<LuPaintBucket size={18} />} onPick={(c) => patchItems(frames, { fill: c })} />
+                        {(() => {
+                            // The title's size (the font stays the same), 10–24.
+                            const ts = frameTitlePx(frames[0])
+                            return (
+                                <>
+                                    <button className={styles.stepBtn} disabled={ts <= FRAME_TITLE_MIN}
+                                        onClick={() => patchItems(frames, { titleSize: Math.max(FRAME_TITLE_MIN, ts - 1) })}
+                                        title="Smaller title" aria-label="Smaller title">−</button>
+                                    <span className={styles.stepValue} title="Title size">{ts}</span>
+                                    <button className={styles.stepBtn} disabled={ts >= FRAME_TITLE_MAX}
+                                        onClick={() => patchItems(frames, { titleSize: Math.min(FRAME_TITLE_MAX, ts + 1) })}
+                                        title="Bigger title (up to 24)" aria-label="Bigger title">+</button>
+                                </>
+                            )
+                        })()}
                         {cropButton(frames)}
                         {frames.length === 1 && onExportFrame && (
                             <>

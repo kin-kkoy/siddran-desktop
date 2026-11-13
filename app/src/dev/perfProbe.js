@@ -13,6 +13,7 @@
 //   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
 //   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
 //   dots:<boardId>   — connection dots: no box without Shift, the drag hint, the rotate knob clear of the top dot (runDots)
+//   framestyle:<boardId> — a frame's title size (10–24) and a fully clear frame colour (runFrameStyle)
 //   hits:<boardId>   — clicks reach links inside an unfilled box; a drawn arrow becomes a curved link (runHits)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
@@ -1916,4 +1917,51 @@ async function runHits() {
     send('done', true)
 }
 if (spec.startsWith('hits:') && boardId) runHits().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── framestyle:<boardId> — a frame's title size from the floating bar (capped
+// at 24, + dimmed there), and a fully clear frame colour (None, opacity 0 %).
+async function runFrameStyle() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const z = stage.scaleX()
+    const c0 = { x: (innerWidth / 2 - stage.x()) / z, y: (innerHeight / 2 - stage.y()) / z }
+    const F = store.addItem(boardId, { type: 'shape', x: c0.x - 200, y: c0.y - 120, w: 400, h: 260, rotation: 0, z_index: -50,
+        payload: { kind: 'frame', title: 'Probe frame', fill: 'rgba(128,128,150,0.10)', stroke: 'rgba(160,160,190,0.35)', strokeWidth: 1 } })
+    await sleep(800)
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    const kc = stage.content.querySelector('canvas')
+    const t = toClient(F.x + 20 / z, F.y - 12 / z)
+    kc.dispatchEvent(ptr('pointerdown', t.x, t.y)); window.dispatchEvent(ptr('pointerup', t.x, t.y)); kc.dispatchEvent(ptr('pointerup', t.x, t.y)); await sleep(700)
+    const frame = () => live().find(i => i.id === F.id)
+    const titleNode = () => stage.find('Text').find(n => n.text().startsWith('Probe frame'))
+    const bigger = () => document.querySelector('button[aria-label="Bigger title"]')
+    const before = { shown: document.querySelector('[title="Title size"]')?.textContent, screenPx: +(titleNode().fontSize() * stage.scaleX()).toFixed(1) }
+    for (let i = 0; i < 15; i++) { bigger()?.click(); await sleep(120) }
+    await sleep(400)
+    const after = { titleSize: frame().payload.titleSize, shown: document.querySelector('[title="Title size"]')?.textContent, screenPx: +(titleNode().fontSize() * stage.scaleX()).toFixed(1),
+        plusDisabled: bigger()?.disabled, plusOpacity: bigger() && getComputedStyle(bigger()).opacity }
+    await step('title', { before, after })
+    // Colour: the menu's "None", then the opacity slider's floor.
+    document.querySelector('button[aria-label="Frame colour"]')?.click(); await sleep(400)
+    const slider = document.querySelector('input[aria-label="Opacity"]')
+    const sliderAtOpen = slider && { min: slider.min, value: slider.value }
+    document.querySelector('button[aria-label="None"]')?.click(); await sleep(500)
+    const fillNone = frame().payload.fill
+    document.querySelector('button[aria-label="Frame colour"]')?.click(); await sleep(400)
+    const s2 = document.querySelector('input[aria-label="Opacity"]')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(s2, '0')
+    s2.dispatchEvent(new Event('input', { bubbles: true })); s2.dispatchEvent(new Event('change', { bubbles: true })); await sleep(500)
+    const fillZero = frame().payload.fill
+    const rectNode = stage.find('Rect').find(n => Math.abs(n.x() - F.x) < 0.01 && Math.abs(n.width() - F.w) < 0.01)
+    await step('colour', { sliderAtOpen, fillNone, fillZero, konvaFill: rectNode?.fill() })
+    send('done', true)
+}
+if (spec.startsWith('framestyle:') && boardId) runFrameStyle().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 

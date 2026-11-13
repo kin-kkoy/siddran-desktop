@@ -2,8 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './ColorMenu.module.css'
 
-// '#rrggbb' or '#rrggbbaa' → { hex: '#rrggbb', alpha: 0–100 }
+// '#rrggbb', '#rrggbbaa' or 'rgba(r,g,b,a)' → { hex: '#rrggbb', alpha: 0–100 }
 function splitColor(v) {
+    const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(v || '')
+    if (rgba) {
+        const h = (n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0')
+        return { hex: `#${h(rgba[1])}${h(rgba[2])}${h(rgba[3])}`, alpha: rgba[4] == null ? 100 : Math.round(Number(rgba[4]) * 100) }
+    }
     const m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(v || '')
     if (!m) return { hex: '#ffffff', alpha: 100 }
     return { hex: `#${m[1]}`, alpha: m[2] ? Math.round(parseInt(m[2], 16) / 2.55) : 100 }
@@ -11,7 +16,8 @@ function splitColor(v) {
 const joinColor = (hex, alpha) => (alpha >= 100 ? hex : `${hex}${Math.round(alpha * 2.55).toString(16).padStart(2, '0')}`)
 
 /** Any colour, optionally with transparency: a native picker plus an opacity slider. */
-export function CustomColor({ value, onPick, alpha: withAlpha = true, label = 'Custom' }) {
+// `minAlpha`: how far down the opacity slider goes (frames: 0, fully clear).
+export function CustomColor({ value, onPick, alpha: withAlpha = true, label = 'Custom', minAlpha = 5 }) {
     const { hex, alpha } = splitColor(value)
     return (
         <div className={styles.customColor}>
@@ -20,7 +26,7 @@ export function CustomColor({ value, onPick, alpha: withAlpha = true, label = 'C
                 onChange={(e) => onPick(withAlpha ? joinColor(e.target.value, alpha) : e.target.value)} />
             {withAlpha && (
                 <>
-                    <input type="range" min={5} max={100} step={5} value={alpha} className={styles.alphaSlider}
+                    <input type="range" min={minAlpha} max={100} step={5} value={alpha} className={styles.alphaSlider}
                         aria-label="Opacity" title={`Opacity ${alpha}%`}
                         style={{ backgroundImage: `linear-gradient(90deg, transparent, ${hex})` }}
                         onChange={(e) => onPick(joinColor(hex, Number(e.target.value)))} />
