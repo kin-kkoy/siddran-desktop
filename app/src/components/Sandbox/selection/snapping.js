@@ -21,21 +21,41 @@ const yLines = (b) => [b.y, b.y + b.h / 2, b.y + b.h]
  * @returns { dx, dy, guides:[{type:'v'|'h', pos}] }
  */
 export function computeSnap(movingAABB, otherItems, gridSize, threshold) {
-    const targetsX = []
-    const targetsY = []
-    for (const it of otherItems) {
-        const b = itemAABB(it)
-        targetsX.push(...xLines(b))
-        targetsY.push(...yLines(b))
-    }
+    return computeSnapTo(movingAABB, snapTargets(otherItems), gridSize, threshold)
+}
 
-    const best = (movingLines, targets) => {
+/**
+ * Snap targets, built ONCE per gesture: every edge and centre line of
+ * `items`, sorted, so each frame finds the nearest with a binary search
+ * instead of re-measuring every item on the board.
+ */
+export function snapTargets(items) {
+    const { xs, ys } = snapLines(items)
+    return { xs: Float64Array.from(xs).sort(), ys: Float64Array.from(ys).sort() }
+}
+
+/** The value in sorted `arr` nearest to `v` (or null when empty). */
+function nearest(arr, v) {
+    let lo = 0, hi = arr.length - 1
+    if (hi < 0) return null
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (arr[mid] < v) lo = mid + 1; else hi = mid
+    }
+    const a = arr[lo], b = lo > 0 ? arr[lo - 1] : a
+    return Math.abs(a - v) <= Math.abs(b - v) ? a : b
+}
+
+/** computeSnap against prebuilt targets (snapTargets). */
+export function computeSnapTo(movingAABB, targets, gridSize, threshold) {
+    const best = (movingLines, sorted) => {
         let bestDelta = 0
         let bestDist = threshold + 1
         let bestPos = null
         for (const m of movingLines) {
             // nearest other-item line
-            for (const t of targets) {
+            const t = nearest(sorted, m)
+            if (t != null) {
                 const dist = Math.abs(t - m)
                 if (dist < bestDist) { bestDist = dist; bestDelta = t - m; bestPos = t }
             }
@@ -49,8 +69,8 @@ export function computeSnap(movingAABB, otherItems, gridSize, threshold) {
         return bestDist <= threshold ? { delta: bestDelta, pos: bestPos } : null
     }
 
-    const sx = best(xLines(movingAABB), targetsX)
-    const sy = best(yLines(movingAABB), targetsY)
+    const sx = best(xLines(movingAABB), targets.xs)
+    const sy = best(yLines(movingAABB), targets.ys)
 
     const guides = []
     if (sx) guides.push({ type: 'v', pos: sx.pos })
@@ -91,7 +111,9 @@ export function snapLines(items) {
  */
 export function snapEdge(v, lines, gridSize, threshold) {
     let best = null, bestDist = threshold
-    for (const t of lines) {
+    // Sorted targets (snapTargets): binary search; a plain array: scan it.
+    const near = lines instanceof Float64Array ? nearest(lines, v) : null
+    for (const t of near != null ? [near] : lines) {
         const dist = Math.abs(t - v)
         if (dist <= bestDist) { bestDist = dist; best = t }
     }
@@ -100,4 +122,13 @@ export function snapEdge(v, lines, gridSize, threshold) {
         if (Math.abs(g - v) < bestDist || (best == null && Math.abs(g - v) <= threshold)) best = g
     }
     return best
+}
+
+/** Items worth snapping to: those meeting `rect` (the visible board, plus a margin). */
+export function inView(items, rect) {
+    if (!rect) return items
+    return items.filter(it => {
+        const b = itemAABB(it)
+        return b.x <= rect.x + rect.w && b.x + b.w >= rect.x && b.y <= rect.y + rect.h && b.y + b.h >= rect.y
+    })
 }

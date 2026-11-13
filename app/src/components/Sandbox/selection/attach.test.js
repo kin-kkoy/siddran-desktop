@@ -141,3 +141,41 @@ describe('resize snapping', () => {
     expect(snapEdge(250, xs, 0, 6)).toBeNull()
   })
 })
+
+import { computeSnap, computeSnapTo, snapTargets, inView } from './snapping'
+describe('move snapping against prebuilt targets', () => {
+  // The old scan, kept here as the reference.
+  const brute = (m, items, grid, thr) => {
+    const xs = [], ys = []
+    for (const it of items) { xs.push(it.x, it.x + it.w / 2, it.x + it.w); ys.push(it.y, it.y + it.h / 2, it.y + it.h) }
+    const best = (ml, ts) => {
+      let d = 0, bd = thr + 1
+      for (const v of ml) {
+        for (const t of ts) if (Math.abs(t - v) < bd) { bd = Math.abs(t - v); d = t - v }
+        const g = Math.round(v / grid) * grid
+        if (Math.abs(g - v) < bd) { bd = Math.abs(g - v); d = g - v }
+      }
+      return bd <= thr ? d : 0
+    }
+    return { dx: best([m.x, m.x + m.w / 2, m.x + m.w], xs), dy: best([m.y, m.y + m.h / 2, m.y + m.h], ys) }
+  }
+  it('gives the same nudge as scanning every item', () => {
+    let seed = 7
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+    const items = Array.from({ length: 300 }, (_, i) => ({ id: `i${i}`, type: 'shape', x: rnd() * 4000, y: rnd() * 3000, w: 20 + rnd() * 300, h: 20 + rnd() * 200, rotation: 0, payload: { kind: 'rect' } }))
+    const targets = snapTargets(items)
+    for (let k = 0; k < 200; k++) {
+      const m = { x: rnd() * 4000, y: rnd() * 3000, w: 50 + rnd() * 200, h: 40 + rnd() * 100 }
+      const a = computeSnapTo(m, targets, 24, 10), b = brute(m, items, 24, 10)
+      // itemAABB goes through rotation maths: equal to ~1e-12, not bit for bit.
+      expect(a.dx).toBeCloseTo(b.dx, 9)
+      expect(a.dy).toBeCloseTo(b.dy, 9)
+      expect(computeSnap(m, items, 24, 10).dx).toBe(a.dx)
+    }
+  })
+  it('looks only at what is in view', () => {
+    const a = { id: 'a', type: 'shape', x: 0, y: 0, w: 10, h: 10, rotation: 0, payload: {} }
+    const b = { ...a, id: 'b', x: 5000 }
+    expect(inView([a, b], { x: -100, y: -100, w: 1000, h: 1000 }).map(i => i.id)).toEqual(['a'])
+  })
+})

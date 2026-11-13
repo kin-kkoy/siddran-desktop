@@ -159,7 +159,7 @@ way to build the same thing. Keep the text mode for AI and paste.
       lowering are desktop-only (user's decision).
 - [x] Keep the parity tests between `flowText.js` and `diagram.rs` green.
 
-## Section 5 — Format shell + shared record model (prerequisite for 6–11)  ✅ built (session 5) — **check-in: awaiting the user's hands-on check**
+## Section 5 — Format shell + shared record model (prerequisite for 6–11)  ✅ done (session 5) — checked by the user, committed
 
 - [x] **First, before any Format work: measure drag smoothness.** The user
       felt dragging shapes was a bit laggy (2026-11-12). It was unmeasured, and
@@ -785,3 +785,22 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     the inserted widget and at the source menu's own entries (the test Bag now
     holds the user's own widgets), and read undo from the live store. 644
     tests pass, lint 25, build and `cargo check` pass. Not seen on screen.
+- 2026-11-13 · session 5 · **magnet: stronger and cheaper** (user: a bit
+  laggy on a busy board, and not strong enough).
+  - The catch radius went from 6 to 10 screen px (`SNAP_PX`, moves and
+    resizes).
+  - Targets are built ONCE per gesture, sorted (`snapTargets`), and each
+    frame finds the nearest line by binary search (`computeSnapTo`; tested
+    equal to the old full scan). Before, every frame re-measured every item
+    on the board. In Node, 500 items: 0.53 ms → 0.0006 ms per frame, plus
+    0.44 ms once per drag.
+  - Only items on screen (plus a 200 px margin) are targets (`inView`), so
+    far-off, unrelated things neither pull nor cost anything.
+  - Guides re-render only when they change (`showGuides`), not on every
+    pointer move.
+  - Honest note: snapping was a modest share of a frame; this morning's
+    measurement puts most of the dev-mode lag on the dev build itself.
+  - The attach and top walks re-run green in a hidden window. 646 tests pass,
+    lint 25, build passes.
+- 2026-11-13 · session 5 · **Section 5 closed with the user** (all checks
+  done by hand). Handed to the next session for section 6.

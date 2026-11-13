@@ -4,7 +4,7 @@ import {
     getItemBounds, getSelectionBounds, getOrientedAnchors, boxCenter,
     boxUpVector, rotatePoint,
 } from './itemBounds'
-import { computeSnap, unionAABB, snapLines, snapEdge } from './snapping'
+import { computeSnapTo, unionAABB, snapTargets, snapEdge, inView } from './snapping'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameTitleRect } from '../frames/frames'
@@ -32,7 +32,7 @@ import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 const DEG = Math.PI / 180
 const HANDLE = 9          // screen px
 const ROTATE_GAP = 26     // screen px above the top edge
-const SNAP_PX = 6         // screen-px magnet radius for snapping
+const SNAP_PX = 10        // screen-px magnet radius for snapping (was 6 — the user wanted it stronger)
 const SNAP_GRID = 24      // world units between grid snap lines (matches GRID_MINOR)
 // Connection dots: drawn DOT_OUT screen px outside each edge midpoint, with a
 // generous invisible hit circle so they are easy to grab. SandboxCanvas keeps the
@@ -71,6 +71,14 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     const [hotDot, setHotDot] = useState(null)           // side under the pointer
     const rafRef = useRef(0)
     const lastMoveRef = useRef(null)
+    // Guides change far less often than the pointer moves: re-render for them only when they do.
+    const guidesKeyRef = useRef('')
+    const showGuides = (g) => {
+        const k = g.map(x => `${x.type}${x.pos}`).join('|')
+        if (k === guidesKeyRef.current) return
+        guidesKeyRef.current = k
+        setGuides(g)
+    }
 
     const { viewport } = canvas
     // Connectors have no transform box — exclude them so a selected connector
@@ -123,6 +131,16 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
 
     const screenOf = (wp) => canvas.screenFromWorld(wp)
 
+    // The visible board in world units, with a margin: snapping only looks at
+    // what's on (or just off) screen, not at every item on a big board.
+    const visibleWorld = () => {
+        const r = rootRef.current?.getBoundingClientRect()
+        if (!r) return null
+        const z = viewport.zoom || 1, m = 200 / z
+        const a = canvas.worldFromScreen({ x: 0, y: 0 })
+        return { x: a.x - m, y: a.y - m, w: r.width / z + 2 * m, h: r.height / z + 2 * m }
+    }
+
     const worldFromClient = (e) => {
         const rect = rootRef.current.getBoundingClientRect()
         return canvas.worldFromScreen({ x: e.clientX - rect.left, y: e.clientY - rect.top })
@@ -138,7 +156,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         const d = dragRef.current
         const wasPending = d.pending
         dragRef.current = null
-        setGuides([])
+        showGuides([])
         // A press that never moved opened nothing (see applyMove) — nothing to close.
         if (!wasPending) {
             setGesturing(false)
@@ -204,10 +222,10 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             let dy = p.y - d.startWorld.y
             if (canvas.snapEnabled && d.baseAABB) {
                 const moving = { x: d.baseAABB.x + dx, y: d.baseAABB.y + dy, w: d.baseAABB.w, h: d.baseAABB.h }
-                const snap = computeSnap(moving, d.others, SNAP_GRID, SNAP_PX / viewport.zoom)
+                const snap = computeSnapTo(moving, d.targets, SNAP_GRID, SNAP_PX / viewport.zoom)
                 dx += snap.dx
                 dy += snap.dy
-                setGuides(snap.guides)
+                showGuides(snap.guides)
             }
             for (const s of d.snap) updateItem(s.id, { x: s.box.x + dx, y: s.box.y + dy })
             return
@@ -241,7 +259,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             const ex = d.handleWorld.x + (p.x - d.startWorld.x), ey = d.handleWorld.y + (p.y - d.startWorld.y)
             if (d.scaleX) { const t = snapEdge(ex, d.lines.xs, SNAP_GRID, thr); if (t != null) { p.x += t - ex; g.push({ type: 'v', pos: t }) } }
             if (d.scaleY) { const t = snapEdge(ey, d.lines.ys, SNAP_GRID, thr); if (t != null) { p.y += t - ey; g.push({ type: 'h', pos: t }) } }
-            setGuides(g)
+            showGuides(g)
         }
         const pLocal = rotatePoint(p.x, p.y, A.x, A.y, -θ)
         const h0Local = rotatePoint(d.handleWorld.x, d.handleWorld.y, A.x, A.y, -θ)
@@ -301,8 +319,9 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         startGesture(e, {
             mode: 'move',
             baseAABB: unionAABB(moving),
-            // Snap targets — not connectors: their stored box is a 0×0 at the origin.
-            others: (items || []).filter(it => !selIds.has(it.id) && it.type !== 'connector'),
+            // Snap targets, built once: what's on screen and not moving — not
+            // connectors (their stored 0×0 box sits at the origin).
+            targets: snapTargets(inView((items || []).filter(it => !selIds.has(it.id) && it.type !== 'connector'), visibleWorld())),
             riders,
         }, moving)
         return true
@@ -467,7 +486,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             scaleX: HANDLES[key].sx,
             scaleY: HANDLES[key].sy,
             // Snap targets: everything not being resized (connectors have no box).
-            lines: snapLines((items || []).filter(it => it.type !== 'connector' && !boxItems.some(b => b.id === it.id))),
+            lines: snapTargets(inView((items || []).filter(it => it.type !== 'connector' && !boxItems.some(b => b.id === it.id)), visibleWorld())),
         })
     }
 
