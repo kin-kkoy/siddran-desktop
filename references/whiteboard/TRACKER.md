@@ -65,10 +65,9 @@ done, so the next session knows where things stand.
 6. **A widget doesn't carry what's underneath it** (2026-11-13). Board shapes
    paint beneath widgets, so any under one stay put when it moves.
 
-7. **Sticky attachment: kept for widgets, with a per-widget crop ⇄ hang toggle** (2026-11-13; it started as a trial). Frames keep
-   their positional membership for now. If the user likes the trial, extend
-   it to frames. If not, remove it (see the log for what to take out),
-   because things "hanging" off a frame or widget is also nice.
+7. **Sticky attachment: kept for widgets, with a per-widget crop ⇄ hang
+   toggle** (2026-11-13; it started as a trial). Frames still use positional
+   membership. Whether frames get attachment and the same toggle is still open.
 
 **Check-ins:** the user reviews by hand after **section 2** and after
 **section 5**. Stop at those points and ask them to try it. Other sections can
