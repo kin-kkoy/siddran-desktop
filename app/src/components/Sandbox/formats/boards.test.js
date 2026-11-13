@@ -140,3 +140,23 @@ describe('view settings follow options and fields', () => {
         expect(p.matrix.cells.High.Low.label).toBe('Quick wins')
     })
 })
+
+describe('card looks', () => {
+    it('one card, then every card (which clears what it sets from each card), then clear', async () => {
+        const { applyCardStyle, cardLook } = await import('./boards')
+        let s = applyCardStyle({}, 'a', { bold: true, color: '#f00' })
+        expect(cardLook(s, 'a')).toEqual({ bold: true, color: '#f00' })
+        expect(cardLook(s, 'b')).toBe(null)
+        s = applyCardStyle(s, null, { color: '#0f0', scale: 1.3 })
+        expect(cardLook(s, 'a')).toEqual({ bold: true, color: '#0f0', scale: 1.3 })
+        expect(cardLook(s, 'b')).toEqual({ color: '#0f0', scale: 1.3 })
+        s = applyCardStyle(s, 'a', null)
+        expect(s.card).toBeUndefined()
+        expect(applyCardStyle(s, null, null)).toEqual({})
+    })
+    it('a deleted record takes its card look with it', async () => {
+        const { removeRecord } = await import('./formats')
+        const p = { records: [{ id: 'a', values: {} }], kanban: { styles: { card: { a: { bold: true } }, all: { scale: 2 } } } }
+        expect(removeRecord(p, 'a').kanban.styles).toEqual({ card: {}, all: { scale: 2 } })
+    })
+})

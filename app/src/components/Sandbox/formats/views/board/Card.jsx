@@ -4,6 +4,7 @@ import styles from '../../Board.module.css'
 import { OptionChip } from '../TableMenus'
 import { cardText } from '../../boards'
 import { hasOptions, isEmptyValue, optionHue } from '../../fields'
+import { FONT_FAMILIES } from '../../../text/textStyle'
 
 /**
  * A record as a card (Kanban, Matrix): its title, a few fields, a coloured
@@ -12,10 +13,10 @@ import { hasOptions, isEmptyValue, optionHue } from '../../fields'
  * a touch screen. ⤢ opens the record's detail panel; the trash deletes (own
  * records). Both are always there, dimmed until the card is hovered.
  */
-function TitleEditor({ value, onDone }) {
+function TitleEditor({ value, onDone, style }) {
     const [draft, setDraft] = useState(value)
     return (
-        <textarea className={styles.titleEdit} value={draft} autoFocus rows={1} aria-label="Card title"
+        <textarea className={styles.titleEdit} style={style} value={draft} autoFocus rows={1} aria-label="Card title"
             onFocus={(e) => { const n = e.currentTarget.value.length; e.currentTarget.setSelectionRange(n, n) }}
             onChange={(e) => setDraft(e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
@@ -53,22 +54,43 @@ function AddCard({ onAdd, onClose, placeholder }) {
     )
 }
 
-function Card({ rec, primary, shown, colorBy, size, selected, editing, editable, canRemove, drop, dragging, stale, api }) {
+/** A look (the style bar's) as CSS: the size and fill on the card, the rest on its title. */
+function lookCss(l) {
+    if (!l) return {}
+    const deco = [l.underline && 'underline', l.strike && 'line-through'].filter(Boolean).join(' ')
+    return {
+        card: {
+            fontSize: l.scale ? `${(0.87 * l.scale).toFixed(3)}em` : undefined,
+            backgroundColor: l.bg ? `color-mix(in srgb, ${l.bg} 26%, var(--bg-surface))` : undefined,
+        },
+        title: {
+            fontFamily: l.fontFamily ? FONT_FAMILIES[l.fontFamily]?.css : undefined,
+            fontWeight: l.bold ? 700 : undefined,
+            fontStyle: l.italic ? 'italic' : undefined,
+            textDecoration: deco || undefined,
+            color: l.color || undefined,
+            textAlign: l.textAlign || undefined,
+        },
+    }
+}
+
+function Card({ rec, primary, shown, colorBy, size, look, selected, editing, editable, canRemove, drop, dragging, stale, api }) {
+    const css = lookCss(look)
     const title = primary ? rec.values?.[primary.id] : ''
     const hue = colorBy && typeof rec.values?.[colorBy.id] === 'string' ? optionHue(rec.values[colorBy.id]) : null
     const detailed = size === 'detailed'
     return (
         <div data-rid={rec.id} role="listitem" aria-selected={selected}
             className={[styles.card, selected && styles.cardSel, dragging && styles.cardLifted, drop === 'before' && styles.dropBefore, drop === 'after' && styles.dropAfter, size === 'compact' && styles.compact, stale && styles.stale].filter(Boolean).join(' ')}
-            style={hue != null ? { '--card-hue': hue } : undefined}
+            style={{ ...css.card, ...(hue != null ? { '--card-hue': hue } : null) }}
             onPointerDown={(e) => api.down(e, rec.id)}
             onDoubleClick={(e) => { if (!e.target.closest('button')) api.edit(rec.id) }}>
             {hue != null && <span className={styles.cardEdge} />}
             <div className={styles.cardTop}>
                 {editing ? (
-                    <TitleEditor value={typeof title === 'string' ? title : ''} onDone={(v, key) => api.editDone(rec.id, v, key)} />
+                    <TitleEditor style={css.title} value={typeof title === 'string' ? title : ''} onDone={(v, key) => api.editDone(rec.id, v, key)} />
                 ) : (
-                    <span className={`${styles.cardTitle} ${title ? '' : styles.untitled}`} title={editable ? 'Double-click to edit' : undefined}>{title || 'Untitled'}</span>
+                    <span className={`${styles.cardTitle} ${title ? '' : styles.untitled}`} style={css.title} title={editable ? 'Double-click to edit' : undefined}>{title || 'Untitled'}</span>
                 )}
                 <span className={styles.cardTools}>
                     <button className={styles.cardBtn} onClick={() => api.open(rec.id)} title="Open the record (Space)" aria-label="Open the record">

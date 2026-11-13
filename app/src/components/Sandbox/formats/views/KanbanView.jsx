@@ -1,16 +1,15 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { LuPlus, LuEllipsisVertical, LuChevronRight, LuChevronDown } from 'react-icons/lu'
+import { LuPlus, LuEllipsisVertical, LuChevronRight, LuChevronDown, LuChevronsRightLeft } from 'react-icons/lu'
 import styles from '../Board.module.css'
 import t from '../Table.module.css'
 import Popover from '../Popover'
-import { OptionChip } from './TableMenus'
 import Card, { AddCard } from './board/Card'
-import { ViewBar } from './board/cardView'
+import { ViewBar, CardStyleBar } from './board/cardView'
 import { useCards } from './board/useCards'
 import { ViewSettings, ColumnMenu } from './board/BoardMenus'
 import { useCardDrag } from './board/useCardDrag'
 import { useViewRows } from './board/useViewRows'
-import { kanbanSetup, kanbanColumns, kanbanLanes, kanbanCells, cellKey, cardFields, primaryField, dropPatch, dropBefore, valueOf, NONE } from '../boards'
+import { kanbanSetup, kanbanColumns, kanbanLanes, kanbanCells, cellKey, cardFields, applyCardStyle, cardLook, primaryField, dropPatch, dropBefore, valueOf, NONE } from '../boards'
 import { orderRecords } from '../layout'
 import { optionHue } from '../fields'
 import { STATUS_OPTIONS } from '../formats'
@@ -24,7 +23,7 @@ import { STATUS_OPTIONS } from '../formats'
  * `source`, so it works over own records and linked tasks alike.
  */
 
-const COL_W = '14em', COL_FOLDED = '2.6em'
+const COL_W = '14em', COL_FOLDED = '2.8em'
 
 function KanbanView({ source, item, onConfig }) {
     const cfg = useMemo(() => item?.payload?.kanban || {}, [item?.payload?.kanban])
@@ -67,7 +66,10 @@ function KanbanView({ source, item, onConfig }) {
         source.moveTo?.(d.rid, patch, before)
     }
     const { drag, down } = useCardDrag({ rootRef, scrollRef, onDrop, onClick: (ev, rid) => cards.api.click(ev, rid) })
-    const cards = useCards({ source, primary, all: rows.all, order, rootRef, down })
+    const cards = useCards({ source, primary, all: rows.all, order, rootRef, down, onStyleKey: (k) => applyLook({ [k]: !curLook?.[k] }) })
+    // The style bar: the selected card, else every card.
+    const curLook = cards.sel ? cardLook(cfg.styles, cards.sel) : cfg.styles?.all || null
+    const applyLook = (patch) => cfgSet(c => ({ ...c, styles: applyCardStyle(c.styles, cards.sel, patch) }))
 
     // Linked tasks: a new task lands where its defaults put it, so only that cell offers to add.
     const canAddIn = (lk, ck) => {
@@ -105,31 +107,37 @@ function KanbanView({ source, item, onConfig }) {
     const menuCol = menu && columns.find(c => c.key === menu.colKey)
     const optCols = columns.filter(c => c.key !== NONE)
 
+    const toggleFold = (k) => cfgSet(x => ({ ...x, collapsed: (x.collapsed || []).includes(k) ? x.collapsed.filter(y => y !== k) : [...(x.collapsed || []), k] }))
     const renderCell = (l, c) => {
         const key = cellKey(l.key, c.key)
         const list = cells.get(key) || []
         const folded = collapsed.has(c.key)
         const over = drag?.cell === key && !drag.over
+        const tint = c.key !== NONE ? { '--col-hue': optionHue(c.key) } : undefined
+        if (folded) {
+            // A folded column is one tall strip: a click anywhere on it opens it again (and it still takes a dropped card).
+            return (
+                <div key={key} data-cell={key} role="button" tabIndex={-1} title={`Expand ${c.label}`} style={tint}
+                    className={[styles.kcell, styles.kcellFolded, over && styles.cellOver].filter(Boolean).join(' ')}
+                    onClick={() => toggleFold(c.key)}>
+                    {list.length > 0 && <span className={styles.foldCount}>{list.length}</span>}
+                </div>
+            )
+        }
         return (
-            <div key={key} data-cell={key} className={[styles.kcell, folded && styles.kcellFolded, over && styles.cellOver].filter(Boolean).join(' ')} role="list">
-                {folded ? (
-                    list.length > 0 && <span className={styles.foldCount}>{list.length}</span>
-                ) : (
-                    <>
-                        {list.map(r => (
-                            <Card key={r.id} rec={r} primary={primary} shown={shown} colorBy={setup.colorBy} size={size}
-                                selected={cards.sel === r.id} editing={cards.editing === r.id} editable={!!primary && source.editable.has(primary.id)}
-                                canRemove={source.canRemove} drop={drag?.over === r.id ? drag.place : null} dragging={drag?.rid === r.id}
-                                stale={!!stale?.has(r.id)} api={cards.api} />
-                        ))}
-                        {adding === key ? (
-                            <AddCard placeholder={primary ? `Type a ${primary.name.toLowerCase()}, Enter` : 'Enter to add'}
-                                onAdd={(text) => add(l.key, c.key, text)} onClose={() => setAdding(null)} />
-                        ) : canAddIn(l.key, c.key) ? (
-                            <button className={styles.addCard} onClick={() => setAdding(key)}><LuPlus size="1em" /> Add a card</button>
-                        ) : null}
-                    </>
-                )}
+            <div key={key} data-cell={key} style={tint} className={[styles.kcell, over && styles.cellOver].filter(Boolean).join(' ')} role="list">
+                {list.map(r => (
+                    <Card key={r.id} rec={r} primary={primary} shown={shown} colorBy={setup.colorBy} size={size} look={cardLook(cfg.styles, r.id)}
+                        selected={cards.sel === r.id} editing={cards.editing === r.id} editable={!!primary && source.editable.has(primary.id)}
+                        canRemove={source.canRemove} drop={drag?.over === r.id ? drag.place : null} dragging={drag?.rid === r.id}
+                        stale={!!stale?.has(r.id)} api={cards.api} />
+                ))}
+                {adding === key ? (
+                    <AddCard placeholder={primary ? `Type a ${primary.name.toLowerCase()}, Enter` : 'Enter to add'}
+                        onAdd={(text) => add(l.key, c.key, text)} onClose={() => setAdding(null)} />
+                ) : canAddIn(l.key, c.key) ? (
+                    <button className={styles.addCard} onClick={() => setAdding(key)}><LuPlus size="1em" /> Add a card</button>
+                ) : null}
             </div>
         )
     }
@@ -137,30 +145,42 @@ function KanbanView({ source, item, onConfig }) {
     return (
         <div ref={rootRef} className={styles.view} tabIndex={0} onKeyDown={cards.onKeyDown}>
             <ViewBar fields={fields} cfg={cfg} onConfig={cfgSet} shown={rows.rows.length} total={rows.total}
+                styleBar={<CardStyleBar cur={curLook} selected={!!cards.sel} apply={applyLook} />}
                 settings={() => (
                     <ViewSettings kind="kanban" fields={fields} cfg={cfg} setup={setup} primary={primary} onConfig={cfgSet} source={source} />
                 )} />
             {/* data-sb-scroll: the board's wheel scrolls this (both ways) instead of zooming. */}
-            <div ref={scrollRef} className={styles.kscroll} data-sb-scroll="true">
+            <div ref={scrollRef} className={styles.kscroll} data-sb-scroll="true"
+                onPointerDown={(e) => { if (!e.target.closest('[data-rid]')) cards.setSel(null) }}>
                 <div className={styles.kgrid} style={{ gridTemplateColumns: gridCols }}>
                     {columns.map((c, i) => {
                         const folded = collapsed.has(c.key)
                         const n = counts.get(c.key)
                         const wip = cfg.wip?.[c.key]
-                        return (
-                            <div key={`h:${c.key}`} className={`${styles.khead} ${folded ? styles.kheadFolded : ''}`}
-                                style={c.key !== NONE ? { '--col-hue': optionHue(c.key) } : undefined}>
-                                <button className={styles.kheadName} onClick={() => cfgSet(x => ({ ...x, collapsed: folded ? (x.collapsed || []).filter(k => k !== c.key) : [...(x.collapsed || []), c.key] }))}
-                                    title={folded ? 'Expand the column' : 'Collapse the column'}>
-                                    {c.key === NONE ? <span className={styles.noneLabel}>{c.label}</span> : <OptionChip label={c.label} small />}
+                        const tint = c.key !== NONE ? { '--col-hue': optionHue(c.key) } : undefined
+                        const count = (
+                            <span className={`${styles.kcount} ${wip && n > wip ? styles.overLimit : ''}`} title={wip ? `Limit ${wip}${n > wip ? ' — over the limit' : ''}` : undefined}>
+                                {wip ? `${n}/${wip}` : n}
+                            </span>
+                        )
+                        if (folded) {
+                            return (
+                                <button key={`h:${c.key}`} className={`${styles.khead} ${styles.kheadFolded}`} style={tint}
+                                    onClick={() => toggleFold(c.key)} title={`Expand ${c.label}`} aria-label={`Expand ${c.label}`}>
+                                    <span className={styles.kfoldName}>{c.label}</span>
+                                    {count}
                                 </button>
-                                <span className={`${styles.kcount} ${wip && n > wip ? styles.overLimit : ''}`} title={wip ? `Limit ${wip}${n > wip ? ' — over the limit' : ''}` : undefined}>
-                                    {wip ? `${n}/${wip}` : n}
-                                </span>
-                                {!folded && (
-                                    <button className={styles.kmenu} onClick={(e) => { const anchor = e.currentTarget; setMenu(m => (m?.colKey === c.key ? null : { colKey: c.key, anchor, first: i === 0, last: i === optCols.length - 1 })) }}
-                                        title="Column settings" aria-label={`${c.label} settings`}><LuEllipsisVertical size="1em" /></button>
-                                )}
+                            )
+                        }
+                        return (
+                            <div key={`h:${c.key}`} className={styles.khead} style={tint}>
+                                <span className={`${styles.kheadName} ${c.key === NONE ? styles.kheadNone : ''}`} title={c.label}>{c.label}</span>
+                                {count}
+                                <button className={styles.kmenu} onClick={() => toggleFold(c.key)} title="Collapse the column" aria-label={`Collapse ${c.label}`}>
+                                    <LuChevronsRightLeft size="1em" />
+                                </button>
+                                <button className={styles.kmenu} onClick={(e) => { const anchor = e.currentTarget; setMenu(m => (m?.colKey === c.key ? null : { colKey: c.key, anchor, first: i === 0, last: i === optCols.length - 1 })) }}
+                                    title="Column settings" aria-label={`${c.label} settings`}><LuEllipsisVertical size="1em" /></button>
                             </div>
                         )
                     })}
@@ -181,7 +201,7 @@ function KanbanView({ source, item, onConfig }) {
                                 <button key={`l:${l.key}`} className={styles.laneHead}
                                     onClick={() => cfgSet(x => ({ ...x, lanesCollapsed: folded ? (x.lanesCollapsed || []).filter(k => k !== l.key) : [...(x.lanesCollapsed || []), l.key] }))}>
                                     {folded ? <LuChevronRight size="1em" /> : <LuChevronDown size="1em" />}
-                                    {l.key === NONE ? <span className={styles.noneLabel}>{l.label}</span> : <OptionChip label={l.label} small />}
+                                    <span className={l.key === NONE ? styles.kheadNone : undefined}>{l.label}</span>
                                     <span className={styles.kcount}>{laneCount}</span>
                                 </button>
                             ),

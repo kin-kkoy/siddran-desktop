@@ -1004,9 +1004,33 @@ async function runCards() {
     setInput(lim, '1'); kd(lim, 'Enter'); lim.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); await sleep(400)
     const over = !!todoHead.querySelector('[class*="overLimit"]')
     key('Escape'); await sleep(200)
-    ;[...W().querySelectorAll('[class*="khead"]')].find(h => h.textContent.includes('Doing')).querySelector('[class*="kheadName"]').click(); await sleep(300)
+    W().querySelector('button[aria-label="Collapse Doing"]').click(); await sleep(300)
+    // Folded: the whole strip opens it again — a click low down on a cell, far from the name.
+    const strip = [...W().querySelectorAll('[data-cell]')].find(c => c.getAttribute('data-cell') === '*\u0001Doing')
+    const sr = strip.getBoundingClientRect()
+    const foldW = Math.round(sr.width), foldH = Math.round(sr.height)
+    strip.click(); await sleep(300)
+    const reopened = !(P().kanban?.collapsed || []).includes('Doing')
+    W().querySelector('button[aria-label="Collapse Doing"]').click(); await sleep(300)
     W().querySelector('button[aria-label="Add a column"]').click(); await sleep(300)
-    await step('kanban-columns', { menuOn, wip: P().kanban?.wip, over, collapsed: P().kanban?.collapsed, options: P().fields.find(f => f.id === 'status').options, heads: heads() })
+    // The style bar: nothing selected → every card; a selected card → just it.
+    const sbtn = (label) => W().querySelector(`[role="toolbar"] button[aria-label="${label}"]`)
+    // A press on empty space in the view lets go of the selected card.
+    const empty = cellOf('Done'); const er = empty.getBoundingClientRect()
+    empty.dispatchEvent(ptr('pointerdown', er.left + 4, er.bottom - 4)); window.dispatchEvent(ptr('pointerup', er.left + 4, er.bottom - 4)); await sleep(250)
+    const sbLabel1 = [...W().querySelectorAll('[class*="count"]')].map(x => x.textContent.trim()).find(x => /cards?$/.test(x))
+    sbtn('Bold (Ctrl+B)').click(); await sleep(300)
+    const allBold = P().kanban?.styles?.all
+    click(card('Delta').querySelector('[class*="cardTitle"]')); await sleep(250)
+    const sbLabel2 = [...W().querySelectorAll('[class*="count"]')].map(x => x.textContent.trim()).find(x => /card$/.test(x))
+    sbtn('Bigger text').click(); await sleep(300); sbtn('Bigger text').click(); await sleep(300)
+    const did = P().records.find(r => r.values.title === 'Delta')?.id
+    const deltaFont = parseFloat(getComputedStyle(card('Delta')).fontSize), bravoFont = parseFloat(getComputedStyle(card('Bravo two')).fontSize)
+    const deltaWeight = getComputedStyle(card('Delta').querySelector('[class*="cardTitle"]')).fontWeight
+    const bravoWeight = getComputedStyle(card('Bravo two').querySelector('[class*="cardTitle"]')).fontWeight
+    key('Escape'); await sleep(200)
+    await step('kanban-style', { sbLabel1, allBold, sbLabel2, card: P().kanban?.styles?.card?.[did], deltaFont, bravoFont, deltaWeight, bravoWeight })
+    await step('kanban-columns', { foldW, foldH, reopened, menuOn, wip: P().kanban?.wip, over, collapsed: P().kanban?.collapsed, options: P().fields.find(f => f.id === 'status').options, heads: heads() })
 
     // View settings: Priority as swimlanes needs a second select — add one via the Table, then come back.
     const switchTo = async (label) => {

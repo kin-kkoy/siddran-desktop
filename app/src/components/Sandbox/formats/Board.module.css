@@ -47,29 +47,43 @@
     z-index: 3;
     display: flex;
     align-items: center;
-    gap: 0.35em;
+    gap: 0.3em;
     min-width: 0;
-    padding: 0.4em 0.3em 0.4em 0.45em;
-    border-top: 3px solid hsl(var(--col-hue, 0), 55%, 55%);
-    border-radius: 0.5em;
-    background-color: var(--bg-surface-alt);
-    box-shadow: 0 1px 0 var(--tbl-line);
+    padding: 0.45em 0.3em 0.45em 0.6em;
+    border: none;
+    border-radius: 0.55em;
+    /* The column's own tint, the same as its cells': one quiet colour per column, from the option's label. */
+    background-color: color-mix(in srgb, hsl(var(--col-hue, 0), 45%, 50%) 14%, var(--bg-surface));
+    color: var(--text-primary);
+    font: inherit;
 }
-.khead:not([style]) { border-top-color: var(--border-strong); }
-.kheadFolded { flex-direction: column; padding: 0.4em 0.1em; }
-.kheadFolded .kheadName { writing-mode: vertical-rl; }
+.khead:not([style]) { background-color: var(--bg-surface-alt); }
 .kheadName {
     flex: 1;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
     overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font: 600 0.84em var(--font-display);
+    letter-spacing: 0.01em;
+}
+.kheadNone { color: var(--text-muted); font-weight: 500; }
+/* Folded: the header is a button the column's width, its name running down it. */
+.kheadFolded {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.5em;
+    padding: 0.6em 0;
+    cursor: pointer;
+}
+.kheadFolded:hover, .kcellFolded:hover { background-color: color-mix(in srgb, hsl(var(--col-hue, 0), 45%, 50%) 26%, var(--bg-surface)); }
+.kfoldName {
+    writing-mode: vertical-rl;
+    max-height: 12em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 600 0.84em var(--font-display);
 }
 .kcount { flex: none; font: 0.74em var(--font-mono); color: var(--text-muted); }
 .overLimit { color: var(--accent-danger); font-weight: 700; }
@@ -119,8 +133,8 @@
     border: none;
     border-radius: 0.4em;
     background: transparent;
-    color: var(--text-secondary);
-    font: 600 0.82em var(--font-body);
+    color: var(--text-primary);
+    font: 600 0.84em var(--font-display);
     cursor: pointer;
 }
 .laneHead:hover { background-color: var(--bg-hover); color: var(--text-primary); }
@@ -132,10 +146,12 @@
     min-height: 3.2em;
     padding: 0.45em;
     border-radius: 0.55em;
-    background-color: color-mix(in srgb, var(--bg-surface-alt) 70%, transparent);
+    background-color: color-mix(in srgb, hsl(var(--col-hue, 0), 45%, 50%) 8%, var(--bg-surface-alt));
     border: 1px dashed transparent;
 }
-.kcellFolded { align-items: center; padding: 0.45em 0; }
+.kcell:not([style]) { background-color: color-mix(in srgb, var(--bg-surface-alt) 70%, transparent); }
+.kcellFolded { align-items: center; padding: 0.6em 0; cursor: pointer; }
+.kcellFolded:not([style]):hover, .kheadFolded:not([style]):hover { background-color: var(--bg-hover); }
 .foldCount { font: 0.74em var(--font-mono); color: var(--text-muted); }
 .cellOver { border-color: var(--accent-warning); background-color: color-mix(in srgb, var(--accent-warning) 9%, var(--bg-surface-alt)); }
 
@@ -268,7 +284,16 @@
     white-space: nowrap;
 }
 .mcorner span { display: inline-flex; align-items: center; gap: 0.25em; }
-.maxis { display: flex; align-items: flex-end; justify-content: center; padding: 0.15em 0.3em; min-width: 0; }
+.maxis {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0.15em 0.3em;
+    min-width: 0;
+    font: 600 0.84em var(--font-display);
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
 .mrowAxis { align-items: center; justify-content: flex-end; max-width: 9em; }
 .mcell {
     display: flex;
@@ -278,7 +303,7 @@
     padding: 0.4em;
     border: 1px solid var(--tbl-line);
     border-radius: 0.6em;
-    background-color: hsla(var(--cell-hue, 0), 55%, 50%, 0.1);
+    background-color: color-mix(in srgb, hsl(var(--cell-hue, 0), 50%, 50%) 12%, var(--bg-surface));
 }
 .mcell:not([style]) { background-color: color-mix(in srgb, var(--bg-surface-alt) 60%, transparent); }
 .mcellEmpty { border-style: dashed; }
@@ -291,13 +316,14 @@
     text-overflow: ellipsis;
     padding: 0.1em 0.2em;
     border-radius: 0.3em;
-    font: 600 0.8em var(--font-display);
-    letter-spacing: 0.02em;
-    color: hsl(var(--cell-hue, 0), 45%, 62%);
+    font: 600 0.86em var(--font-display);
+    letter-spacing: 0.01em;
+    /* Readable on its tint in both themes: the theme's text colour with a touch of the cell's hue. */
+    color: color-mix(in srgb, hsl(var(--cell-hue, 0), 70%, 60%) 22%, var(--text-primary));
     cursor: text;
 }
-.mcell:not([style]) .mlabel { color: var(--text-secondary); }
-.mlabelEmpty { color: var(--text-muted) !important; font-weight: 400; font-style: italic; opacity: 0.6; }
+.mcell:not([style]) .mlabel { color: var(--text-primary); }
+.mlabelEmpty { color: var(--text-secondary) !important; font-weight: 400; font-style: italic; }
 .mlabel:hover { background-color: var(--bg-hover); }
 .mlabelInput {
     flex: 1;

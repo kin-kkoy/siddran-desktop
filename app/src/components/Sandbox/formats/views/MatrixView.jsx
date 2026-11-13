@@ -3,14 +3,13 @@ import { LuPlus, LuPalette, LuArrowDown, LuArrowRight } from 'react-icons/lu'
 import styles from '../Board.module.css'
 import t from '../Table.module.css'
 import Popover from '../Popover'
-import { OptionChip } from './TableMenus'
 import Card, { AddCard } from './board/Card'
-import { ViewBar } from './board/cardView'
+import { ViewBar, CardStyleBar } from './board/cardView'
 import { useCards } from './board/useCards'
 import { ViewSettings, CellMenu } from './board/BoardMenus'
 import { useCardDrag } from './board/useCardDrag'
 import { useViewRows } from './board/useViewRows'
-import { matrixSetup, matrixLayout, cellKey, cardFields, primaryField, dropPatch, dropBefore, selectFields, MATRIX_FIELDS_MAX, MATRIX_MAX, NONE } from '../boards'
+import { matrixSetup, matrixLayout, cellKey, cardFields, applyCardStyle, cardLook, primaryField, dropPatch, dropBefore, selectFields, MATRIX_FIELDS_MAX, MATRIX_MAX, NONE } from '../boards'
 import { orderRecords } from '../layout'
 import * as F from '../fields'
 import { MATRIX_FIELDS, MATRIX_CELLS } from '../formats'
@@ -82,7 +81,10 @@ function MatrixView({ source, item, onConfig }) {
         source.moveTo?.(d.rid, patch, before)
     }
     const { drag, down } = useCardDrag({ rootRef, scrollRef, onDrop, onClick: (ev, rid) => cards.api.click(ev, rid) })
-    const cards = useCards({ source, primary, all: rows.all, order, rootRef, down })
+    const cards = useCards({ source, primary, all: rows.all, order, rootRef, down, onStyleKey: (k) => applyLook({ [k]: !curLook?.[k] }) })
+    // The style bar: the selected card, else every card.
+    const curLook = cards.sel ? cardLook(cfg.styles, cards.sel) : cfg.styles?.all || null
+    const applyLook = (patch) => cfgSet(c => ({ ...c, styles: applyCardStyle(c.styles, cards.sel, patch) }))
 
     const setCell = (rk, ck, patch) => cfgSet(c => {
         const cells = { ...(c.cells || {}) }
@@ -129,7 +131,7 @@ function MatrixView({ source, item, onConfig }) {
         keepNew(source.add(values))
     }
     const cardProps = (r) => ({
-        rec: r, primary, shown, colorBy: setup.colorBy, size,
+        rec: r, primary, shown, colorBy: setup.colorBy, size, look: cardLook(cfg.styles, r.id),
         selected: cards.sel === r.id, editing: cards.editing === r.id, editable: !!primary && source.editable.has(primary.id),
         canRemove: source.canRemove, drop: drag?.over === r.id ? drag.place : null, dragging: drag?.rid === r.id,
         stale: !!stale?.has(r.id), api: cards.api,
@@ -140,10 +142,12 @@ function MatrixView({ source, item, onConfig }) {
     return (
         <div ref={rootRef} className={styles.view} tabIndex={0} onKeyDown={cards.onKeyDown}>
             <ViewBar fields={fields} cfg={cfg} onConfig={cfgSet} shown={rows.rows.length} total={rows.total}
+                styleBar={<CardStyleBar cur={curLook} selected={!!cards.sel} apply={applyLook} />}
                 settings={() => (
                     <ViewSettings kind="matrix" fields={fields} cfg={cfg} setup={setup} primary={primary} onConfig={cfgSet} source={source} />
                 )} />
-            <div ref={scrollRef} className={styles.mscroll} data-sb-scroll="true">
+            <div ref={scrollRef} className={styles.mscroll} data-sb-scroll="true"
+                onPointerDown={(e) => { if (!e.target.closest('[data-rid]')) cards.setSel(null) }}>
                 <div className={styles.mgrid} style={{
                     gridTemplateColumns: `auto repeat(${Math.max(1, lay.cols.length)}, minmax(13em, 1fr))`,
                     gridTemplateRows: `auto repeat(${Math.max(1, lay.rows.length)}, minmax(9em, auto))`,
@@ -153,10 +157,10 @@ function MatrixView({ source, item, onConfig }) {
                         <span><LuArrowDown size="0.9em" /> {row.name}</span>
                         <span>{col.name} <LuArrowRight size="0.9em" /></span>
                     </div>
-                    {lay.cols.map(b => <div key={`c:${b}`} className={styles.maxis}><OptionChip label={b} small /></div>)}
+                    {lay.cols.map(b => <div key={`c:${b}`} className={styles.maxis}>{b}</div>)}
                     {!lay.cols.length && <div className={styles.maxis}><span className={styles.noneLabel}>{col.name} has no options yet</span></div>}
                     {lay.rows.map(a => [
-                        <div key={`r:${a}`} className={`${styles.maxis} ${styles.mrowAxis}`}><OptionChip label={a} small /></div>,
+                        <div key={`r:${a}`} className={`${styles.maxis} ${styles.mrowAxis}`}>{a}</div>,
                         ...lay.cols.map(b => {
                             const key = cellKey(a, b)
                             const list = lay.cells.get(key) || []

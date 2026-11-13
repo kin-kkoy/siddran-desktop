@@ -9,7 +9,7 @@ import { useOpenAttachment } from '../table/attachKinds'
  * (the detail panel steps through it). Returns a stable `api` for the cards
  * (they're memoized) plus the pieces the view renders.
  */
-export function useCards({ source, primary, all, order, rootRef, down }) {
+export function useCards({ source, primary, all, order, rootRef, down, onStyleKey }) {
     const [sel, setSel] = useState(null)        // the selected card's record id
     const [editing, setEditing] = useState(null)
     const [detail, setDetail] = useState(null)
@@ -53,6 +53,8 @@ export function useCards({ source, primary, all, order, rootRef, down }) {
         if (e.target !== rootRef.current) return
         if (e.key === 'Escape') { if (!sel) return; e.stopPropagation(); setSel(null); return }
         e.stopPropagation()   // board shortcuts would fire otherwise
+        const k = e.key.toLowerCase()
+        if ((e.ctrlKey || e.metaKey) && (k === 'b' || k === 'i' || k === 'u')) { e.preventDefault(); onStyleKey?.({ b: 'bold', i: 'italic', u: 'underline' }[k]); return }
         if (!sel) return
         if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); api.edit(sel) }
         else if (e.key === ' ') { e.preventDefault(); setDetail(sel) }

@@ -1157,4 +1157,27 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     7. Link a Kanban to All tasks: drag a task to Done.
     8. Full screen (Enter) and the text size — do cards and headers read well
        on your theme?
+- 2026-11-13 · session 7 · user feedback on checkpoint 1:
+  - **Kanban columns: no pills, no stripes.** A column is a quiet tint of its
+    option's colour (header and cells alike) with a plain semibold name;
+    lanes are plain names too. Collapse is a ⇥⇤ button beside ⋮.
+  - **A folded column is one tall strip** (2.8em) and a click anywhere on it
+    opens it again — header or cells; it still takes a dropped card.
+  - **Matrix labels read better:** cell names in the theme's text colour with
+    a touch of the cell's hue; the axis options are plain text, not pills;
+    cell tints mixed over the surface so text keeps its contrast.
+  - **The Table's style bar on both views** (font, bold/italic/underline/
+    strike, colour, fill, − 100% +, alignment, clear; Ctrl+B/I/U): with a
+    card selected it formats that card, otherwise every card ("All cards" /
+    "This card" shown beside it, so it's never dimmed). Kept in the view's
+    settings as `styles = { all, card: { [recordId]: look } }`
+    (boards.js `applyCardStyle`; formatting every card clears those keys
+    from each card's own). A press on empty space lets go of the card. A
+    deleted record takes its look with it. The widget's whole text size
+    (toolbar included) is still the floating bar's −/+ and full screen's.
+  - Checked in a hidden window (`cards:` walk, all steps pass): folded strip
+    42×135 px, a click low on it reopened the column; empty-space press →
+    "All cards"; Bold → `styles.all.bold`, both cards weight 700; Delta
+    selected → "This card", + + → `styles.card[Delta].scale` 1.2, Delta
+    15.7 px vs 13.05 px. Desktop 709 tests, lint 25, build pass.
 

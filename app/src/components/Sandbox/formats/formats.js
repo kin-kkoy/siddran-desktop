@@ -110,6 +110,13 @@ export function updateRecord(payload, id, patch, { at = nowISO() } = {}) {
 export function removeRecord(payload, id) {
     const out = { ...payload, records: (payload.records || []).filter(r => r.id !== id) }
     if (payload.table?.styles) out.table = { ...payload.table, styles: pruneStyles(payload.table.styles, { rid: id }) }
+    // A card's own look in the Kanban / Matrix goes with it.
+    for (const v of ['kanban', 'matrix']) {
+        if (!payload[v]?.styles?.card?.[id]) continue
+        const card = { ...payload[v].styles.card }
+        delete card[id]
+        out[v] = { ...payload[v], styles: { ...payload[v].styles, card } }
+    }
     return out
 }
 

@@ -195,3 +195,43 @@ export function cardText(field, v) {
     if (field.type === 'files') return `${v.length} file${v.length === 1 ? '' : 's'}`
     return cellText(field, v)
 }
+
+// ---- card fonts (the Table's style bar over cards) ----
+
+const STYLE_KEYS = ['fontFamily', 'bold', 'italic', 'underline', 'strike', 'color', 'bg', 'scale', 'textAlign']
+const mergeLook = (base, patch) => {
+    const out = { ...base }
+    for (const [k, v] of Object.entries(patch)) { if (v == null || v === false) delete out[k]; else out[k] = v }
+    return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * Card looks live in the view's settings: `styles = { all, card: { [recordId]: look } }`,
+ * a look being the Table's { fontFamily, bold, italic, underline, strike, color, bg, scale, textAlign }.
+ * A card reads all < its own. Styling every card (`rid` null) also drops those keys from each
+ * card's own look, so the new look shows everywhere. A null patch clears.
+ */
+export function applyCardStyle(styles = {}, rid, patch) {
+    const p = patch == null ? Object.fromEntries(STYLE_KEYS.map(k => [k, null])) : patch
+    const out = { ...styles }
+    if (rid == null) {
+        const all = mergeLook(styles.all, p)
+        if (all) out.all = all; else delete out.all
+        if (styles.card) {
+            const clear = Object.fromEntries(Object.keys(p).map(k => [k, null]))
+            const card = {}
+            for (const [id, look] of Object.entries(styles.card)) { const v = mergeLook(look, clear); if (v) card[id] = v }
+            out.card = card
+        }
+    } else {
+        const card = { ...(styles.card || {}) }
+        const v = mergeLook(card[rid], p)
+        if (v) card[rid] = v; else delete card[rid]
+        out.card = card
+    }
+    if (out.card && !Object.keys(out.card).length) delete out.card
+    return out
+}
+
+/** A card's look: every card's, then its own. */
+export const cardLook = (styles, rid) => (styles?.all || styles?.card?.[rid] ? { ...styles?.all, ...styles?.card?.[rid] } : null)
