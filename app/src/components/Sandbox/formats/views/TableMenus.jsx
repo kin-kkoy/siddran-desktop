@@ -208,7 +208,7 @@ function OptionsEditor({ field, source }) {
     )
 }
 
-export function FieldMenu({ field, fields, source, records, config, onConfig, onClose }) {
+export function FieldMenu({ field, fields, source, records, config, onConfig, onMove, onClose }) {
     const [confirm, setConfirm] = useState(false)
     const own = !!source.fieldsEditable
     const idx = fields.findIndex(f => f.id === field.id)
@@ -255,14 +255,14 @@ export function FieldMenu({ field, fields, source, records, config, onConfig, on
                 onClick={() => { onConfig(c => ({ ...c, hidden: [...new Set([...(c.hidden || []), field.id])] })); onClose() }}>
                 <span className={styles.popTick}><LuEyeOff size={13} /></span> Hide field
             </button>
+            <button className={styles.popItem} disabled={idx <= 0} onClick={() => onMove(field.id, idx - 1)}>
+                <span className={styles.popTick}><LuArrowLeft size={13} /></span> Move left
+            </button>
+            <button className={styles.popItem} disabled={idx >= fields.length - 1} onClick={() => onMove(field.id, idx + 1)}>
+                <span className={styles.popTick}><LuArrowRight size={13} /></span> Move right
+            </button>
             {own && (
                 <>
-                    <button className={styles.popItem} disabled={idx <= 0} onClick={() => source.moveField(field.id, idx - 1)}>
-                        <span className={styles.popTick}><LuArrowLeft size={13} /></span> Move left
-                    </button>
-                    <button className={styles.popItem} disabled={idx >= fields.length - 1} onClick={() => source.moveField(field.id, idx + 1)}>
-                        <span className={styles.popTick}><LuArrowRight size={13} /></span> Move right
-                    </button>
                     {!confirm ? (
                         <button className={`${styles.popItem} ${styles.danger}`} disabled={fields.length <= 1} onClick={() => setConfirm(true)}>
                             <span className={styles.popTick}><LuTrash2 size={13} /></span> Delete field
@@ -318,8 +318,8 @@ export function CalcMenu({ field, config, onConfig, onClose }) {
 
 // ---- picking a select / multi-select value in a cell ----
 
-export function OptionPicker({ field, value, canCreate, onChange, onClose }) {
-    const [q, setQ] = useState('')
+export function OptionPicker({ field, value, query = '', canCreate, onChange, onClose }) {
+    const [q, setQ] = useState(query)
     const [hi, setHi] = useState(0)
     const multi = field.type === 'multi'
     const chosen = multi ? (Array.isArray(value) ? value : []) : value
@@ -343,7 +343,7 @@ export function OptionPicker({ field, value, canCreate, onChange, onClose }) {
                             e.preventDefault()
                             if (hi < shown.length) pick(shown[hi])
                             else if (create) pick(q.trim())
-                        } else if (e.key === 'Tab') { e.preventDefault(); onClose() }
+                        } else if (e.key === 'Tab') { e.preventDefault(); onClose(e.shiftKey ? 'prev' : 'next') }
                     }} />
             </div>
             {shown.map((o, i) => (

@@ -16,10 +16,10 @@
 .toolbar {
     flex: none;
     display: flex;
+    flex-wrap: wrap;          /* a narrow widget puts the style bar on its own line, always (never toggling) */
     align-items: center;
     gap: 4px;
     padding: 0 0 6px;
-    overflow: hidden;
 }
 .tool {
     flex: none;
@@ -43,13 +43,16 @@
 
 /* ── the grid ── */
 .scroll {
+    position: relative;       /* rows measure their offsets against it (keyboard scrolling, virtual rows) */
     flex: 1;
     min-height: 0;
     overflow: auto;
+    outline: none;
     border: 1px solid var(--tbl-line);
     border-radius: 7px;
 }
 .grid { width: max-content; min-width: 100%; }
+.body { position: relative; }
 .trow {
     display: grid;
     grid-template-columns: var(--cols);
@@ -79,15 +82,40 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 0 0.55em;
+    padding: 0 0.2em 0 0.55em;
     border: none;
     background: transparent;
     color: var(--text-secondary);
     font: 600 0.78em var(--font-body);
     letter-spacing: 0.02em;
     text-align: left;
+    cursor: grab;
+}
+.headMenu {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    padding: 0;
+    margin-right: 4px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85em;
     cursor: pointer;
 }
+.head:hover .headMenu { color: var(--text-primary); }
+.headMenu:hover { background-color: var(--bg-hover); color: var(--accent-warning); }
+.headSel { background-color: color-mix(in srgb, var(--accent-warning) 22%, transparent); }
+.headSel .headBtn { color: var(--text-primary); }
+.corner {
+    border: none;
+    background: transparent;
+    cursor: cell;
+}
+.corner:hover { background-color: color-mix(in srgb, var(--accent-warning) 18%, transparent); }
 .headBtn:hover { color: var(--text-primary); background-color: var(--bg-hover); }
 .headName { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .resizer {
@@ -288,7 +316,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     border-top: 1px solid var(--tbl-line);
     background-color: var(--bg-surface-alt);
 }
-.group .calcRow { position: static; background-color: transparent; border-top: none; border-bottom: 1px solid var(--tbl-line); }
+.gcalc { position: static; background-color: transparent; border-top: none; border-bottom: 1px solid var(--tbl-line); }
 .calcCell {
     display: flex;
     align-items: center;
@@ -441,3 +469,77 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     user-select: text;
 }
 .longEditor:focus { border-color: var(--accent-warning); }
+
+/* ── selection ── */
+.cellSel { background-color: color-mix(in srgb, var(--accent-warning) 14%, transparent); }
+.cellFocus { box-shadow: inset 0 0 0 2px var(--accent-warning); }
+.rowSel .gutter { background-color: color-mix(in srgb, var(--accent-warning) 22%, transparent); }
+.cell { cursor: cell; }
+.cell[aria-disabled] { cursor: default; }
+
+/* The row grip: select the row; drag to move it. Sized off the widget's text size. */
+.grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.6em;
+    padding: 0;
+    border: none;
+    border-radius: 0.3em;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.95em;
+    cursor: grab;
+    opacity: 0.6;
+}
+.trow:hover .grip { opacity: 1; }
+.grip:hover { color: var(--text-primary); background-color: var(--bg-hover); }
+.rowEnd { display: flex; align-items: center; justify-content: center; }
+
+/* ── dragging rows and columns ── */
+.dragging { opacity: 0.4; }
+.dropBefore { box-shadow: inset 0 3px 0 var(--accent-warning); }
+.dropAfter { box-shadow: inset 0 -3px 0 var(--accent-warning); }
+.dropLeft { box-shadow: inset 3px 0 0 var(--accent-warning); }
+.dropRight { box-shadow: inset -3px 0 0 var(--accent-warning); }
+
+/* ── the style bar (fonts for selected cells) ── */
+.styleBar { display: flex; align-items: center; gap: 2px; }
+.styleBarOff { opacity: 0.45; }
+.styleBtn {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 3px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: 13px var(--font-body);
+    cursor: pointer;
+}
+.styleBtn:hover:not(:disabled) { background-color: var(--bg-hover); color: var(--text-primary); }
+.styleBtn:disabled { cursor: default; }
+.styleOn { color: var(--accent-warning); border-color: rgba(240, 184, 64, 0.4); }
+.styleSelect {
+    height: 24px;
+    max-width: 78px;
+    padding: 0 4px;
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    background-color: var(--bg-surface);
+    color: var(--text-secondary);
+    font: 11.5px var(--font-body);
+    color-scheme: dark light;
+}
+.styleScale { min-width: 34px; text-align: center; font: 10.5px var(--font-mono); color: var(--text-muted); }
+.colorA { font-weight: 700; line-height: 1; padding-bottom: 1px; border-bottom: 3px solid; }
+.fillSwatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--border-strong); }
+.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 6px; }
+.swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
+.swatch:hover { outline: 2px solid var(--accent-warning); outline-offset: 1px; }
+.swatchNone { background: linear-gradient(135deg, transparent 45%, var(--accent-danger) 45%, var(--accent-danger) 55%, transparent 55%); }

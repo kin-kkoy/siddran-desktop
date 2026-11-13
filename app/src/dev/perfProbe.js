@@ -7,6 +7,7 @@
 //   frames:<boardId> — sticky attachment on frames (runFrames)
 //   top:<boardId>    — things drawn on a widget, on the top canvas (runTop)
 //   table:<boardId>  — the Table view: fields, cells, sort, filter, group (runTable)
+//   grid:<boardId>   — Table selection, cell fonts, row/column drag, long tables (runGrid)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -512,7 +513,7 @@ async function runTable() {
     const popBtn = (txt) => [...(pop()?.querySelectorAll('button') || [])].find(b => b.textContent.trim().startsWith(txt))
     const setSel = (el, v) => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('change', { bubbles: true })) }
     const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
-    const heads = () => [...W().querySelectorAll('[role="columnheader"] button')].map(b => b.textContent.trim())
+    const heads = () => [...W().querySelectorAll('[role="columnheader"] button:first-child')].map(b => b.textContent.trim())
     const dataRows = () => [...W().querySelectorAll('[role="row"]')].filter(r => r.querySelector('[role="gridcell"]'))
     const cellOf = (row, name) => row.children[1 + heads().findIndex(h => h.replace(/ [↑↓]$/, '') === name)]
     const texts = (name) => dataRows().map(r => cellOf(r, name)?.textContent.trim())
@@ -532,18 +533,25 @@ async function runTable() {
     }
     await step('fields', { heads: heads(), fields: P()?.fields?.map(f => [f.name, f.type]) })
 
-    // Points: click, type, Enter moves down; Tab moves right into Tags (a picker).
-    cellOf(dataRows()[0], 'Points').querySelector('button').click(); await sleep(200)
-    let inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '5'); kd(inp, 'Enter'); await sleep(300)
+    // Points: select a cell, type (the key starts the edit), Enter commits and moves down; Tab moves right.
+    const grid = () => W().querySelector('[role="grid"]')
+    const press = (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(ptr('pointerdown', r.left + 4, r.top + 4)); window.dispatchEvent(ptr('pointerup', r.left + 4, r.top + 4)) }
+    press(cellOf(dataRows()[0], 'Points').querySelector('button')); await sleep(200)
+    kd(grid(), '5'); await sleep(200)
+    let inp = W().querySelector('input[aria-label="Points"]'); kd(inp, 'Enter'); await sleep(300)
+    kd(grid(), '1'); await sleep(200)
     inp = W().querySelector('input[aria-label="Points"]'); const downOk = dataRows()[1].contains(inp)
     setInput(inp, '1,200'); kd(inp, 'Enter'); await sleep(300)
-    inp = W().querySelector('input[aria-label="Points"]'); setInput(inp, '3'); kd(inp, 'Tab'); await sleep(400)
+    kd(grid(), '3'); await sleep(200)
+    inp = W().querySelector('input[aria-label="Points"]'); kd(inp, 'Tab'); await sleep(300)
+    kd(grid(), 'Enter'); await sleep(400)
     const picker = pop()
     const tabToTags = !!picker && picker.getAttribute('aria-label') === 'Tags options'
     if (picker) { const q = picker.querySelector('input'); setInput(q, 'ui'); kd(q, 'Enter'); await sleep(300); setInput(q, 'api'); kd(q, 'Enter'); await sleep(300) }
     key('Escape'); await sleep(300)
-    // Status of row 1 → Done (picked from the list).
-    cellOf(dataRows()[0], 'Status').querySelector('button').click(); await sleep(300)
+    // Status of row 1 → Done (select, Enter, pick).
+    press(cellOf(dataRows()[0], 'Status').querySelector('button')); await sleep(200)
+    kd(grid(), 'Enter'); await sleep(300)
     ;[...pop().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done')?.click(); await sleep(300)
     await step('cells', { downOk, tabToTags, values: values(), points: texts('Points'), tagOptions: P()?.fields?.find(f => f.name === 'Tags')?.options })
 
@@ -579,7 +587,7 @@ async function runTable() {
     await step('grouped', { groupBy: P()?.table?.groupBy, groups, calcs: P()?.table?.calcs, sums })
 
     // Points → Text: values convert, the filter on it goes, the sort stays.
-    W().querySelector('[role="columnheader"] button[title^="Points"]').click(); await sleep(300)
+    W().querySelector('[role="columnheader"] button[aria-label="Points settings"]').click(); await sleep(300)
     setSel(pop().querySelector('select[aria-label="Field type"]'), 'text'); await sleep(400)
     key('Escape'); await sleep(200)
     await step('retyped', { type: P()?.fields?.find(f => f.id === pts)?.type, values: values().map(v => v[pts]), filters: P()?.table?.filters, sorts: P()?.table?.sorts })
@@ -611,6 +619,118 @@ async function runTable() {
     send('done', true)
 }
 
+// ── grid:<boardId> — checkpoint 1 of the Table follow-up: selection, cell
+// fonts, Delete, dragging rows and columns, long tables drawing only what's
+// in view. Same conventions as table: (hidden window, live store).
+async function runGrid() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(1000)
+    const fid = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const P = () => live().find(i => i.id === fid)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${fid}"]`)
+    const G = () => W().querySelector('[role="grid"]')
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const rows = () => [...W().querySelectorAll('[role="row"][data-ri]')]
+    const heads = () => [...W().querySelectorAll('[role="columnheader"]')]
+    const cell = (ri, ci) => rows()[ri]?.children[1 + ci]
+    const center = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] }
+    const press = (el, o = {}) => { const [x, y] = center(el); el.dispatchEvent(ptr('pointerdown', x, y, o)); window.dispatchEvent(ptr('pointerup', x, y, o)) }
+    const nSel = () => W().querySelectorAll('[class*="cellSel"]').length
+    const titles = () => rows().map(r => r.children[1].textContent.trim())
+    const add = W().querySelector('input[aria-label="New record"]')
+    for (const t of ['Alpha', 'Bravo', 'Charlie', 'Delta']) { setInput(add, t); kd(add, 'Enter'); await sleep(250) }
+
+    // Select a cell, extend with Shift+click, drag-select, arrows.
+    press(cell(0, 0).querySelector('button')); await sleep(150)
+    const one = nSel()
+    press(cell(2, 1).querySelector('button'), { shiftKey: true }); await sleep(150)
+    const block = nSel()
+    const a = cell(1, 0).querySelector('button'), b = cell(3, 2).querySelector('button')
+    const [ax, ay] = center(a)
+    a.dispatchEvent(ptr('pointerdown', ax, ay))
+    b.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerId: 1, pointerType: 'mouse' })); await sleep(100)
+    window.dispatchEvent(ptr('pointerup', ax, ay)); await sleep(150)
+    const dragged = nSel()
+    kd(G(), 'ArrowUp'); await sleep(150)
+    const afterArrow = nSel()
+    await step('select', { one, block, dragged, afterArrow })
+
+    // A whole row (grip) and a whole column (header click), then bold on the column.
+    press(rows()[1].querySelector('button[aria-label="Select row"]')); await sleep(200)
+    const rowCells = nSel(), rowMarked = rows()[1].className.includes('rowSel')
+    press(heads()[0].querySelector('button')); await sleep(200)
+    const colCells = nSel(), colMarked = heads()[0].className.includes('headSel')
+    W().querySelector('button[aria-label^="Bold"]').click(); await sleep(300)
+    const boldCol = P()?.table?.styles?.col
+    const weight = getComputedStyle(cell(0, 0).querySelector('button')).fontWeight
+    // A block of cells → Serif + a fill; Ctrl+I on it.
+    press(cell(0, 1).querySelector('button')); await sleep(100)
+    press(cell(1, 2).querySelector('button'), { shiftKey: true }); await sleep(150)
+    const fsel = W().querySelector('select[aria-label="Font"]')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(fsel, 'serif'); fsel.dispatchEvent(new Event('change', { bubbles: true })); await sleep(300)
+    kd(G(), 'i', { ctrlKey: true }); await sleep(300)
+    const cellsStyled = Object.keys(P()?.table?.styles?.cell || {}).length
+    const family = getComputedStyle(cell(0, 1).querySelector('button')).fontFamily
+    await step('styles', { rowCells, rowMarked, colCells, colMarked, boldCol, weight, cellsStyled, family, sample: Object.values(P()?.table?.styles?.cell || {})[0] })
+
+    // Type into a selected status cell? No — Delete clears a block of titles.
+    press(cell(2, 0).querySelector('button')); await sleep(100)
+    press(cell(3, 0).querySelector('button'), { shiftKey: true }); await sleep(100)
+    kd(G(), 'Delete'); await sleep(300)
+    const cleared = P().records.map(r => r.values.title ?? null)
+    key('z', { ctrlKey: true }); await sleep(300)
+    await step('delete', { cleared, afterUndo: P().records.map(r => r.values.title ?? null) })
+
+    // Drag row 4 (Delta) above row 1 by its grip.
+    const grip = rows()[3].querySelector('button[aria-label="Select row"]')
+    const [gx, gy] = center(grip)
+    const t0 = rows()[0].getBoundingClientRect()
+    grip.dispatchEvent(ptr('pointerdown', gx, gy))
+    for (let i = 1; i <= 8; i++) { await frame(); grip.dispatchEvent(ptr('pointermove', gx, gy + (t0.top + 3 - gy) * i / 8)) }
+    grip.dispatchEvent(ptr('pointerup', gx, t0.top + 3)); await sleep(400)
+    const rowOrder = titles()
+    // Drag the Due column (3rd) before Title (1st) by its header.
+    const due = heads()[2].querySelector('button'), h0 = heads()[0].getBoundingClientRect()
+    const [dx, dy] = center(due)
+    due.dispatchEvent(ptr('pointerdown', dx, dy))
+    for (let i = 1; i <= 8; i++) { await frame(); due.dispatchEvent(ptr('pointermove', dx + (h0.left + 4 - dx) * i / 8, dy)) }
+    due.dispatchEvent(ptr('pointerup', h0.left + 4, dy)); await sleep(400)
+    await step('reorder', { rowOrder, orders: P().records.map(r => [r.values.title, r.order]), fieldOrder: P()?.table?.fieldOrder, heads: heads().map(h => h.textContent.trim()) })
+
+    // A long table: 400 records, only the rows in view drawn; an edit still lands.
+    const t1 = performance.now()
+    for (let i = 0; i < 400; i++) { setInput(add, `Row ${i + 1}`); kd(add, 'Enter'); if (i % 25 === 0) await sleep(30) }
+    await sleep(1500)
+    const addMs = Math.round(performance.now() - t1)
+    const drawn = rows().length
+    const sc = G()
+    sc.scrollTop = sc.scrollHeight; sc.dispatchEvent(new Event('scroll')); await sleep(600)
+    const lastTitles = rows().slice(-2).map(r => r.children[1 + heads().findIndex(h => h.textContent.trim().startsWith('Title'))]?.textContent.trim())
+    sc.scrollTop = 0; sc.dispatchEvent(new Event('scroll')); await sleep(600)
+    const ti = heads().findIndex(h => h.textContent.trim().startsWith('Title'))
+    press(cell(0, ti).querySelector('button')); await sleep(100)
+    const e0 = performance.now()
+    kd(G(), 'X'); await sleep(50)
+    const inp = W().querySelector('input[aria-label="Title"]'); setInput(inp, 'Edited'); kd(inp, 'Enter')
+    await frame(); await frame()
+    const editMs = Math.round(performance.now() - e0)
+    await sleep(300)
+    await step('long', { records: P().records.length, drawn, addMs, lastTitles, editMs, firstTitle: rows()[0].children[1 + ti]?.textContent.trim(), spacers: [...W().querySelectorAll('[aria-hidden="true"]')].length })
+    send('done', true)
+}
+
+if (spec.startsWith('grid:') && boardId) runGrid().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('table:') && boardId) runTable().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('top:') && boardId) runTop().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('frames:') && boardId) runFrames().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

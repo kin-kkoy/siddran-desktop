@@ -26,6 +26,8 @@
  * (desktop/sync/merge.js `mergeSandboxItems`).
  */
 
+import { pruneStyles } from './layout'
+
 export const FORMAT_KIND = 'format'
 export const isFormat = (it) => it?.type === 'shape' && it.payload?.kind === FORMAT_KIND
 
@@ -88,7 +90,18 @@ export function updateRecord(payload, id, patch, { at = nowISO() } = {}) {
 }
 
 export function removeRecord(payload, id) {
-    return { ...payload, records: (payload.records || []).filter(r => r.id !== id) }
+    const out = { ...payload, records: (payload.records || []).filter(r => r.id !== id) }
+    if (payload.table?.styles) out.table = { ...payload.table, styles: pruneStyles(payload.table.styles, { rid: id }) }
+    return out
+}
+
+/** Several records' patches as one change (clearing a selection: one undo step). */
+export function updateRecords(payload, patches, { at = nowISO() } = {}) {
+    const by = new Map(patches.map(p => [p.id, p.patch]))
+    return {
+        ...payload,
+        records: (payload.records || []).map(r => by.has(r.id) ? { ...r, values: { ...r.values, ...by.get(r.id) }, updated_at: at } : r),
+    }
 }
 
 /** The text a record is known by — its title field, else its first text value. */

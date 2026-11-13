@@ -14,13 +14,16 @@
  *     hidden:  [fieldId],                     // columns not shown
  *     widths:  { [fieldId]: px },             // at the default text size
  *     calcs:   { [fieldId]: calcId },         // footer calculations
- *     wrap:    boolean,                       // wrap long cell text
+ *     wrap:    boolean,                       // wrap cell text (absent = wrap)
+ *     fieldOrder: [fieldId],                  // column order (layout.js)
+ *     styles:  { col, row, cell },            // fonts per column/row/cell (layout.js)
  *   }
  *
  * A widget linked to tasks keeps its settings here too (the tasks have no
  * room for them), keyed by the task fields' ids.
  */
 import { isEmptyValue, cellText, TEXTLIKE, formatNumber } from './fields'
+import { orderFields, orderRecords } from './layout'
 
 export const tableConfig = (payload) => payload?.table || {}
 
@@ -246,14 +249,16 @@ export function calculate(records, field, calc) {
 export function tableRows(source, config = {}, { today = todayDay(), keep } = {}) {
     const fields = source.fields
     const hidden = new Set(config.hidden || [])
-    const shown = fields.filter(f => !hidden.has(f.id))
+    const ordered = orderFields(fields, config.fieldOrder)
+    const shown = ordered.filter(f => !hidden.has(f.id))
+    const records = orderRecords(source.records)
     // `keep`: records just added here stay visible even if the filter would hide them.
-    let rows = filterRecords(source.records, fields, config, today)
+    let rows = filterRecords(records, fields, config, today)
     if (keep?.size) {
         const inRows = new Set(rows.map(r => r.id))
-        rows = source.records.filter(r => inRows.has(r.id) || keep.has(r.id))
+        rows = records.filter(r => inRows.has(r.id) || keep.has(r.id))
     }
     rows = sortRecords(rows, fields, config.sorts)
     const groupField = fields.find(f => f.id === config.groupBy)
-    return { fields: shown, rows, total: source.records.length, groupField, groups: groupRecords(rows, groupField) }
+    return { fields: shown, ordered, rows, total: source.records.length, groupField, groups: groupRecords(rows, groupField) }
 }

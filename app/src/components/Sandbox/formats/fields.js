@@ -1,3 +1,5 @@
+import { pruneStyles } from './layout'
+
 /**
  * Field types and field edits for a Format's own records (spec §13.4.2).
  *
@@ -276,6 +278,8 @@ function pruneConfig(payload, fieldId, { type = false } = {}) {
         if (c.groupBy === fieldId) delete next.groupBy
         if (c.hidden) next.hidden = c.hidden.filter(h => h !== fieldId)
         if (c.widths && fieldId in c.widths) { next.widths = { ...c.widths }; delete next.widths[fieldId] }
+        if (c.fieldOrder) next.fieldOrder = c.fieldOrder.filter(id => id !== fieldId)
+        if (c.styles) next.styles = pruneStyles(c.styles, { fid: fieldId })
     }
     return { ...payload, table: next }
 }

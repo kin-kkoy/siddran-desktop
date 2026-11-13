@@ -22,7 +22,8 @@
  * tasks.siddran directly. Linked rows can't be deleted from a board: that
  * would delete real tasks from a widget, too easy to do by accident.
  */
-import { addRecord, updateRecord, removeRecord, newRecordId } from './formats'
+import { addRecord, updateRecord, updateRecords, removeRecord, newRecordId } from './formats'
+import { moveRecord } from './layout'
 import * as F from './fields'
 import { fromPickerValue, toPickerValue } from '../../../utils/deadline'
 
@@ -78,6 +79,9 @@ export function ownSource(payload, commit) {
         // A new option typed into a cell joins its field in the same undo step.
         update: (id, patch) => commit(p => F.ensureOptions(updateRecord(p, id, patch), patch)),
         remove: (id) => commit(p => removeRecord(p, id)),
+        updateMany: (list) => { if (list.length) commit(p => list.reduce((q, x) => F.ensureOptions(q, x.patch), updateRecords(p, list))) },
+        canReorder: true,
+        moveRecord: (id, beforeId) => commit(p => moveRecord(p, id, beforeId)),
         fieldsEditable: true,
         canAddField: fields.length < F.MAX_FIELDS,
         addField: (def) => {

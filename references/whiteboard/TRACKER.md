@@ -904,4 +904,69 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     can't paint over other cards).
   - Grid lines a step stronger (`--tbl-line`, from --border-strong).
   Not seen on screen (user at the computer); lint 25, 664 tests, build pass.
+- 2026-11-13 · session 6 · **Table follow-up, checkpoint 1 of 2** (the user
+  asked for: drag rows AND columns, paste/CSV, detail panel, basic formulas,
+  fonts per selected cells, select whole rows/columns, attachments, and
+  both speed fixes; agreed: two checkpoints). Checkpoint 1 = speed,
+  selection, fonts, reordering. Checkpoint 2 = formulas (a formula COLUMN,
+  option A, Notion-style; plus making the Calculate row discoverable: faint
+  "Σ Calculate" always, a "Show totals row" toggle), attachment field,
+  detail panel, paste from a spreadsheet + CSV import with a preview.
+  - **Spreadsheet-style editing now:** a click SELECTS a cell; a second click,
+    double-click, Enter, F2 or just typing edits it (typing replaces the
+    value). Arrows move, Shift+arrows / Shift+click / drag extend a block,
+    Tab moves right, Enter commits and moves down, Esc cancels (a second
+    Esc clears the selection, a third leaves full screen). Delete clears the
+    block (one undo step; linked tasks never lose their title). Ctrl+A
+    selects all, Ctrl+C copies the block as tab-separated text. A press
+    outside the widget ends the selection. Checkboxes still toggle in one
+    click.
+  - **Whole rows / columns:** the row grip (left) selects its row; a column
+    header click selects its column (Shift extends); the top-left corner
+    selects everything. A header's ⋮ button (or right-click) opens the
+    field menu that a header click used to open.
+  - **Fonts per cell, row or column** (`layout.js`, tested): a style bar
+    always in the table's toolbar (dimmed until something is selected —
+    nothing jumps): font, bold, italic, underline, strike, text colour,
+    fill, size (60–240 %), alignment, clear. Ctrl+B/I/U. Kept in
+    `payload.table.styles` as { col, row, cell }; a cell reads column <
+    row < cell; styling a whole column or row clears the same keys from
+    the cells inside it. Styles go with a deleted record or field.
+  - **Reordering:** drag a row by its grip (own records, not while sorted —
+    the sort decides the order then); drag a column by its header (also for
+    linked tasks). Rows: each record may carry `order`; a move sets only the
+    moved record's (stamped), so merging stays per record. Columns:
+    `payload.table.fieldOrder` (a view setting; the fields array is
+    untouched). The field menu's Move left/right use the same order.
+  - The trash button moved to the right end of the row; the grip took its
+    place on the left.
+  - **Speed:** rows are memoized (`views/table/Row.jsx`): an edit re-renders
+    its own row (linked tasks compare by value, since their records are
+    rebuilt on every change). Over 200 rows only those in view (+500 px)
+    are drawn (`views/table/useVirtualRows.js`), with spacers for the
+    rest; heights are measured as rows appear (wrap makes them differ), so
+    the scrollbar can settle slightly on a first scroll through.
+  - Checked in a hidden window (`grid:` and `table:` probes, Bag copy,
+    localStorage backed up and restored):
+    - select one cell → 1; Shift+click → a 3×2 block (6); drag → 3×3 (9);
+      an arrow → 1;
+    - grip → whole row (3 cells, marked); header → whole column (4,
+      marked); Bold → `styles.col.title.bold`, weight 700 on screen;
+    - a 2×2 block → Serif + Ctrl+I: 4 cell styles, Lora on screen;
+    - Delete on 2 titles cleared them; Ctrl+Z restored them;
+    - row 4 dragged above row 1 → Delta, Alpha, Bravo, Charlie (only
+      Delta got a new `order`); Due dragged before Title →
+      `fieldOrder` due, title, status;
+    - 404 records → 20 rows drawn; scrolled to the bottom → Row 399, 400
+      shown; a type-to-edit on row 1 landed;
+    - the whole `table:` walk passes on the new model (type-to-edit,
+      Enter down, Tab then Enter opens the picker, sort, filter, group,
+      sums, retype, resize + undo, wheel, linked).
+    Two bugs found and fixed on the way: a click on the grip or a header
+    didn't count (the release was only heard on the element itself; now on
+    the window), and a long table didn't follow the scroll in a hidden
+    window (the read waited for a frame; it now reads on the scroll event).
+    The console's "key prop spread into JSX" warning comes from the
+    sidebar's notebook list (useDragReorder), not the table — left alone.
+    Desktop 676 tests, lint 25, build and `cargo check` pass.
 
