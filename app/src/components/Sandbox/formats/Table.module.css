@@ -4,6 +4,8 @@
    or backdrop-filter (they blur on the user's 0.83-scaled display). */
 
 .table {
+    /* Grid lines: a step stronger than the widget's own dividers, so rows and columns read. */
+    --tbl-line: color-mix(in srgb, var(--border-strong) 80%, transparent);
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -44,7 +46,7 @@
     flex: 1;
     min-height: 0;
     overflow: auto;
-    border: 1px solid var(--border-default);
+    border: 1px solid var(--tbl-line);
     border-radius: 7px;
 }
 .grid { width: max-content; min-width: 100%; }
@@ -53,7 +55,7 @@
     grid-template-columns: var(--cols);
     align-items: stretch;
     min-height: 2.2em;
-    border-bottom: 1px solid var(--border-default);
+    border-bottom: 1px solid var(--tbl-line);
 }
 .trow > * { min-width: 0; }
 .trow:not(.headRow):not(.calcRow):not(.addRow):hover { background-color: var(--bg-hover); }
@@ -69,7 +71,7 @@
 .head {
     position: relative;
     display: flex;
-    border-left: 1px solid var(--border-default);
+    border-left: 1px solid var(--tbl-line);
 }
 .headBtn {
     flex: 1;
@@ -103,12 +105,13 @@
     align-items: center;
     justify-content: center;
     border: none;
-    border-left: 1px solid var(--border-default);
+    border-left: 1px solid var(--tbl-line);
     background: transparent;
-    color: var(--text-muted);
+    color: var(--accent-warning);
     cursor: pointer;
 }
-.addField:hover { color: var(--accent-warning); background-color: var(--bg-hover); }
+.addField:hover { background-color: var(--bg-hover); }
+.addMark { color: var(--accent-warning); }
 
 .gutter {
     display: flex;
@@ -116,25 +119,27 @@
     justify-content: center;
     color: var(--text-muted);
 }
+/* Delete a record: always there (dimmed until the row is hovered), sized off the widget's text size. */
 .rowDel {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 1.6em;
+    height: 1.6em;
     padding: 0;
     border: none;
-    border-radius: 4px;
+    border-radius: 0.3em;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-secondary);
+    font-size: 0.95em;
     cursor: pointer;
-    opacity: 0;
+    opacity: 0.55;
 }
 .trow:hover .rowDel { opacity: 1; }
-.rowDel:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.12); }
+.rowDel:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.16); }
 
 /* ── cells ── */
-.cellWrap { position: relative; display: flex; border-left: 1px solid var(--border-default); }
+.cellWrap { position: relative; display: flex; border-left: 1px solid var(--tbl-line); }
 .cell {
     flex: 1;
     min-width: 0;
@@ -151,7 +156,7 @@
     overflow: hidden;
     white-space: nowrap;
 }
-div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--border-default); }
+div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line); }
 .cell:disabled { cursor: default; color: var(--text-primary); }
 .cell:focus-visible { outline: 2px solid var(--accent-warning); outline-offset: -2px; }
 .cellText { overflow: hidden; text-overflow: ellipsis; }
@@ -235,7 +240,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--border-def
     min-height: 2em;
     padding: 0 0.5em;
     border: none;
-    border-bottom: 1px solid var(--border-default);
+    border-bottom: 1px solid var(--tbl-line);
     background-color: var(--bg-elevated);
     color: var(--text-secondary);
     font: 600 0.82em var(--font-body);
@@ -280,10 +285,10 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--border-def
     z-index: 1;
     min-height: 1.9em;
     border-bottom: none;
-    border-top: 1px solid var(--border-default);
+    border-top: 1px solid var(--tbl-line);
     background-color: var(--bg-surface-alt);
 }
-.group .calcRow { position: static; background-color: transparent; border-top: none; border-bottom: 1px solid var(--border-default); }
+.group .calcRow { position: static; background-color: transparent; border-top: none; border-bottom: 1px solid var(--tbl-line); }
 .calcCell {
     display: flex;
     align-items: center;

@@ -8,6 +8,7 @@ import { viewComponent } from './views'
 import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
 import { cutLabel } from '../selection/attach'
+import { stepFontSize } from '../text/textStyle'
 
 /**
  * A Format widget's chrome and body — used on the board (a window you move by
@@ -15,7 +16,7 @@ import { cutLabel } from '../selection/attach'
  * (the same widget, full screen). The body is whichever view `payload.view`
  * names (views/index.js), fed one data source (dataSource.js).
  */
-function Chrome({ item, source, commit, focus, renaming, onRenameDone, onToggleFocus, onPickSource, onTitlePointerDown }) {
+function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming, onRenameDone, onToggleFocus, onPickSource, onTitlePointerDown }) {
     const { bundles } = useTasksApi()
     const p = item.payload || {}
     const [menu, setMenu] = useState(false)
@@ -56,6 +57,14 @@ function Chrome({ item, source, commit, focus, renaming, onRenameDone, onToggleF
                     <span className={styles.srcCount}>{source.records.length}</span>
                     <LuChevronDown size={11} />
                 </button>
+                {focus && onFocusSize && (
+                    // Full screen has its own text size (payload.focusFontSize), so a big table on the board can still fit here.
+                    <span className={styles.sizeStep}>
+                        <button className={styles.barBtn} onClick={() => onFocusSize(-1)} title="Smaller text (Ctrl+−)" aria-label="Smaller text">−</button>
+                        <span className={styles.sizeValue} title="Full-screen text size">{focusSize}</span>
+                        <button className={styles.barBtn} onClick={() => onFocusSize(1)} title="Bigger text (Ctrl+=)" aria-label="Bigger text">+</button>
+                    </span>
+                )}
                 <button className={styles.barBtn} onClick={onToggleFocus} title={focus ? 'Back to the board (Esc)' : 'Full screen (Enter)'}
                     aria-label={focus ? 'Exit full screen' : 'Full screen'}>
                     {focus ? <LuMinimize2 size={15} /> : <LuMaximize2 size={13} />}
@@ -74,6 +83,8 @@ function Chrome({ item, source, commit, focus, renaming, onRenameDone, onToggleF
 // The size of a widget's contents (payload.fontSize, set from the floating bar).
 const FORMAT_FONT = 15
 const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_FONT}px` })
+// Full screen: its own size once set, else 15% over the widget's.
+const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || FORMAT_FONT) * 1.15)
 
 function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
@@ -125,8 +136,15 @@ function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, o
 export function FormatFocus({ item, onClose, onCommit }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
+    const size = focusFont(item)
+    const stepFocus = useCallback((dir) => commit(p => ({ ...p, focusFontSize: stepFontSize(p.focusFontSize || size, dir) })), [commit, size])
     useEffect(() => {
         const onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && ['=', '+', '-', '_'].includes(e.key)) {
+                e.preventDefault(); e.stopPropagation()
+                stepFocus(e.key === '=' || e.key === '+' ? 1 : -1)
+                return
+            }
             if (e.key !== 'Escape') return
             const t = document.activeElement
             if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return   // the field takes its own Esc
@@ -135,11 +153,11 @@ export function FormatFocus({ item, onClose, onCommit }) {
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-    }, [onClose])
+    }, [onClose, stepFocus])
     return createPortal(
         <div className={styles.focusBackdrop} onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-            <div className={styles.focusPanel} role="dialog" aria-label={item.payload?.title || 'Widget'} style={fontVar(item)}>
-                <Chrome item={item} source={source} commit={commit} focus onToggleFocus={onClose}
+            <div className={styles.focusPanel} role="dialog" aria-label={item.payload?.title || 'Widget'} style={{ '--fmt-font': `${size}px` }}>
+                <Chrome item={item} source={source} commit={commit} focus focusSize={size} onFocusSize={stepFocus} onToggleFocus={onClose}
                     onPickSource={(s) => commit(p => ({ ...p, source: s }))}
                     onRenameDone={(v) => { if (v && v !== item.payload?.title) commit(p => ({ ...p, title: v })) }} />
             </div>

@@ -15,6 +15,7 @@
     font-family: var(--font-body);
     -webkit-user-select: none;
     user-select: none;
+    isolation: isolate;   /* z-index inside (the badge, sticky table rows) stays inside */
 }
 .selected { border-color: var(--accent-warning); }
 
@@ -260,8 +261,11 @@
 }
 .focusPanel .bar { height: 44px; padding: 0 10px 0 16px; cursor: default; }
 .focusPanel .barTitle { font-size: 16px; }
-/* Full screen reads a little larger than the widget's own size. */
-.focusPanel .body { padding: 10px 16px 16px; font-size: calc(var(--fmt-font, 15px) * 1.15); }
+/* Full screen has its own text size (payload.focusFontSize; FormatWidget focusFont). */
+.focusPanel .body { padding: 10px 16px 16px; }
+.sizeStep { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
+.sizeStep .barBtn { font-size: 16px; }
+.sizeValue { min-width: 22px; text-align: center; font: 12px var(--font-mono); color: var(--text-secondary); }
 
 /* Things attached to the widget but cut off by its edge. */
 .hiddenBadge {
@@ -275,4 +279,5 @@
     background-color: var(--bg-elevated);
     border: 1px solid rgba(240, 184, 64, 0.4);
     pointer-events: none;
+    z-index: 10;   /* over the table's sticky header and footer, however small the widget gets */
 }

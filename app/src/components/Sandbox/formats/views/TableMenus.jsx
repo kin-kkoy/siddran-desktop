@@ -173,7 +173,7 @@ export function FieldsMenu({ fields, config, onConfig }) {
                 )
             })}
             <div className={styles.popRowCheck}>
-                <label><input type="checkbox" checked={!!config.wrap} onChange={(e) => onConfig(c => ({ ...c, wrap: e.target.checked }))} /> Wrap long text</label>
+                <label><input type="checkbox" checked={config.wrap !== false} onChange={(e) => onConfig(c => ({ ...c, wrap: e.target.checked }))} /> Wrap long text</label>
             </div>
             {hidden.size > 0 && <div className={styles.popActions}><button className={styles.popBtnQuiet} onClick={() => onConfig(c => ({ ...c, hidden: [] }))}>Show all</button></div>}
         </>

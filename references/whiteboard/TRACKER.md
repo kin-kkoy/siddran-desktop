@@ -890,4 +890,18 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     7. Long text and URL cells (the ↗ button asks before opening).
     8. Link it to All tasks: edit a title, status, priority, due date.
     9. Full screen (Enter) with a big table — is it readable?
+- 2026-11-13 · session 6 · user feedback on the Table (the rest works):
+  - Record delete is a **trash icon**, sized in em, so it follows the
+    widget's text size; it's always shown (dimmed until the row is hovered).
+    The + in the header and the add row are in the accent colour.
+  - **Full screen has its own text size**: − n + in its title bar, or
+    Ctrl+= / Ctrl+−, stored as `payload.focusFontSize` (absent = 15% over
+    the widget's size, as before).
+  - **Wrap is the default** (`table.wrap` absent = wrap; the Fields menu
+    toggle stores false).
+  - The "cropped / out of view" badge sits above the table's sticky header
+    and footer (z-index, and the widget isolates its stacking so the badge
+    can't paint over other cards).
+  - Grid lines a step stronger (`--tbl-line`, from --border-strong).
+  Not seen on screen (user at the computer); lint 25, 664 tests, build pass.
 

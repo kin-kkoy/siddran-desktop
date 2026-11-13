@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { LuFilter, LuArrowUpDown, LuRows3, LuColumns3, LuPlus, LuX, LuChevronRight, LuChevronDown, LuExternalLink, LuCheck } from 'react-icons/lu'
+import { LuFilter, LuArrowUpDown, LuRows3, LuColumns3, LuPlus, LuChevronRight, LuChevronDown, LuExternalLink, LuCheck, LuTrash2 } from 'react-icons/lu'
 import styles from '../Table.module.css'
 import Popover from '../Popover'
 import { tableConfig, tableRows, calculate, activeFilterCount, calcsFor } from '../query'
@@ -116,12 +116,13 @@ function TableView({ source, item, onConfig }) {
     const fields = t.fields
     const all = source.fields
     const w = (f) => (resize?.fid === f.id ? resize.w : widthOf(f, config))
-    const cols = ['2em', ...fields.map(f => em(w(f))), '2.4em'].join(' ')
+    const cols = ['2.2em', ...fields.map(f => em(w(f))), '2.4em'].join(' ')
     const primary = all.find(f => f.id === 'title') || all.find(f => TEXTLIKE.has(f.type))
     const editFields = fields.filter(f => source.editable.has(f.id) && f.type !== 'check')
     const flat = useMemo(() => t.groups.flatMap(g => collapsed.has(g.key) ? [] : g.records.map(r => ({ gk: g.key, rid: r.id }))), [t.groups, collapsed])
     const recById = useMemo(() => new Map(source.records.map(r => [r.id, r])), [source.records])
     const anyCalc = fields.some(f => config.calcs?.[f.id])
+    const wrap = config.wrap !== false   // wrapping is the default; the Fields menu can turn it off
 
     const commitCell = (rid, field, raw) => {
         const rec = recById.get(rid)
@@ -189,7 +190,7 @@ function TableView({ source, item, onConfig }) {
                 title={hiddenByFilter ? 'Just added — the filter hides it once you change the filter' : undefined}>
                 <div className={styles.gutter}>
                     {source.canRemove && (
-                        <button className={styles.rowDel} onClick={() => source.remove(rec.id)} title="Delete record" aria-label="Delete record"><LuX size={12} /></button>
+                        <button className={styles.rowDel} onClick={() => source.remove(rec.id)} title="Delete record" aria-label="Delete record"><LuTrash2 size="1em" /></button>
                     )}
                 </div>
                 {fields.map(f => {
@@ -215,7 +216,7 @@ function TableView({ source, item, onConfig }) {
                     const href = (f.type === 'url' || f.type === 'email') && !isEmptyValue(val) ? hrefFor(f, val) : null
                     return (
                         <div key={f.id} role="gridcell" className={`${styles.cellWrap} ${isEditing ? styles.cellEditing : ''}`}>
-                            <button className={`${styles.cell} ${align} ${config.wrap ? styles.wrap : ''}`} disabled={!canEdit}
+                            <button className={`${styles.cell} ${align} ${wrap ? styles.wrap : ''}`} disabled={!canEdit}
                                 ref={isEditing ? editAnchor : undefined}
                                 title={f.type === 'long' || TEXTLIKE.has(f.type) ? cellText(f, val) || undefined : undefined}
                                 onClick={(e) => { editAnchor.current = e.currentTarget; setEdit({ gk: g.key, rid: rec.id, fid: f.id }) }}>
@@ -292,7 +293,7 @@ function TableView({ source, item, onConfig }) {
                             )
                         })}
                         {source.fieldsEditable && source.canAddField ? (
-                            <button className={styles.addField} onClick={(e) => openMenu('addField', e)} title="Add a field" aria-label="Add a field"><LuPlus size={13} /></button>
+                            <button className={styles.addField} onClick={(e) => openMenu('addField', e)} title="Add a field" aria-label="Add a field"><LuPlus size="1.15em" /></button>
                         ) : <div />}
                     </div>
 
@@ -321,7 +322,7 @@ function TableView({ source, item, onConfig }) {
 
                     {source.canAdd && (
                         <div className={`${styles.trow} ${styles.addRow}`}>
-                            <div className={styles.gutter}><LuPlus size={12} /></div>
+                            <div className={`${styles.gutter} ${styles.addMark}`}><LuPlus size="1.1em" /></div>
                             {primary ? (
                                 <input className={styles.addInput} value={adding}
                                     placeholder={source.type === 'own' ? `New record — type a ${primary.name.toLowerCase()}, Enter` : 'New task — type a title, Enter'}
