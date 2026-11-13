@@ -71,6 +71,15 @@
     background-color: var(--bg-surface);
 }
 
+/* Presenting slides: the board fills the whole window, over the header,
+   footer and sidebar (components/Sandbox/slides/). */
+.canvasShell.presenting {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    background-color: #000;
+}
+
 .footer {
     display: flex;
     align-items: center;

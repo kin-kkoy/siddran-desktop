@@ -55,6 +55,14 @@ const GROUPS = [
             ['Zoom to fit', ['1']], ['Reset zoom', ['⌘', '0']], ['This help', ['?']],
         ],
     },
+    {
+        title: 'Slides (media menu → Slides)',
+        rows: [
+            ['Slides panel', ['⇧', 'F']], ['Present from the start', ['F5']], ['Present from here', ['⇧', 'F5']],
+            ['Next / previous slide', ['→', '←']], ['Go to slide n', ['n', 'Enter']],
+            ['Blank the screen', ['B']], ['Fullscreen', ['F']], ['Stop presenting', ['Esc']],
+        ],
+    },
 ]
 
 const s = {

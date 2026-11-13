@@ -11,6 +11,7 @@ import {
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
     LuPencil, LuMaximize2, LuCrop,
 } from 'react-icons/lu'
+import SlideButtons from '../slides/SlideButtons'
 import { DiagramIcon, NextStepIcon } from '../flow/icons'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -137,6 +138,7 @@ function ContextToolbar({
     onToggleLock,
     onFrameSelection,
     onExportFrame,
+    slideActions,       // frames ⇄ slides, slide size, new slide, present (slides/SlideButtons)
     onEditText,
     onRevertInk,        // (id) — a smart-drawn shape back to the ink it came from
     beginTransaction,
@@ -473,6 +475,7 @@ function ContextToolbar({
                                 </button>
                             </>
                         )}
+                        {slideActions && <SlideButtons frames={frames} btnClass={styles.btn} actions={slideActions} />}
                         <div className={styles.sep} />
                     </>
                 )}

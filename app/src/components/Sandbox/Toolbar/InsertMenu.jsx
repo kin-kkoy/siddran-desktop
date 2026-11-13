@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt, LuFilePen } from 'react-icons/lu'
+import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt, LuFilePen, LuPresentation } from 'react-icons/lu'
 import styles from './ShapePicker.module.css'
 
 /**
@@ -8,7 +8,7 @@ import styles from './ShapePicker.module.css'
  * "Insert +" menu. Portal + fixed positioning + click-outside + Escape, mirroring
  * ShapePicker (whose CSS it reuses).
  */
-function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf, onPickFormat }) {
+function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf, onPickFormat, onPickSlides }) {
     const panelRef = useRef(null)
     const [pos, setPos] = useState(null)
 
@@ -54,6 +54,8 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
             // A page of text (formats/doc): kept in the board, or a note.
             { label: 'Doc', Icon: LuFilePen, onClick: () => onPickFormat('doc') },
         ] : []),
+        // A slide sized for your display; more come from the Slides panel or the slide's bar (slides/).
+        ...(onPickSlides ? [{ label: 'Slides', Icon: LuPresentation, onClick: onPickSlides }] : []),
     ]
 
     return createPortal(

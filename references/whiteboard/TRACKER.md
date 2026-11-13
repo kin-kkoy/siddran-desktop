@@ -195,10 +195,15 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       hands-on check.
 - [x] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
-      ✅ built (session 8, branch `whiteboard-doc`). Round 1 checked by the user;
-      round 2 (slash fix, export, your templates, image folder) awaiting their check.
-- [ ] **9 · Slides:** frames as slides plus a presentation mode with
-      F5/arrows/Esc (§11.8, §13.10).
+      ✅ built (session 8, branch `whiteboard-doc`); both rounds checked by the
+      user. Merged into `whiteboard` (session 7, 2026-11-13).
+- [x] **9 · Slides:** frames as slides plus a presentation mode with
+      F5/arrows/Esc (§11.8, §13.10). ✅ built (session 9, branch
+      `whiteboard-slides` in both repos): checkpoint 1 tried by the user;
+      checkpoint 2 (slides as their own thing, display sizes, fade, CLI, PDF)
+      checked by the user, except the last change (a dissolve between
+      slides, 6736bcc), checked only in a hidden window. Merged into
+      `whiteboard` (session 7, 2026-11-13).
 - [ ] **10 · Prototype:** screens with click-through hotspots and a preview
       mode (§13.11).
 - [ ] **11 · Engage activities + Talktrack, solo versions (decided):**
@@ -1402,3 +1407,238 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   `aria-selected="false"` on the others; now only the chosen row has the
   attribute, as in CodeMirror's own list (`doc2:` walk: 1 highlighted row in
   each case). **Section 8 done; ready to merge with 9.**
+- 2026-11-13 · session 9 · **section 9, checkpoint 1 of 2: frames as slides,
+  the Slides panel, presentation mode.** Worktree `../Siddran-Desktop-wb9`,
+  branch `whiteboard-slides` (off 53d5e84). The CLI is untouched so far. New
+  folder `components/Sandbox/slides/`:
+  - **Model** (`slides.js`, tested): every frame is a slide. There is no
+    Slides item and no new type. The deck is an ordering layer on the frames'
+    payloads, with two optional fields. `slideOrder` (number): frames without
+    one follow the numbered ones, in reading order (rows top to bottom, then
+    left to right). `slideHidden: true`: skipped when presenting, still on the
+    board, and the frame's title reads "· hidden from slides". Reordering
+    numbers every frame 1…n in one undo step and never moves a frame (R11.11).
+  - **Slides panel** (`SlidesPanel.jsx`): the header's **Slides** button or
+    Shift+F. A column on the board's right edge. Each row has a number, the
+    title, an eye (hide/show) and ▶ (present from this slide), plus a
+    thumbnail. Drag a row to reorder (pointer events, no HTML5 drag). Click a
+    row and the board glides there, with the frame selected.
+  - **Thumbnails** (`Thumbnail.jsx`): SVG in the frame's own coordinates.
+    Shapes come from the registry outlines (flow/svgPath), and ink from its
+    outline. Stickies, images and links are drawn. Text, cards and widgets
+    show as labelled boxes. Chosen over a Konva snapshot because cards and
+    widgets are DOM (a snapshot would miss them), and off-screen frames would
+    need a repaint.
+  - **Presentation** (`Presentation.jsx`, `usePresentation.js`):
+    - How it shows a slide: it reuses the LIVE board, steering the viewport
+      onto each frame (fit and letterbox). So a slide looks exactly like its
+      frame, cards, widgets and ink included. The canvas shell turns
+      `position: fixed; inset: 0` and goes over the header, footer and
+      sidebar. The dock, floating bar, selection overlay and dot grid are
+      hidden. A frame-sized hole in a black mask covers the rest.
+    - Keys: F5 starts from the first slide; Shift+F5, the header's
+      **▶ Present** and the frame bar's new ▶ start from here (the selected
+      frame, else the frame in view). → ↓ PageDown Space Enter go to the next
+      slide, and ← ↑ PageUp Backspace to the previous one. Home/End work, and
+      "n Enter" jumps to slide n. B or . blanks the screen. F toggles
+      fullscreen. Esc un-blanks, else leaves.
+    - Clicks: the left third goes back, anywhere else forward.
+    - A 140 ms fade through black between slides. An end screen after the
+      last slide.
+    - The HUD (‹ n / N title › · blank · fullscreen · ×) and the cursor fade
+      out after 2.2 s of rest.
+    - Keys are captured on the window and stopped, so board shortcuts and
+      Space-to-pan never see them.
+    - Entering goes fullscreen through a new Rust command
+      `set_presentation_fullscreen` (main.rs; no webview window capability,
+      like the tray commands). Leaving restores the exact viewport, selection
+      and tool (R11.18), and leaves fullscreen only if presenting entered it,
+      also on unmount. Presenting writes nothing to the board or the undo
+      stack.
+  - Small additive edits to shared files:
+    - SandBoxPage: the header buttons, F5/Shift+F5/Shift+F, the `presenting`
+      class, and the hidden label in `frameCutLabels`.
+    - SandboxCanvas: a `plain` prop (no grid).
+    - ContextToolbar: an `onPresentFrame` ▶ button on a single frame.
+    - ShortcutsModal: a Slides group.
+    - perfProbe: a `slides:` scenario.
+  - **Shared dev-app lock with session 8**: `mkdir
+    /tmp/claude-1000/siddran-devapp.lock` before a walk. Back up the dev
+    localStorage, seed your own Bag copy, walk, restore, then `rmdir`.
+  - Checks: 740 tests pass (17 new), lint at 25, build and `cargo check`
+    pass. The `slides:` walk ran in a HIDDEN window (ws 19) on a TestBag
+    copy, with the dev localStorage restored afterwards. It made 3 frames and
+    a sticky. All of these were observed:
+    - Shift+F opened the panel (inside the window). The sticky showed in its
+      frame's thumbnail.
+    - Dragging row 3 to the top gave orders 2, 3, 1.
+    - Hiding a slide set the flag, and the board title read "Frame 1 ·
+      hidden from slides". The panel count dropped to 2.
+    - F5: on slide 1 of 2. The mask's hole matched the frame's screen rect
+      exactly, letterboxed. Toolbar and panel gone, grid off, HUD inside the
+      window.
+    - → went to slide 2 (the hidden one skipped). B blanked and B again
+      unblanked. A left-third click went back.
+    - End, then →, showed the end screen. Esc restored the exact viewport.
+      The board JSON was unchanged.
+    - Shift+F5 with the last frame selected started on it. The frame bar's ▶
+      was present, inside the window.
+    - **A real F5 sent by Hyprland** (`send_shortcut`) started the deck and
+      did NOT reload the webview.
+    - Hyprland reported the window fullscreen while presenting (2) and back
+      to normal after Esc (0).
+    - Two Ctrl+Z undid the hide and the reorder.
+  - **Not seen:** what it looks like, since there are no screenshots while
+    the user is at the computer. In the hidden window the Konva stage kept
+    its old size (1600×962) while the shell filled the window (1820×1040),
+    because ResizeObserver doesn't fire without rendering updates. On screen
+    it should resize; the user's check confirms.
+  - **Please try:**
+    1. Make 3–4 frames with things in them (a sticky, ink, a text card, a
+       Table). Open **Slides** (Shift+F): are the thumbnails recognisable?
+    2. Drag rows to reorder. The frames shouldn't move on the board.
+    3. Hide one with the eye. Does its title say so on the board? Is it
+       skipped when presenting?
+    4. **▶ Present** / F5 / Shift+F5 / the ▶ on a frame's floating bar.
+       Does the slide fill the screen, letterboxed, with nothing of the board
+       around it? Does it go fullscreen?
+    5. Arrows, Space, clicks (left third = back), B, F, a number + Enter,
+       Esc. Is the fade between slides too slow or too fast?
+    6. After Esc: are you back exactly where you were, with the same
+       selection?
+    7. Present on the HDMI monitor (0.83 scale): any blur on the HUD?
+  - **Proposed checkpoint 2** (not built; the user picks): presenter notes
+    per slide (`payload.notes`) and a speaker view (current and next slide,
+    notes, timer), either a second window on the other monitor or a side
+    strip. "Present selected". A transition choice (none or fade).
+    `sandbox_read` listing the deck (order, hidden, notes) in the CLI, which
+    means telling session 8 first. Possibly PDF export of the deck.
+- 2026-11-13 · session 9 · user feedback on checkpoint 1: "amazing". The
+  slide did NOT fill the screen: a 640×400 frame (16:10) on a 16:9 screen
+  left black bars left and right. The user chose checkpoint 2's scope and
+  left the rest for when needed (speaker notes and view, present selected).
+- 2026-11-13 · session 9 · **section 9, checkpoint 2: slides as their own
+  thing, display sizes, fade, CLI, PDF export.** Desktop and CLI both on
+  `whiteboard-slides` (CLI worktree `../Siddran-CLI-wb9`).
+  - **Slides are distinct from frames** (the user's call). On disk a slide is
+    still a frame with `payload.slide: true`: no new type, and older builds
+    and the CLI draw and round-trip it as a frame. Only slides are in the deck
+    now. Checkpoint 1's "every frame is a slide" is gone.
+    - Slides are numbered "Slide 1, 2…" apart from frames.
+    - A frame's floating bar has **Convert to slide** where the ▶ was. A
+      slide's bar has the size menu, + (new slide after this one), ▶ (present
+      from here) and "turn back into a frame". Default titles follow the
+      conversion ("Frame 2" ⇄ "Slide 3"); a typed title stays.
+  - **One click:** media menu → **Slides** makes Slide 1 at the view centre,
+    sized for Display 1. It opens the Slides panel and glides the board to it.
+    More come from the panel's "+ New slide" or the slide bar's +. A new
+    slide goes to the right of the one before (past any frame in the way),
+    takes the deck's size and slots in after it, as one undo step.
+  - **Sizes from the displays:** a Rust command `list_displays` (new
+    `src-tauri/src/slides.rs`) reads the connected connectors from
+    `/sys/class/drm` (native resolution = first mode), laptop panel first,
+    then falls back to the windowing system's monitors. On the user's machine
+    it lists "Display 1 (laptop) 1920×1080" and "Display 2 (HDMI)
+    1600×900", plus "Standard 4:3". 16:9 isn't listed separately when a
+    display already is. New slides default to Display 1, else 1920×1080. The
+    panel has a size menu for the whole deck; the slide bar has one for the
+    selection.
+  - **Fade** is the default and slower: 280 ms out to black, a 60 ms beat,
+    380 ms in (was 140 ms, which the user read as an instant switch).
+  - **PDF export** (panel → Export PDF). A native save dialog, then the
+    presentation steps through the shown slides with no controls on screen.
+    For each slide the shell takes WebKitGTK's own snapshot of the webview,
+    so cards, Tables and ink come out exactly as presented, and crops it to
+    the slide. cairo writes one PDF page per slide at 96 dpi (new deps
+    `webkit2gtk` and `cairo-rs` with `pdf`; both were already in the tree).
+    Esc cancels. Hidden slides are skipped.
+  - **Frame numbering** (the user's ask): the frame tool already numbered
+    new frames. The user's test board held two "Frame 1"s of the same size:
+    Duplicate copies the title. Copies of a default-titled frame or slide now
+    get the next free number, one per copy (`duplicateTitles`).
+  - **CLI**, `sandbox.rs`. Session 8's Doc edits are in the same file; mine
+    are appended blocks, so the merge should be clean:
+    - `sandbox_read` lists `slides` apart from `frames`: deck order, number
+      (null when hidden), hidden, size, contents (`deck_order` mirrors
+      slides.js).
+    - `sandbox_edit`: `add` takes shape `slide` (the last slide's size or
+      1920×1080, placed to its right, "Slide n"). `update` takes `hidden`
+      and `order` (1-based), for slides only. 2 new tests; 19 pass in that
+      crate, and clippy is unchanged.
+  - **Shared dev-app lock** with session 8 (see checkpoint 1's entry). A
+    probe-only window event `siddran-probe-export-pdf` (page, only when
+    VITE_PERF_PROBE is set) skips the native save dialog.
+  - Checks: 747 tests pass, lint at 25, build, `cargo check`, and the Rust
+    `slides` unit test pass. The `slides:` walk ran in a HIDDEN window (ws 19)
+    on a TestBag copy, with the dev localStorage restored afterwards. All of
+    these were observed:
+    - media menu → Slides made "Slide 1", 1920×1080 (from DRM), and the
+      panel opened;
+    - "+ New slide" ×2 added Slides 2 and 3, 120 apart, same size;
+    - a new frame stayed out of the deck; Ctrl+D on it gave "Frame 3" (not a
+      second "Frame 1"); Convert to slide made it "Slide 4";
+    - the slide size menu listed "Display 1 (laptop) 1920×1080 · Display 2
+      (HDMI) 1600×900 · Standard 4:3", inside the window; Display 2 resized
+      the slide to 1600×900; the panel's menu set all four to 1920×1080;
+    - reorder, then hide: 3 shown;
+    - F5: slide 1/3 filled the window, apart from a 10 px letterbox at each
+      side (the hidden window is 1870×1040, not a 16:9 fullscreen);
+    - → : the veil was at full black mid-change (transition 280 ms), then
+      slide 2;
+    - Esc restored the view, and the board JSON was unchanged;
+    - the PDF export wrote 3 pages (hidden slide skipped). Rendered page 1
+      shows the board's ink inside the slide;
+    - Hyprland reported fullscreen while presenting and normal after;
+    - Ctrl+Z undid the hide.
+  - **Not seen:** how it looks on the user's real screen. Ratio lock while
+    resizing a slide by hand isn't built: resizing goes through
+    SelectionOverlay, a hot file shared with session 8. The size menu snaps a
+    slide back to an exact display size.
+  - **Please try:**
+    1. Media menu → **Slides**. Does one slide appear with the panel? Then
+       "+ New slide" and the + on a slide's bar.
+    2. Draw a frame (F). Is it left out of the panel? Use its bar's
+       **Convert to slide**, and the frame icon on a slide's bar to turn it
+       back.
+    3. Ctrl+D a frame: is the copy numbered next?
+    4. A slide's size menu with the HDMI plugged in and unplugged: the
+       Display 1 / Display 2 labels and resolutions.
+    5. F5 on a Display 1-sized slide: does it now fill the laptop screen
+       with no black bars? Is the fade noticeable now, and not too slow?
+    6. Panel → Export PDF: pick a file, watch it step through, open the PDF.
+       Are the cards and Tables there?
+- 2026-11-13 · session 9 · user feedback on checkpoint 2: "this is good".
+  One change: the transition should be a **dissolve**, not a fade through
+  black. Built:
+  - On each slide change, the shell takes a picture of the slide on screen (a
+    new `slides_snapshot_png` in src-tauri slides.rs, the same WebKitGTK
+    snapshot the PDF export uses, as a PNG; cairo-rs gets the `png` feature).
+  - The picture is laid over the slide, and the board moves to the next
+    slide underneath. After 90 ms it fades out over 480 ms.
+  - Keys pressed during a dissolve skip straight ahead.
+  - Without the desktop shell, it falls back to the fade through black.
+  - Checked in the hidden-window walk: the picture covered the screen at the
+    slide's size while the board was already on slide 2; the screen never
+    went black; the picture faded (`opacity 480ms`) and was removed.
+    Lint 25, 747 tests and the build pass. **Section 9 is finished as far as
+    the user wants it.** Speaker notes and view, and "present selected", are
+    deferred ("when needed").
+  - For the merge into `whiteboard`, shared files touched (all additive):
+    - SandBoxPage.jsx, SandboxCanvas.jsx (`plain`), ContextToolbar.jsx
+      (`slideActions`), InsertMenu.jsx / SandboxToolbar.jsx (`onPickSlides` /
+      `onInsertSlides`), ShortcutsModal.jsx, SandBoxPage.module.css,
+      perfProbe.js (`slides:`);
+    - src-tauri main.rs (`mod slides`, 6 commands), Cargo.toml (webkit2gtk,
+      cairo-rs);
+    - CLI sandbox.rs (appended blocks).
+- 2026-11-13 · session 7 · **sections 8 (Doc) and 9 (Slides) merged into
+  `whiteboard`**, in both repos, at the user's request; both sessions
+  confirmed final and stopped committing first. Doc merged cleanly (desktop
+  a1585e9, CLI d379abd). Slides then conflicted only where both added lines,
+  kept both: InsertMenu (Doc and Slides entries + icons), perfProbe (doc:,
+  doc2:, slides: scenarios), this tracker (section boxes, logs), and the CLI's
+  sandbox_read description (the doc and slides sentences). After the merge:
+  desktop 765 tests, lint 25, build, `cargo check`, `cargo test slides`; CLI
+  90 tests, clippy unchanged. The branches `whiteboard-doc` /
+  `whiteboard-slides` and worktrees wb8 / wb9 are left for the user to remove.
+

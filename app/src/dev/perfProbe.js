@@ -11,6 +11,7 @@
 //   extras:<boardId> — formulas, totals, detail panel, paste, CSV import, attachments (runExtras)
 //   doc:<boardId>    — a Doc: template, typing + autosave, undo, slash menu, find, note link, full screen (runDoc)
 //   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
+//   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -1462,6 +1463,119 @@ async function runDoc2() {
 
 if (spec.startsWith('doc2:') && boardId) runDoc2().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('doc:') && boardId) runDoc().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+// ── slides:<boardId> — slides (components/Sandbox/slides/): Insert → Slides,
+// New slide, frame ⇄ slide, numbered duplicates, display sizes, the panel
+// (reorder, hide), presenting (fade, keys, exit restoring the view) and the
+// PDF export (to VITE_SLIDES_PDF, past the save dialog via a probe-only event).
+async function runSlides() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const frames = () => live().filter(i => i.payload?.kind === 'frame')
+    const slides = () => frames().filter(f => f.payload.slide === true)
+    const kc = stage.content.querySelector('canvas')
+    const rect = stage.container().getBoundingClientRect()
+    const inWindow = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight }
+    const btn = (label, root = document) => [...root.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent.trim() === label)
+    const panel = () => document.querySelector('[data-slides-panel]')
+    const rows = () => [...(panel()?.querySelectorAll('li[data-frame-id]') || [])]
+    const titles = () => rows().map(r => r.querySelector('[class*="title"]')?.textContent)
+    const sz = (f) => [Math.round(f.w), Math.round(f.h)]
+
+    // 1. Media menu → Slides: one slide, sized for Display 1, the panel opens.
+    btn('Media').click(); await sleep(400)
+    ;[...document.querySelectorAll('button[class*="menuItem"]')].find(b => b.textContent.trim() === 'Slides').click(); await sleep(900)
+    const s1 = slides()
+    await step('insert', { slides: s1.map(f => [f.payload.title, ...sz(f)]), panel: !!panel(), panelInWindow: inWindow(panel()), rows: titles(), selected: s1[0] && document.querySelector('button[aria-label="Slide size"]')?.textContent })
+
+    // 2. "+ New slide" twice: to the right, same size, numbered.
+    panel().querySelector('[data-new-slide]').click(); await sleep(600)
+    panel().querySelector('[data-new-slide]').click(); await sleep(600)
+    await step('new-slides', { slides: slides().map(f => [f.payload.title, Math.round(f.x), Math.round(f.y), ...sz(f)]), rows: titles() })
+
+    // 3. A plain frame: not a slide; Ctrl+D numbers the copy; "Convert to slide".
+    key('Escape'); await sleep(200)
+    const zoom = stage.scaleX()
+    const fx = rect.left + 40, fy = rect.top + rect.height - 60
+    key('f'); await sleep(200)
+    kc.dispatchEvent(ptr('pointerdown', fx, fy)); kc.dispatchEvent(ptr('pointerup', fx, fy)); await sleep(500)
+    const plain = frames().filter(f => !f.payload.slide)
+    key('d', { ctrlKey: true }); await sleep(500)
+    const plain2 = frames().filter(f => !f.payload.slide)
+    const convertBtn = btn('Convert to slide')
+    const convertInWindow = inWindow(convertBtn)
+    convertBtn?.click(); await sleep(500)
+    await step('frames', { zoom: Math.round(zoom * 1000) / 1000, plainTitles: plain.map(f => f.payload.title), afterDup: plain2.map(f => f.payload.title), convertBtn: !!convertBtn, convertInWindow, slidesNow: slides().map(f => f.payload.title), rows: titles() })
+
+    // 4. Slide size from the floating bar: the displays.
+    const sizeBtn = btn('Slide size')
+    sizeBtn?.click(); await sleep(700)
+    const menu = document.querySelector('[data-slide-size-menu]')
+    const options = [...(menu?.querySelectorAll('button') || [])].map(b => b.textContent)
+    const menuOpen = { inWindow: inWindow(menu), rect: (() => { const r = menu?.getBoundingClientRect(); return r && [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] })() }
+    const conv = live().find(i => i.payload?.title === slides().at(-1)?.payload.title)
+    ;[...(menu?.querySelectorAll('button') || [])].find(b => b.textContent.startsWith('Display 2'))?.click(); await sleep(500)
+    const box = (el) => { const r = el?.getBoundingClientRect(); return r && [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] }
+    await step('size', { options, menuOpen, sizeBtnRect: box(sizeBtn), win: [window.innerWidth, window.innerHeight], resized: conv && sz(live().find(i => i.id === conv.id)) })
+    // …and every slide back to one size from the panel.
+    btn('Size of every slide').click(); await sleep(500)
+    ;[...panel().querySelectorAll('[role="menuitem"]')].find(b => b.textContent.startsWith('Display 1'))?.click(); await sleep(500)
+    await step('size-all', { sizes: slides().map(sz), panelSize: btn('Size of every slide')?.textContent })
+
+    // 5. Panel: drag the last row to the top, hide the second.
+    {
+        const rs = rows(), last = rs[rs.length - 1], first = rs[0]
+        const lr = last.getBoundingClientRect(), fr = first.getBoundingClientRect()
+        const lx = lr.left + 30, ly = lr.top + 10
+        last.dispatchEvent(ptr('pointerdown', lx, ly))
+        for (let i = 1; i <= 8; i++) { last.dispatchEvent(ptr('pointermove', lx, ly + (fr.top + 4 - ly) * i / 8)); await sleep(30) }
+        last.dispatchEvent(ptr('pointerup', lx, fr.top + 4)); await sleep(600)
+    }
+    const hiddenTitle = rows()[1].querySelector('[class*="title"]').textContent
+    rows()[1].querySelector('button[aria-label="Hide slide"]').click(); await sleep(500)
+    await step('panel', { rows: titles(), hidden: hiddenTitle, count: panel().querySelector('[class*="heading"]')?.textContent })
+
+    // 6. Present: the slide fills the screen (display-sized), fades between slides.
+    const before = { x: stage.x(), y: stage.y(), s: stage.scaleX() }
+    const itemsBefore = JSON.stringify(live())
+    key('F5'); await sleep(1500)
+    const root = () => document.querySelector('[data-presenting]')
+    const countEl = () => root()?.querySelector('[data-slide]')
+    const hole = () => { const h = root()?.querySelector('[class*="hole"]'); if (!h) return null; const r = h.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] }
+    const where = () => ({ slide: countEl()?.dataset.slide, of: countEl()?.dataset.of, hole: hole(), win: [window.innerWidth, window.innerHeight] })
+    const veil = () => root()?.querySelector('[class*="veil"]')
+    await step('present', { on: !!root(), ...where() })
+    // The dissolve: a picture of the slide we leave lies over the next one, then fades.
+    key('ArrowRight')
+    const shown = await waitFor(() => root()?.querySelector('[data-dissolve]'), 3000)
+    const d0 = shown && { state: shown.dataset.dissolve, rect: [Math.round(shown.getBoundingClientRect().width), Math.round(shown.getBoundingClientRect().height)], natural: [shown.naturalWidth, shown.naturalHeight], slide: countEl()?.dataset.slide, veil: veil()?.style.opacity }
+    const fading = await waitFor(() => root()?.querySelector('[data-dissolve="fading"]'), 3000)
+    const d1 = fading && { opacity: fading.style.opacity, transition: fading.style.transition }
+    await sleep(900)
+    await step('dissolve', { d0, d1, gone: !root()?.querySelector('[data-dissolve]'), veil: veil()?.style.opacity, ...where() })
+    key('Escape'); await sleep(800)
+    const after = { x: stage.x(), y: stage.y(), s: stage.scaleX() }
+    await step('exit', { on: !!root(), restored: before.x === after.x && before.y === after.y && before.s === after.s, boardUntouched: JSON.stringify(live()) === itemsBefore })
+
+    // 7. PDF export (shown slides only), past the save dialog.
+    const pdf = import.meta.env.VITE_SLIDES_PDF
+    window.dispatchEvent(new CustomEvent('siddran-probe-export-pdf', { detail: pdf }))
+    await sleep(500)
+    const exporting = !!root()
+    const toastText = await waitFor(() => [...document.querySelectorAll('[role="status"], [class*="toast"], [class*="Toast"]')].map(n => n.textContent).find(t => /Exported|export failed/i.test(t)), 30000)
+    await step('pdf', { exporting, presentingAfter: !!root(), toast: toastText || null, file: pdf })
+
+    // 8. Undo a step: the hide comes back off.
+    key('z', { ctrlKey: true }); await sleep(400)
+    await step('undone', { hidden: slides().filter(f => f.payload.slideHidden).map(f => f.payload.title) })
+    send('done', true)
+}
+
 if (spec.startsWith('timeline:') && boardId) runTimeline().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('cards:') && boardId) runCards().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
@@ -1477,5 +1591,6 @@ if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', 
     formats: cached().filter(i => i.payload?.kind === 'format').map(i => ({ id: i.id, source: i.payload.source, attachedTo: i.payload.attachedTo })),
     path: location.pathname,
 }))
+if (spec.startsWith('slides:') && boardId) runSlides().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('drag:') && boardId) run().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('format:') && boardId) runFormat().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
