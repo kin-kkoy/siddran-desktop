@@ -9,6 +9,8 @@
  *     editable: Set(fieldId), // which values the views may change
  *     canAdd, canRemove,
  *     add(values), update(id, patch), remove(id),
+ *     moveTo(id, patch, beforeId),  // a card dropped in another cell: fields + order, one step
+ *     newValues,              // linked tasks: what a new record gets (so a view adds only where it lands)
  *     fieldsEditable,         // own records only: the field verbs below work
  *     fields: addField(def) → id, updateField(id, patch), removeField(id),
  *             moveField(id, index), addOption / renameOption / removeOption,
@@ -24,6 +26,7 @@
  */
 import { addRecord, updateRecord, updateRecords, removeRecord, newRecordId } from './formats'
 import { moveRecord } from './layout'
+import { renameOptionKeys } from './boards'
 import * as F from './fields'
 import { fromPickerValue, toPickerValue } from '../../../utils/deadline'
 
@@ -83,6 +86,14 @@ export function ownSource(payload, commit) {
         apply: (fn) => commit(fn),   // a whole-payload change in one step (an import)
         canReorder: true,
         moveRecord: (id, beforeId) => commit(p => moveRecord(p, id, beforeId)),
+        // A card dropped elsewhere (Kanban, Matrix): its fields and its place, one undo step (R13.47).
+        // `beforeId` undefined keeps its place in the order.
+        moveTo: (id, patch, beforeId) => commit(p => {
+            let q = Object.keys(patch).length ? F.ensureOptions(updateRecord(p, id, patch), patch) : p
+            if (beforeId !== undefined) q = moveRecord(q, id, beforeId)
+            return q
+        }),
+        newValues: {},
         fieldsEditable: true,
         canAddField: fields.length < F.MAX_FIELDS,
         addField: (def) => {
@@ -94,7 +105,8 @@ export function ownSource(payload, commit) {
         removeField: (id) => commit(p => F.removeField(p, id)),
         moveField: (id, index) => commit(p => F.moveField(p, id, index)),
         addOption: (fieldId, label) => commit(p => F.addOption(p, fieldId, label)),
-        renameOption: (fieldId, from, to) => commit(p => F.renameOption(p, fieldId, from, to)),
+        renameOption: (fieldId, from, to) => commit(p => { const q = F.renameOption(p, fieldId, from, to); return q === p ? p : renameOptionKeys(q, fieldId, from, String(to).trim()) }),
+        moveOption: (fieldId, from, to) => commit(p => F.moveOption(p, fieldId, from, to)),
         removeOption: (fieldId, label) => commit(p => F.removeOption(p, fieldId, label)),
     }
 }
@@ -115,12 +127,13 @@ export function taskSource(source, { tasks = [], bundles = [], api = {} } = {}) 
             }
         }
         const rows = (p.tasks || []).filter(show)
-        return {
+        return withMoveTo({
             type: 'project', label: p.title || 'Project',
             fields: PROJECT_FIELDS,
             records: rows.map(t => { const r = taskToRecord(t); delete r.values.due; return r }),
             editable: new Set(['title', 'status', 'priority']),
             canAdd: !!api.addBundleTasks, canRemove: false,
+            newValues: { status: 'To do', priority: 'normal' },   // what a new task gets (a Kanban adds only where it would land)
             add: (values) => { if (values?.title?.trim()) api.addBundleTasks?.(p.id, [{ title: values.title.trim() }]) },
             update: (id, patch) => {
                 const t = (p.tasks || []).find(x => String(x.id) === String(id))
@@ -134,15 +147,16 @@ export function taskSource(source, { tasks = [], bundles = [], api = {} } = {}) 
                 api.batchUpdateBundleTasks?.(p.id, [row])
             },
             remove: () => {},
-        }
+        })
     }
     const rows = tasks.filter(t => !t._optimistic || t.title).filter(show)
-    return {
+    return withMoveTo({
         type: 'tasks', label: 'Tasks',
         fields: TASK_FIELDS,
         records: rows.map(taskToRecord),
         editable: new Set(['title', 'status', 'priority', 'due']),
         canAdd: !!api.addTask, canRemove: false,
+        newValues: { status: 'To do', priority: 'normal' },
         add: (values) => { if (values?.title?.trim()) api.addTask?.(values.title.trim(), '', 'normal', '') },
         update: (id, patch) => {
             const t = tasks.find(x => String(x.id) === String(id))
@@ -152,7 +166,13 @@ export function taskSource(source, { tasks = [], bundles = [], api = {} } = {}) 
             api.updateTask?.(t.id, u)
         },
         remove: () => {},
-    }
+    })
+}
+
+// A linked card dropped in another column: the field change only (tasks keep their own order).
+function withMoveTo(src) {
+    src.moveTo = (id, patch) => { if (Object.keys(patch).length) src.update(id, patch) }
+    return src
 }
 
 /** The source a widget's payload asks for. */

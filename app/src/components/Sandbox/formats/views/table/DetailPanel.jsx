@@ -102,7 +102,7 @@ export default function DetailPanel({ rec, fields, primary, source, index, count
                 <button className={styles.popIcon} disabled={index >= count - 1} onClick={() => onStep(1)} title="Next record (↓)" aria-label="Next record"><LuChevronDown size={15} /></button>
                 <button className={styles.popIcon} onClick={onClose} title="Close (Esc)" aria-label="Close"><LuX size={15} /></button>
             </div>
-            {hidden && <div className={styles.detailNote}>Hidden by the table’s filter.</div>}
+            {hidden && <div className={styles.detailNote}>Hidden by the filter.</div>}
             <div className={styles.detailBody}>
                 {fields.map(f => (
                     <div key={`${rec.id}:${f.id}`} className={styles.detailRow}>

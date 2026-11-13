@@ -892,6 +892,192 @@ async function runExtras() {
     send('done', true)
 }
 
+// Kanban and Matrix (section 7): insert, add cards, drag between columns and within one, one undo step,
+// edit rules, detail panel and menus on screen, view switching, the Matrix's cells and tray.
+async function runCards() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const insert = async (label) => {
+        document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+        ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === label)?.click(); await sleep(1000)
+        return live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    }
+    const onScreen = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1 }
+    const setArea = (el, v) => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const pop = () => [...document.querySelectorAll('[role="dialog"][data-sb-handle="true"]')].at(-1)
+    const center = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] }
+    const dbl = (el) => el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    const click = (el) => { const [x, y] = center(el); el.dispatchEvent(ptr('pointerdown', x, y)); window.dispatchEvent(ptr('pointerup', x, y)) }
+    // Scroll a view's own scroller (not the board) so `el` shows inside it.
+    const reveal = (el) => {
+        const sc = el.closest('[class*="kscroll"], [class*="mscroll"]')
+        if (!sc) return
+        const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect()
+        if (r.right > s.right) sc.scrollLeft += r.right - s.right + 10
+        if (r.left < s.left) sc.scrollLeft -= s.left - r.left + 10
+        if (r.bottom > s.bottom) sc.scrollTop += r.bottom - s.bottom + 10
+        if (r.top < s.top) sc.scrollTop -= s.top - r.top + 10
+    }
+    // Press a card, move in steps to (x, y), release there.
+    const dragTo = async (el, x, y) => {
+        const [x0, y0] = center(el)
+        send('trace', { drag: el.textContent.slice(0, 20), from: [Math.round(x0), Math.round(y0)], to: [Math.round(x), Math.round(y)], win: [innerWidth, innerHeight] })
+        el.dispatchEvent(ptr('pointerdown', x0, y0)); await sleep(30)
+        for (let i = 1; i <= 8; i++) { window.dispatchEvent(ptr('pointermove', x0 + (x - x0) * i / 8, y0 + (y - y0) * i / 8)); await sleep(30) }
+        const chain = []; for (let n = document.elementFromPoint(x, y); n && chain.length < 5; n = n.parentElement) chain.push(`${n.tagName}.${String(n.className?.baseVal ?? n.className).slice(0, 30)}`)
+        const wr = el.closest('[data-sb-id]')?.getBoundingClientRect()
+        send('trace', { moved: true, chain, widget: wr && [Math.round(wr.left), Math.round(wr.top), Math.round(wr.right), Math.round(wr.bottom)] })
+        await sleep(100)
+        window.dispatchEvent(ptr('pointerup', x, y)); await sleep(400)
+        send('trace', { released: true })
+    }
+
+    // ---- Kanban ----
+    const kid = await insert('Kanban')
+    const P = () => live().find(i => i.id === kid)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${kid}"]`)
+    const heads = () => [...W().querySelectorAll('[class*="khead"]')].map(h => h.textContent.trim())
+    const cellOf = (col) => [...W().querySelectorAll('[data-cell]')].find(c => c.getAttribute('data-cell') === `*\u0001${col}`)
+    const cardsIn = (col) => [...(cellOf(col)?.querySelectorAll('[data-rid]') || [])].map(c => c.textContent.trim())
+    const card = (name) => [...W().querySelectorAll('[data-rid]')].find(c => c.querySelector('[class*="cardTitle"]')?.textContent.trim() === name)
+    const addIn = async (col, names) => {
+        [...cellOf(col).querySelectorAll('button')].find(b => b.textContent.includes('Add a card')).click(); await sleep(250)
+        for (const n of names) { const ta = W().querySelector('textarea[aria-label="New card"]'); setArea(ta, n); kd(ta, 'Enter'); await sleep(250) }
+        kd(W().querySelector('textarea[aria-label="New card"]'), 'Escape'); await sleep(250)
+    }
+    await step('kanban-insert', { view: P()?.view, w: live().find(i => i.id === kid)?.w, heads: heads(), fields: P()?.fields.map(f => f.id) })
+    await addIn('To do', ['Alpha', 'Bravo'])
+    await addIn('Done', ['Charlie'])
+    await step('kanban-added', { todo: cardsIn('To do'), doneCol: cardsIn('Done'), statuses: P().records.map(r => `${r.values.title}:${r.values.status}`) })
+
+    // Alpha → Done, above Charlie: status and order in one step.
+    reveal(card('Charlie')); await sleep(200)
+    const ch = card('Charlie').getBoundingClientRect()
+    const before = live().length
+    await dragTo(card('Alpha'), ch.left + ch.width / 2, ch.top + 4)
+    const afterMove = { todo: cardsIn('To do'), doneCol: cardsIn('Done'), alpha: P().records.find(r => r.values.title === 'Alpha')?.values.status }
+    key('z', { ctrlKey: true }); await sleep(500)
+    const undone = { todo: cardsIn('To do'), doneCol: cardsIn('Done') }
+    key('y', { ctrlKey: true }); await sleep(500)
+    await step('kanban-drag', { afterMove, undone, redoneCol: cardsIn('Done'), itemsSame: live().length === before })
+
+    // Within a column: Delta added under Bravo, dragged above it.
+    await addIn('To do', ['Delta'])
+    const br = card('Bravo').getBoundingClientRect()
+    await dragTo(card('Delta'), br.left + br.width / 2, br.top + 3)
+    await step('kanban-reorder', { todo: cardsIn('To do'), orders: P().records.map(r => `${r.values.title}:${r.order ?? '-'}`) })
+
+    // Edit rules: one click on a filled title selects only; a double-click edits.
+    click(card('Bravo').querySelector('[class*="cardTitle"]')); await sleep(250)
+    const oneClick = { editing: !!W().querySelector('textarea[aria-label="Card title"]'), selected: card('Bravo').getAttribute('aria-selected') }
+    dbl(card('Bravo')); await sleep(250)
+    const ta = W().querySelector('textarea[aria-label="Card title"]')
+    const dblEdit = !!ta
+    if (ta) { setArea(ta, 'Bravo two'); kd(ta, 'Enter'); await sleep(300) }
+    await step('kanban-edit', { oneClick, dblEdit, renamed: P().records.some(r => r.values.title === 'Bravo two') })
+
+    // Detail panel from ⤢; Space too.
+    card('Delta').querySelector('button[aria-label="Open the record"]').click(); await sleep(400)
+    const panel = document.querySelector('[role="dialog"][aria-label^="Record:"]')
+    const panelInfo = { label: panel?.getAttribute('aria-label'), onScreen: onScreen(panel) }
+    kd(panel, 'ArrowDown'); await sleep(250)
+    panelInfo.stepped = document.querySelector('[role="dialog"][aria-label^="Record:"]')?.getAttribute('aria-label')
+    kd(document.querySelector('[role="dialog"][aria-label^="Record:"]'), 'Escape'); await sleep(300)
+    panelInfo.closed = !document.querySelector('[role="dialog"][aria-label^="Record:"]')
+    await step('kanban-detail', panelInfo)
+
+    // Column menu: on screen; a limit of 1 on To do (it has 2) shows over the limit; collapse; add a column.
+    const todoHead = [...W().querySelectorAll('[class*="khead"]')].find(h => h.textContent.includes('To do'))
+    todoHead.querySelector('button[aria-label$="settings"]').click(); await sleep(400)
+    const menuOn = onScreen(pop())
+    const lim = pop().querySelector('input[aria-label="Card limit"]')
+    setInput(lim, '1'); kd(lim, 'Enter'); lim.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); await sleep(400)
+    const over = !!todoHead.querySelector('[class*="overLimit"]')
+    key('Escape'); await sleep(200)
+    ;[...W().querySelectorAll('[class*="khead"]')].find(h => h.textContent.includes('Doing')).querySelector('[class*="kheadName"]').click(); await sleep(300)
+    W().querySelector('button[aria-label="Add a column"]').click(); await sleep(300)
+    await step('kanban-columns', { menuOn, wip: P().kanban?.wip, over, collapsed: P().kanban?.collapsed, options: P().fields.find(f => f.id === 'status').options, heads: heads() })
+
+    // View settings: Priority as swimlanes needs a second select — add one via the Table, then come back.
+    const switchTo = async (label) => {
+        W().querySelector('button[aria-label="View"]').click(); await sleep(400)
+        const on = onScreen(pop())
+        ;[...pop().querySelectorAll('button')].find(b => b.textContent.trim() === label).click(); await sleep(600)
+        return on
+    }
+    const viewMenuOn = await switchTo('Matrix')
+    const setupText = W().textContent.includes('two Select fields')
+    ;[...W().querySelectorAll('button')].find(b => b.textContent.includes('Add an Effort field'))?.click(); await sleep(600)
+    await step('matrix-from-kanban', { viewMenuOn, view: P().view, setupText, fields: P().fields.map(f => `${f.id}:${f.type}`), matrix: P().matrix, kanbanKept: !!P().kanban?.wip })
+
+    // Every card is in the tray (no Effort yet). Drag Alpha into Done × High; name that cell.
+    const MW = W
+    const mcell = (a, b) => [...MW().querySelectorAll('[data-cell]')].find(c => c.getAttribute('data-cell') === `${a}\u0001${b}`)
+    const trayCount = MW().querySelector('[data-cell="tray"]').querySelectorAll('[data-rid]').length
+    const target = mcell('Done', 'High')
+    // The tray sits below the grid: scroll so the target cell's foot and the tray's top both show.
+    MW().querySelector('[class*="mscroll"]').scrollTop = target.offsetTop + target.offsetHeight - 120; await sleep(200)
+    const tr = target.getBoundingClientRect()
+    await dragTo(card('Alpha'), tr.left + tr.width / 2, tr.top + tr.height * 0.7)
+    const alpha = P().records.find(r => r.values.title === 'Alpha')?.values
+    const effortId = P().fields.find(f => f.name === 'Effort')?.id
+    const nameBtn = mcell('Done', 'High').querySelector('[class*="mlabel"]')
+    click(nameBtn); await sleep(300)
+    const ni = MW().querySelector('input[aria-label="Cell name"]')
+    if (ni) { setInput(ni, 'Shipped big'); kd(ni, 'Enter'); await sleep(300) }
+    mcell('Done', 'High').querySelector('button[aria-label="Cell colour"]').click(); await sleep(400)
+    const huesOn = onScreen(pop())
+    pop().querySelector('button[aria-label="Hue 140"]')?.click(); await sleep(300)
+    key('Escape'); await sleep(200)
+    // Back to the tray clears both.
+    reveal(MW().querySelector('[data-cell="tray"]')); await sleep(200)
+    const trayEl = MW().querySelector('[data-cell="tray"]').getBoundingClientRect()
+    await dragTo(card('Alpha'), trayEl.left + 20, trayEl.top + 12)
+    const cleared = P().records.find(r => r.values.title === 'Alpha')?.values
+    await step('matrix-cells', { trayCount, alpha: { status: alpha?.status, effort: alpha?.[effortId] }, cell: P().matrix?.cells?.Done?.High, huesOn, cleared: { status: cleared?.status, effort: cleared?.[effortId] } })
+
+    await switchTo('Table')
+    const tableRows = [...W().querySelectorAll('[role="row"][data-ri]')].length
+    await switchTo('Kanban')
+    await step('views-round-trip', { view: P().view, tableRows, kanbanWip: P().kanban?.wip, cards: W().querySelectorAll('[data-rid]').length })
+
+    // ---- a fresh Matrix ----
+    const mid = await insert('Matrix')
+    const M = () => document.querySelector(`[data-sb-id="${mid}"]`)
+    const MP = () => live().find(i => i.id === mid)?.payload
+    const labels = [...M().querySelectorAll('[class*="mlabel"]')].map(l => l.textContent.trim())
+    const tray = M().querySelector('[data-cell="tray"]')
+    ;[...tray.querySelectorAll('button')].find(b => b.textContent.includes('Add a card')).click(); await sleep(250)
+    const tta = M().querySelector('textarea[aria-label="New card"]'); setArea(tta, 'Fix login'); kd(tta, 'Enter'); await sleep(300)
+    kd(M().querySelector('textarea[aria-label="New card"]'), 'Escape'); await sleep(250)
+    const qw = [...M().querySelectorAll('[data-cell]')].find(c => c.getAttribute('data-cell') === 'High\u0001Low').getBoundingClientRect()
+    const fix = [...M().querySelectorAll('[data-rid]')].find(c => c.textContent.includes('Fix login'))
+    await dragTo(fix, qw.left + qw.width / 2, qw.top + qw.height * 0.7)
+    const v = MP().records[0]?.values
+    key('z', { ctrlKey: true }); await sleep(500)
+    const u = MP().records[0]?.values
+    await step('matrix-fresh', { w: live().find(i => i.id === mid)?.w, labels, placed: { impact: v?.impact, effort: v?.effort }, undoneOneStep: { impact: u?.impact ?? null, effort: u?.effort ?? null } })
+
+    // Linked: the Kanban over All tasks — columns To do / Done; only To do offers to add.
+    const src = W().querySelector('button[aria-label="Data source"]')
+    src.click(); await sleep(400)
+    const all = [...document.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('All tasks'))
+    all?.click(); await sleep(800)
+    await step('kanban-linked', { source: P().source, heads: heads(), addIn: [...W().querySelectorAll('[data-cell]')].filter(c => [...c.querySelectorAll('button')].some(b => b.textContent.includes('Add a card'))).map(c => c.getAttribute('data-cell').split('\u0001')[1]), cards: W().querySelectorAll('[data-rid]').length })
+    send('done', true)
+}
+
+if (spec.startsWith('cards:') && boardId) runCards().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('grid:') && boardId) runGrid().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('table:') && boardId) runTable().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

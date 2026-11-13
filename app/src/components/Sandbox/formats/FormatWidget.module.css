@@ -94,6 +94,8 @@
     /* Everything in the body is sized in em off the widget's text size. */
     font-size: var(--fmt-font, 15px);
 }
+.viewFade { height: 100%; animation: fmtFade 150ms ease-out; }
+@keyframes fmtFade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── the plain list ── */
 .list { display: flex; flex-direction: column; gap: 2px; }

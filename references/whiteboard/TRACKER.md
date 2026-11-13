@@ -190,7 +190,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 
 - [x] **6 · Table:** field types, sort, filter, group (spec §13.4). ✅ built (session 6) — awaiting the user's hands-on check
 - [ ] **7 · Timeline + Kanban + Matrix:** views over the same records
-      (§13.5–13.7).
+      (§13.5–13.7). Checkpoint 1 (view switcher, Kanban, Matrix) built by
+      session 7 — awaiting the user's hands-on check; checkpoint 2 = Timeline.
 - [ ] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
 - [ ] **9 · Slides:** frames as slides plus a presentation mode with
@@ -1076,4 +1077,84 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     empty attachment cell opened its pop-up ON SCREEN (1568, 579); the
     panel's row highlighted, and moved with ↓; the `table:`, `grid:` and
     `extras:` walks pass. Lint 25, 693 tests, build pass.
+- 2026-11-13 · session 7 · **section 7, checkpoint 1 of 2: view switcher,
+  Kanban, Matrix** (checkpoint 2 = Timeline). Desktop and CLI on `whiteboard`.
+  - **View switcher** in the widget's title bar ("Table ▾"): Table, Kanban,
+    Matrix (Timeline joins in checkpoint 2). Same records and fields; each view
+    keeps its own settings (`payload.table` / `kanban` / `matrix`); one undo
+    step; the new view fades in (150 ms). The title-bar icon follows the
+    view. Insert (Media) now offers Table, Kanban and Matrix; a new Kanban is
+    920×420 (all four columns show), a new Matrix 600×540.
+  - **Kanban** (`views/KanbanView.jsx`, settings in `payload.kanban`,
+    pure logic in `formats/boards.js`, tested): a column per option of a
+    select field (Status by default, else the first select), in the option
+    order, then "No Status" (hideable). Optional swimlanes by a second select
+    (collapsible). Column header: option chip (colour from its label, as in
+    the Table), count, ⋮ menu (rename, collapse, a card limit — the count
+    turns red over it, never blocks — move left/right, which changes the
+    option order in every view), a click on the name collapses it. "+" at the
+    end adds a column (a new option). "Add a card" at a column's foot: Enter
+    adds and stays open for the next, Esc closes.
+  - **Matrix** (`views/MatrixView.jsx`, `payload.matrix`): rows and columns
+    by two select fields (first six options each). A new Matrix gets Impact
+    (High/Low) × Effort (Low/High) with Quick wins / Big bets / Fill-ins /
+    Thankless tasks named and tinted. A cell's name edits in place (one click
+    when empty, double-click when set); 🎨 picks its tint; + adds a card into
+    it. Over 8 cards: "+N more". Records missing a value wait in the **Not
+    placed** tray below; dragging into the tray clears both values. A widget
+    with fewer than two select fields shows a prompt with a button that adds
+    what's missing (Effort, or Impact + Effort).
+  - **Cards (both views, `views/board/`):** title + up to 3 fields (Matrix
+    2), chosen in View settings, which also has card size (compact /
+    default / detailed) and "Colour by" a select (a coloured left edge).
+    Your Table rules: a click selects; the title edits on a double-click, or
+    one click when empty; one tap on touch. ⤢ (or Space) opens the Table's
+    detail panel, ↑/↓ step through the cards in view order; trash deletes
+    (own records). Both icons always there, dimmed until hover. Arrows move
+    the selection. Filter and Sort are the Table's menus over this view's own
+    settings (view-scoped). Formula fields show their values on cards.
+  - **Dragging a card:** to another column / lane / cell sets those fields;
+    within one it sets the record's `order` (the same order the Table's row
+    drag uses) — field change and order are ONE commit, one undo step
+    (`source.moveTo`). Sorted views and linked tasks change fields only. Esc
+    mid-drag puts the card back; edges auto-scroll.
+  - **Linked tasks:** Kanban by Status (To do / Done) or Priority; "Add a
+    card" only in the cell a new task lands in (To do); Matrix can't add.
+  - Renaming an option renames its keys in Kanban/Matrix settings (limits,
+    collapsed columns, cell names); deleting/retyping a field drops it from
+    every view's filters.
+  - **CLI:** `sandbox_read` gives a Kanban/Matrix `layout`: `columns_by`,
+    `lanes_by` / `rows_by`, `columns_by`, and the Matrix's `cell_names`
+    (only keys that are set).
+  - Not built: R13.13 "apply filter to all views", WIP "enforce", dragging
+    column headers (the menu's Move left/right does it), "suggest placement",
+    1,000-card virtualization (fine at hundreds).
+  - Checked in a hidden window (`cards:` walk, Bag copy, localStorage backed
+    up and restored): Kanban insert → 4 columns; Alpha dragged To do → Done
+    above Charlie (status + order), Ctrl+Z undid both in one step, Ctrl+Y
+    redid; Delta dragged above Bravo (only Delta got an `order`); one click on
+    a filled title selected only, double-click edited; ⤢ panel on screen, ↓
+    stepped, Esc closed; column menu on screen, limit 1 → red, collapse, +
+    column; switched to Matrix → prompt → Effort added; Alpha into Done×High
+    set both, tray cleared both; cell tint; Table and back keep everything;
+    a fresh Matrix showed the four names and a drag into Quick wins was one
+    undo step; linked to All tasks → To do / Done / No Status, Add only in
+    To do. The walk caught that four 17em columns didn't fit a 640 px
+    widget (fixed: 14em columns, wider default Kanban).
+    Desktop 707 tests, lint 25, build and `cargo check` pass; CLI 87 tests,
+    clippy unchanged.
+  - **Please try:**
+    1. Media → Kanban. Add cards in two columns (Enter keeps adding). Drag a
+       card to another column and within one; Ctrl+Z — one step?
+    2. A column's ⋮: rename it, set a card limit of 1, Move left. Click a
+       column name to fold it; + at the end for a new column.
+    3. View (in the widget's toolbar): Swimlanes by a second select (add one
+       in the Table first), card fields, size, Colour by.
+    4. Click a card, double-click its title, ⤢ for the panel, arrows.
+    5. Title bar "Kanban ▾" → Table → Matrix: same records, nothing lost?
+    6. Media → Matrix: drag cards from "Not placed" into Quick wins etc.;
+       name a cell, tint it; drag one back to the tray.
+    7. Link a Kanban to All tasks: drag a task to Done.
+    8. Full screen (Enter) and the text size — do cards and headers read well
+       on your theme?
 

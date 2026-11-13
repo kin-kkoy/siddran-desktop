@@ -1,0 +1,363 @@
+/* Kanban and Matrix: cards in cells. Sizes are in em off the widget's text
+   size (--fmt-font on the widget's body), so they grow with it like the
+   Table; portalled menus use px. No transforms or backdrop-filter at rest
+   (they blur on the user's 0.83-scaled display) — a lifted card is the only
+   transform, and only while it's dragged. */
+
+.view {
+    --tbl-line: color-mix(in srgb, var(--border-strong) 80%, transparent);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    outline: none;
+}
+
+.setup {
+    margin: auto;
+    max-width: 24em;
+    padding: 1em;
+    text-align: center;
+    font-size: 0.87em;
+    color: var(--text-secondary);
+}
+.setup p { margin: 0 0 0.8em; line-height: 1.45; }
+.setup button { margin: 0 auto; }
+.noneLabel { font-size: 0.82em; color: var(--text-muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note { padding: 0.4em 0.2em; font-size: 0.78em; color: var(--text-muted); font-style: italic; }
+
+/* ── Kanban ── */
+.kscroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    outline: none;
+}
+.kgrid {
+    display: grid;
+    gap: 0.5em;
+    align-items: stretch;
+    width: max-content;
+    min-width: 100%;
+    padding-bottom: 0.4em;
+}
+.khead {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    min-width: 0;
+    padding: 0.4em 0.3em 0.4em 0.45em;
+    border-top: 3px solid hsl(var(--col-hue, 0), 55%, 55%);
+    border-radius: 0.5em;
+    background-color: var(--bg-surface-alt);
+    box-shadow: 0 1px 0 var(--tbl-line);
+}
+.khead:not([style]) { border-top-color: var(--border-strong); }
+.kheadFolded { flex-direction: column; padding: 0.4em 0.1em; }
+.kheadFolded .kheadName { writing-mode: vertical-rl; }
+.kheadName {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    overflow: hidden;
+}
+.kcount { flex: none; font: 0.74em var(--font-mono); color: var(--text-muted); }
+.overLimit { color: var(--accent-danger); font-weight: 700; }
+.kmenu {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    padding: 0;
+    border: none;
+    border-radius: 0.35em;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.87em;
+    cursor: pointer;
+}
+.kmenu:hover:not(:disabled) { background-color: var(--bg-hover); color: var(--accent-warning); }
+.kmenu:disabled { opacity: 0.35; cursor: default; }
+.kaddCol {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.2em;
+    padding: 0;
+    border: 1px dashed var(--border-default);
+    border-radius: 0.5em;
+    background: transparent;
+    color: var(--accent-warning);
+    cursor: pointer;
+}
+.kaddCol:hover { background-color: var(--bg-hover); }
+.laneHead {
+    grid-column: 1 / -1;
+    position: sticky;
+    left: 0;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-top: 0.3em;
+    padding: 0.2em 0.4em;
+    border: none;
+    border-radius: 0.4em;
+    background: transparent;
+    color: var(--text-secondary);
+    font: 600 0.82em var(--font-body);
+    cursor: pointer;
+}
+.laneHead:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+.kcell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45em;
+    min-width: 0;
+    min-height: 3.2em;
+    padding: 0.45em;
+    border-radius: 0.55em;
+    background-color: color-mix(in srgb, var(--bg-surface-alt) 70%, transparent);
+    border: 1px dashed transparent;
+}
+.kcellFolded { align-items: center; padding: 0.45em 0; }
+.foldCount { font: 0.74em var(--font-mono); color: var(--text-muted); }
+.cellOver { border-color: var(--accent-warning); background-color: color-mix(in srgb, var(--accent-warning) 9%, var(--bg-surface-alt)); }
+
+/* ── a card ── */
+.card {
+    position: relative;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+    padding: 0.5em 0.55em 0.55em 0.7em;
+    border: 1px solid var(--border-default);
+    border-radius: 0.5em;
+    background-color: var(--bg-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    font-size: 0.87em;
+    cursor: grab;
+    overflow: hidden;
+    touch-action: none;
+}
+.card:hover { border-color: var(--border-strong); }
+.cardSel { border-color: var(--accent-warning); box-shadow: 0 0 0 1px var(--accent-warning); }
+.cardLifted { cursor: grabbing; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); opacity: 0.92; }
+.dropBefore { box-shadow: 0 -0.3em 0 -0.1em var(--accent-warning); }
+.dropAfter { box-shadow: 0 0.3em 0 -0.1em var(--accent-warning); }
+.compact { padding-top: 0.35em; padding-bottom: 0.35em; }
+.stale { opacity: 0.55; }
+.cardEdge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0.25em;
+    background-color: hsl(var(--card-hue), 60%, 55%);
+}
+.cardTop { display: flex; align-items: flex-start; gap: 0.3em; min-width: 0; }
+.cardTitle {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+.untitled { color: var(--text-muted); font-style: italic; }
+.titleEdit, .addBox {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 0.15em 0.3em;
+    border: 1px solid var(--accent-warning);
+    border-radius: 0.3em;
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    font: 1em/1.35 var(--font-body);
+    resize: none;
+    field-sizing: content;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.addBox { flex: none; font-size: 0.87em; padding: 0.4em 0.5em; border-radius: 0.5em; min-height: 3.2em; }
+.cardTools { flex: none; display: flex; gap: 0.1em; opacity: 0.3; transition: opacity 120ms; }
+.card:hover .cardTools, .cardSel .cardTools { opacity: 1; }
+.cardBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55em;
+    height: 1.55em;
+    padding: 0;
+    border: none;
+    border-radius: 0.3em;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.cardBtn:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+.cardDel:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.16); }
+.fields { display: flex; flex-wrap: wrap; gap: 0.3em 0.5em; align-items: center; }
+.fieldsDetailed { display: grid; grid-template-columns: auto 1fr; gap: 0.2em 0.6em; align-items: center; }
+.field { display: contents; }
+.fields .field { display: flex; align-items: center; min-width: 0; }
+.fieldName { font-size: 0.78em; color: var(--text-muted); white-space: nowrap; }
+.fieldText { display: inline-flex; align-items: center; gap: 0.25em; font-size: 0.85em; color: var(--text-secondary); overflow-wrap: anywhere; }
+.fieldEmpty { font-size: 0.85em; color: var(--text-muted); }
+.fieldErr { font: 0.78em var(--font-mono); color: var(--accent-danger); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.2em; }
+
+.addCard {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.35em 0.45em;
+    border: none;
+    border-radius: 0.4em;
+    background: transparent;
+    color: var(--accent-warning);
+    font: 0.82em var(--font-body);
+    text-align: left;
+    cursor: pointer;
+}
+.addCard:hover:not(:disabled) { background-color: var(--bg-hover); }
+.addCard:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Matrix ── */
+.mscroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    outline: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+.mgrid {
+    flex: none;
+    display: grid;
+    gap: 0.4em;
+    min-width: max-content;
+}
+.mcorner {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.15em;
+    padding: 0.2em 0.4em;
+    font: 600 0.72em var(--font-body);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.mcorner span { display: inline-flex; align-items: center; gap: 0.25em; }
+.maxis { display: flex; align-items: flex-end; justify-content: center; padding: 0.15em 0.3em; min-width: 0; }
+.mrowAxis { align-items: center; justify-content: flex-end; max-width: 9em; }
+.mcell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    min-width: 0;
+    padding: 0.4em;
+    border: 1px solid var(--tbl-line);
+    border-radius: 0.6em;
+    background-color: hsla(var(--cell-hue, 0), 55%, 50%, 0.1);
+}
+.mcell:not([style]) { background-color: color-mix(in srgb, var(--bg-surface-alt) 60%, transparent); }
+.mcellEmpty { border-style: dashed; }
+.mcellHead { display: flex; align-items: center; gap: 0.25em; min-height: 1.6em; }
+.mlabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding: 0.1em 0.2em;
+    border-radius: 0.3em;
+    font: 600 0.8em var(--font-display);
+    letter-spacing: 0.02em;
+    color: hsl(var(--cell-hue, 0), 45%, 62%);
+    cursor: text;
+}
+.mcell:not([style]) .mlabel { color: var(--text-secondary); }
+.mlabelEmpty { color: var(--text-muted) !important; font-weight: 400; font-style: italic; opacity: 0.6; }
+.mlabel:hover { background-color: var(--bg-hover); }
+.mlabelInput {
+    flex: 1;
+    min-width: 0;
+    padding: 0.1em 0.3em;
+    border: 1px solid var(--accent-warning);
+    border-radius: 0.3em;
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    font: 600 0.8em var(--font-display);
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.more {
+    align-self: flex-start;
+    padding: 0.2em 0.5em;
+    border: 1px solid var(--border-default);
+    border-radius: 99em;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font: 0.76em var(--font-mono);
+    cursor: pointer;
+}
+.more:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.tray {
+    flex: none;
+    padding: 0.45em;
+    border: 1px dashed var(--border-default);
+    border-radius: 0.6em;
+}
+.trayHead { display: flex; align-items: baseline; gap: 0.5em; margin-bottom: 0.4em; font: 600 0.78em var(--font-body); color: var(--text-secondary); }
+.trayHint { font-weight: 400; color: var(--text-muted); font-style: italic; }
+.trayCards { display: flex; flex-wrap: wrap; gap: 0.45em; align-items: flex-start; }
+.trayCards .card { width: 13em; }
+
+/* ── menus (portalled, px) ── */
+.popLabelWide { flex: none; width: 76px; font-size: 12px; color: var(--text-muted); }
+.segs { display: flex; flex: 1; gap: 2px; padding: 2px; border-radius: 7px; background-color: var(--bg-surface); border: 1px solid var(--border-default); }
+.seg {
+    flex: 1;
+    height: 23px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: 12px var(--font-body);
+    cursor: pointer;
+}
+.seg:hover { color: var(--text-primary); }
+.segOn { background-color: var(--bg-hover); color: var(--accent-warning); }
+.hues { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px 4px; }
+.hue {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background-color: hsl(var(--hue), 55%, 50%);
+    cursor: pointer;
+}
+.hue:not([style]) { background: transparent; border: 1.5px dashed var(--border-strong); }
+.hueOn { outline: 2px solid var(--accent-warning); outline-offset: 2px; }

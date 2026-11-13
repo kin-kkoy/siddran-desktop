@@ -46,7 +46,7 @@ function SandboxToolbar({
     paintColor, onPaintColorChange, paintMenuOpen, onBucketClick, onClosePaintMenu,
     shapePickerOpen, onToggleShapePicker, onCloseShapePicker,
     insertMenuOpen, onToggleInsertMenu, onCloseInsertMenu,
-    onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf, onInsertTable,
+    onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf, onInsertFormat,
     onUndo, onRedo, canUndo, canRedo,
     snapEnabled, onToggleSnap, onExport,
     onOpenDiagram,
@@ -127,7 +127,7 @@ function SandboxToolbar({
                 onPickTask={onAttachTaskClick}
                 onPickImage={onPickImage}
                 onPickPdf={onPickPdf}
-                onPickTable={onInsertTable}
+                onPickFormat={onInsertFormat}
             />
 
             <div className={styles.divider} />

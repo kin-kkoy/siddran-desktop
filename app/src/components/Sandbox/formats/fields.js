@@ -277,6 +277,22 @@ export function removeOption(payload, fieldId, label, { at = nowISO() } = {}) {
     }
 }
 
+/** Move option `from` to the place of option `to` (a Kanban column dragged: the order every view uses, R13.46). */
+export function moveOption(payload, fieldId, from, to) {
+    return {
+        ...payload,
+        fields: (payload.fields || []).map(f => {
+            if (f.id !== fieldId || !hasOptions(f)) return f
+            const opts = [...(f.options || [])]
+            const i = opts.indexOf(from), j = opts.indexOf(to)
+            if (i < 0 || j < 0 || i === j) return f
+            opts.splice(i, 1)
+            opts.splice(j, 0, from)
+            return { ...f, options: opts }
+        }),
+    }
+}
+
 /** Move a field to `index` in the field order. */
 export function moveField(payload, id, index) {
     const fields = [...(payload.fields || [])]
@@ -302,11 +318,25 @@ export function removeField(payload, id, { at = nowISO() } = {}) {
 }
 
 /**
- * Drop view settings (payload.table, see query.js) that name `fieldId` — all
+ * Drop view settings (payload.table, see query.js, and the other views' filters) that name `fieldId` — all
  * of them when the field is gone, or only the type-specific ones (filters,
  * calculations) when its type changed.
  */
 function pruneConfig(payload, fieldId, { type = false } = {}) {
+    // The other views (Kanban, Matrix, Timeline) keep filters and sorts too; their other keys fall back to defaults by themselves.
+    let out = payload
+    for (const view of ['kanban', 'matrix', 'timeline']) {
+        const v = out[view]
+        if (!v) continue
+        const next = { ...v }
+        if (v.filters) next.filters = v.filters.filter(f => f.field !== fieldId)
+        if (!type && v.sorts) next.sorts = v.sorts.filter(s => s.field !== fieldId)
+        out = { ...out, [view]: next }
+    }
+    return pruneTable(out, fieldId, { type })
+}
+
+function pruneTable(payload, fieldId, { type = false } = {}) {
     const c = payload.table
     if (!c) return payload
     const next = { ...c }

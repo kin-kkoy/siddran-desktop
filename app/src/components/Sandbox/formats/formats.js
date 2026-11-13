@@ -18,6 +18,7 @@
  *   fields:  [{ id, name, type, options?, decimals? }],   // types: fields.js
  *   records: [{ id, values: { [fieldId]: value }, updated_at }],
  *   table:   { filters, match, sorts, groupBy, hidden, widths, calcs, wrap },  // the Table view's settings (query.js)
+ *   kanban, matrix: { … },                               // those views' settings (boards.js)
  * }
  *
  * `fields` and `records` are only used by an own-records widget; a linked one
@@ -52,14 +53,31 @@ export function defaultFields() {
 }
 
 export const FORMAT_SIZE = { w: 420, h: 320 }
+/** A new widget's size by view: a Kanban wants width for its columns, a Matrix room for its cells. */
+export const formatSize = (view) => (view === 'kanban' ? { w: 920, h: 420 } : view === 'matrix' ? { w: 600, h: 540 } : FORMAT_SIZE)
+
+/** A new Matrix's axes: impact × effort, with the usual quadrant names (view settings, R13.52). */
+export const MATRIX_FIELDS = [
+    { id: 'impact', name: 'Impact', type: 'select', options: ['High', 'Low'] },
+    { id: 'effort', name: 'Effort', type: 'select', options: ['Low', 'High'] },
+]
+export const MATRIX_CELLS = {
+    High: { Low: { label: 'Quick wins', hue: 140 }, High: { label: 'Big bets', hue: 210 } },
+    Low: { Low: { label: 'Fill-ins', hue: 45 }, High: { label: 'Thankless tasks', hue: 0 } },
+}
 
 export function formatPayload(view = 'table', title) {
-    return {
+    const out = {
         kind: FORMAT_KIND, view, title: title || viewLabel(view),
         source: { type: 'own' },
         fields: defaultFields(),
         records: [],
     }
+    if (view === 'matrix') {
+        out.fields = [out.fields[0], ...MATRIX_FIELDS.map(f => ({ ...f, options: [...f.options] }))]
+        out.matrix = { rowBy: 'impact', colBy: 'effort', cells: JSON.parse(JSON.stringify(MATRIX_CELLS)) }
+    }
+    return out
 }
 
 /** Next default title for `view`: "Table", "Table 2", … */

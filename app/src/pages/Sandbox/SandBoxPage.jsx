@@ -29,7 +29,7 @@ import DiagramModal from '../../components/Sandbox/flow/DiagramModal'
 import TemplatesModal from '../../components/Sandbox/templates/TemplatesModal'
 import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
-import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
+import { isFormat, formatPayload, nextFormatTitle, formatSize } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
 import { attachPatches, stampPatches, boardClips, cutLabel, widgetBorne } from '../../components/Sandbox/selection/attach'
 import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
@@ -727,7 +727,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }, [sandboxId, act])
     const insertFormat = useCallback((view = 'table') => {
         const c = centerWorld()
-        const { w, h } = FORMAT_SIZE
+        const { w, h } = formatSize(view)
         const created = addCard({
             type: 'shape', x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w, h, rotation: 0, z_index: nextZ(),
             payload: formatPayload(view, nextFormatTitle(items, view)),
@@ -984,7 +984,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onAttachTaskClick={() => setTaskPickerOpen(true)}
                     onPickImage={onPickImageClick}
                     onPickPdf={onPickPdf}
-                    onInsertTable={insertFormat}
+                    onInsertFormat={insertFormat}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}

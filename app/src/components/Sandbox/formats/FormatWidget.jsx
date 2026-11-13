@@ -1,10 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuTable2, LuMaximize2, LuMinimize2, LuChevronDown, LuLink } from 'react-icons/lu'
+import { LuTable2, LuMaximize2, LuMinimize2, LuChevronDown, LuLink, LuCheck } from 'react-icons/lu'
 import styles from './FormatWidget.module.css'
 import { useFormatSource } from './useFormatSource'
 import { sourceLabel } from './dataSource'
-import { viewComponent } from './views'
+import { viewComponent, VIEW_ICONS, switchableViews } from './views'
+import { viewLabel } from './formats'
+import Popover from './Popover'
+import tStyles from './Table.module.css'
 import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
 import { cutLabel } from '../selection/attach'
@@ -20,6 +23,9 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
     const { bundles } = useTasksApi()
     const p = item.payload || {}
     const [menu, setMenu] = useState(false)
+    const [viewMenu, setViewMenu] = useState(false)
+    const viewRef = useRef(null)
+    const closeViewMenu = useCallback(() => setViewMenu(false), [])
     const [titleEdit, setTitleEdit] = useState(false)
     const srcRef = useRef(null)
     const editing = titleEdit || renaming
@@ -30,13 +36,15 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
         onRenameDone?.(v)
     }
     const View = viewComponent(p.view)
+    // One undo step. The records, fields and every view's settings stay as they are.
+    const onPickView = (view) => commit(q => ({ ...q, view }))
     // A view's own settings (filters, sorts, widths…) live under payload[view]; one undo step per change.
     const onConfig = useCallback((fn) => commit(q => ({ ...q, [q.view || 'table']: fn(q[q.view || 'table'] || {}) })), [commit])
     return (
         <>
             <header className={styles.bar} onPointerDown={onTitlePointerDown}
                 onDoubleClick={(e) => { if (!e.target.closest('button')) setTitleEdit(true) }}>
-                <LuTable2 size={focus ? 16 : 14} className={styles.barIcon} />
+                {(() => { const Icon = VIEW_ICONS[p.view] || LuTable2; return <Icon size={focus ? 16 : 14} className={styles.barIcon} /> })()}
                 {editing ? (
                     <input className={styles.renameInput} autoFocus defaultValue={p.title || ''} aria-label="Widget title"
                         onPointerDown={(e) => e.stopPropagation()}
@@ -50,6 +58,11 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
                     <span className={styles.barTitle} title="Double-click to rename">{p.title || 'Untitled'}</span>
                 )}
                 <span className={styles.barSpacer} />
+                {/* The view switcher (spec §13.2.4): the same records as a Table, Kanban or Matrix; each view keeps its own settings. */}
+                <button ref={viewRef} className={styles.srcBtn} onClick={() => setViewMenu(m => !m)} title="Show these records as…" aria-label="View">
+                    <span>{viewLabel(p.view)}</span>
+                    <LuChevronDown size={11} />
+                </button>
                 <button ref={srcRef} className={`${styles.srcBtn} ${linked ? styles.srcLinked : ''}`} onClick={() => setMenu(m => !m)}
                     title="Where the records come from" aria-label="Data source">
                     {linked && <LuLink size={11} />}
@@ -72,8 +85,27 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
             </header>
             {/* data-sb-scroll: the board's wheel scrolls this instead of zooming. */}
             <div className={styles.body} data-sb-scroll="true">
-                <View item={item} source={source} onConfig={onConfig} />
+                {/* Keyed by the view: a switch fades the new one in (150 ms) rather than jumping. */}
+                <div key={p.view || 'table'} className={styles.viewFade}>
+                    <View item={item} source={source} onConfig={onConfig} />
+                </div>
             </div>
+            {viewMenu && (
+                <Popover anchor={viewRef} onClose={closeViewMenu} width={190} label="View">
+                    <div className={tStyles.popHead}>Show as</div>
+                    {switchableViews(p.view).map(v => {
+                        const Icon = VIEW_ICONS[v.id] || LuTable2
+                        const on = (p.view || 'table') === v.id
+                        return (
+                            <button key={v.id} className={tStyles.popItem} onClick={() => { setViewMenu(false); if (!on) onPickView(v.id) }}>
+                                <span className={tStyles.popTick}>{on && <LuCheck size={13} />}</span>
+                                <Icon size={14} /> <span className={tStyles.popLabel}>{v.label}</span>
+                            </button>
+                        )
+                    })}
+                    <div className={tStyles.popNote}>Same records; each view keeps its own filters and layout.</div>
+                </Popover>
+            )}
             {menu && <SourceMenu anchorRef={srcRef} source={p.source} bundles={bundles} onClose={closeMenu}
                 onPick={(s) => { setMenu(false); onPickSource(s) }} />}
         </>
