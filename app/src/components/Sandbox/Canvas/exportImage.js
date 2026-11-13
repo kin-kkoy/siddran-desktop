@@ -15,7 +15,7 @@ const PAD = 24          // world px of breathing room around the content
 const TARGET_SCALE = 2  // render at 2× for crispness…
 const MAX_SIDE = 4000   // …unless that would blow past this pixel dimension
 
-export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = null) {
+export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = null, topStage = null) {
     if (!stage) return { ok: false, reason: 'no-stage' }
     if (!clip && (!graphicItems || graphicItems.length === 0)) return { ok: false, reason: 'empty' }
 
@@ -41,24 +41,32 @@ export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = nu
     if (Math.max(w, h) * scale > MAX_SIDE) scale = MAX_SIDE / Math.max(w, h)
 
     // snapshot the live stage so we can restore it exactly
-    const snap = {
-        x: stage.x(), y: stage.y(),
-        sx: stage.scaleX(), sy: stage.scaleY(),
-        width: stage.width(), height: stage.height(),
-    }
+    // The top canvas (what rides on widgets, SandboxCanvas) is posed the same
+    // way and painted over the board's.
+    const stages = topStage ? [stage, topStage] : [stage]
+    const snaps = stages.map(s => ({ s, x: s.x(), y: s.y(), sx: s.scaleX(), sy: s.scaleY(), width: s.width(), height: s.height() }))
+    const W = Math.ceil(w * scale), H = Math.ceil(h * scale)
 
     let url
     try {
-        stage.scale({ x: scale, y: scale })
-        stage.position({ x: -minX * scale, y: -minY * scale })
-        stage.size({ width: Math.ceil(w * scale), height: Math.ceil(h * scale) })
-        stage.draw()
-        url = stage.toDataURL({ pixelRatio: 1 })
+        const out = document.createElement('canvas')
+        out.width = W; out.height = H
+        const ctx = out.getContext('2d')
+        for (const s of stages) {
+            s.scale({ x: scale, y: scale })
+            s.position({ x: -minX * scale, y: -minY * scale })
+            s.size({ width: W, height: H })
+            s.draw()
+            ctx.drawImage(s.toCanvas({ pixelRatio: 1 }), 0, 0)
+        }
+        url = out.toDataURL('image/png')
     } finally {
-        stage.scale({ x: snap.sx, y: snap.sy })
-        stage.position({ x: snap.x, y: snap.y })
-        stage.size({ width: snap.width, height: snap.height })
-        stage.draw()
+        for (const n of snaps) {
+            n.s.scale({ x: n.sx, y: n.sy })
+            n.s.position({ x: n.x, y: n.y })
+            n.s.size({ width: n.width, height: n.height })
+            n.s.draw()
+        }
     }
 
     const safe = (title || 'sandbox').trim().replace(/[^\w-]+/g, '_') || 'sandbox'

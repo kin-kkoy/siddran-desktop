@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { attachedItems, attachTarget, attachPatches, clipRect, isClipped, clipState, legacyRiders, stampPatches, boardClips, cutLabel } from './attach'
+import { attachedItems, attachTarget, attachPatches, clipRect, isClipped, clipState, legacyRiders, stampPatches, boardClips, cutLabel, widgetBorne } from './attach'
 
 const widget = (id, x, y, w, h, z, extra = {}) => ({ id, type: 'shape', x, y, w, h, rotation: 0, z_index: z, payload: { kind: 'format', ...extra } })
 const frame = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', x, y, w, h, rotation: 0, z_index: -5, payload: { kind: 'frame', title: id, ...extra } })
@@ -25,8 +25,11 @@ describe('sticky attachment — widgets', () => {
     expect(attachPatches(['C'], [small, hanging])).toEqual([{ id: 'C', payload: { noteId: 1 } }])
   })
 
-  it('a widget takes only DOM things above it', () => {
-    expect(attachTarget(shape('S', 100, 100, 50, 50), [W])).toBeNull()
+  it('a widget takes anything above it but frames — never what is underneath', () => {
+    expect(attachTarget(shape('S', 100, 100, 50, 50), [W])?.id).toBe('W')
+    expect(attachTarget({ id: 'K', type: 'stroke', x: 100, y: 100, w: 5, h: 5, z_index: 9, payload: {} }, [W])?.id).toBe('W')
+    expect(attachTarget(shape('S', 100, 100, 50, 50, {}), [{ ...W, z_index: 7 }])).toBeNull()   // the shape is beneath it
+    expect(attachTarget({ ...frame('G', 50, 50, 100, 100), z_index: 9 }, [W])).toBeNull()
     expect(attachTarget(card('U', 100, 100, 50, 50, 0), [W])).toBeNull()   // under the widget
     expect(attachPatches(['L'], [W, card('L', 100, 100, 50, 50, 3, { locked: true })])).toEqual([])
   })
@@ -72,6 +75,21 @@ describe('sticky attachment — frames', () => {
     expect(legacyRiders(F, [F, s, out, stuck]).map(i => i.id)).toEqual(['S'])
     expect(stampPatches([F, s, out, stuck])).toEqual([{ id: 'S', payload: { kind: 'rect', attachedTo: 'F' } }])
     expect(stampPatches([s, out])).toEqual([])
+  })
+})
+
+describe('drawn above the widgets', () => {
+  it('board graphics riding on a widget, directly or through a card or a smaller widget', () => {
+    const W = widget('W', 0, 0, 400, 300, 1)
+    const I = widget('I', 10, 10, 100, 100, 2, { attachedTo: 'W' })
+    const F = frame('F', 500, 0, 300, 300)
+    const items = [W, I, F,
+      shape('A', 20, 20, 10, 10, { attachedTo: 'W' }),
+      shape('B', 20, 20, 10, 10, { attachedTo: 'I' }),
+      shape('C', 520, 20, 10, 10, { attachedTo: 'F' }),
+      card('D', 20, 20, 10, 10, 4, { attachedTo: 'W' }),
+      shape('E', 900, 900, 10, 10)]
+    expect([...widgetBorne(items)].sort()).toEqual(['A', 'B'])
   })
 })
 

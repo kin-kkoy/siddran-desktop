@@ -4,6 +4,7 @@
 //   format:<boardId> — a scripted walk through a Format widget (runFormat)
 //   attach:<boardId> — sticky attachment, clipping and text size (runAttach)
 //   frames:<boardId> — sticky attachment on frames (runFrames)
+//   top:<boardId>    — things drawn on a widget, on the top canvas (runTop)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -178,8 +179,9 @@ async function runFormat() {
     await sleep(500)
     ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click()
     await sleep(1000)
-    const widget = () => document.querySelector('[data-sb-scrollcard="true"][data-sb-card="true"]:has(> header)')
-    const fmt = () => cached().find(i => i.payload?.kind === 'format')
+    // The widget this run inserted: the newest one (the Bag may hold others).
+    const fmt = () => cached().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const widget = () => document.querySelector(`[data-sb-id="${fmt()?.id}"]`)
     await step('inserted', { items: cached().length - before, format: fmt()?.payload, box: boxOf(fmt()) })
 
     const add = widget().querySelector('input[placeholder="+ Add a record"]')
@@ -236,7 +238,7 @@ async function runFormat() {
     // Point it at the Bag's tasks, tick one, then back to own records.
     widget().querySelector('button[aria-label="Data source"]').click()
     await sleep(500)
-    ;[...document.querySelectorAll('button')].find(b => b.textContent.includes('All tasks'))?.click()
+    ;[...document.querySelectorAll('[data-sb-handle="true"] button')].find(b => b.textContent.includes('All tasks'))?.click()
     await sleep(1200)
     const firstTask = widget().querySelector('button[aria-label="Mark done"]')
     const taskTitle = firstTask?.parentElement?.querySelector('input')?.value
@@ -246,15 +248,20 @@ async function runFormat() {
 
     widget().querySelector('button[aria-label="Data source"]').click()
     await sleep(500)
-    ;[...document.querySelectorAll('button')].find(b => b.textContent.includes('Own records'))?.click()
+    // The menu's entry (portalled, data-sb-handle) — not another widget's "Own records" chip.
+    ;[...document.querySelectorAll('[data-sb-handle="true"] button')].find(b => b.textContent.includes('Own records'))?.click()
     await sleep(1000)
     await step('own-again', { records: fmt()?.payload?.records?.length })
 
     // Undo walks back: source → … ; redo restores.
-    key('z', { ctrlKey: true }); await sleep(500)
-    const undone = fmt()?.payload?.source
-    key('y', { ctrlKey: true }); await sleep(500)
-    await step('undo', { afterUndo: undone, afterRedo: fmt()?.payload?.source })
+    // Read the live store (the localStorage cache lags, more so in a hidden window).
+    const store = await import('../hooks/sandboxItemsStore')
+    const liveSource = () => store.getSnapshot(boardId).find(i => i.id === fmt()?.id)?.payload?.source
+    const beforeUndo = liveSource()
+    key('z', { ctrlKey: true }); await sleep(300)
+    const undone = liveSource()
+    key('y', { ctrlKey: true }); await sleep(300)
+    await step('undo', { beforeUndo, afterUndo: undone, afterRedo: liveSource() })
     send('done', true)
 }
 
@@ -412,6 +419,72 @@ async function runFrames() {
     send('done', true)
 }
 
+// ── top:<boardId> — things drawn on a widget live on the top canvas.
+async function runTop() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(800)
+    const W = () => live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const wEl = () => document.querySelector(`[data-sb-id="${W().id}"]`)
+    const kc = stage.content.querySelector('canvas')
+    const top = window.Konva.stages.find(s => s !== stage && s.container()?.isConnected)
+    const topShapes = () => top ? top.find('Shape').length : -1
+    key('Escape'); await sleep(200)
+
+    // Pen: a squiggle across the widget's body.
+    let r = wEl().getBoundingClientRect()
+    key('p'); await sleep(300)
+    const x0 = r.left + 60, y0 = r.top + 120
+    kc.dispatchEvent(ptr('pointerdown', x0, y0))
+    for (let i = 1; i <= 20; i++) { kc.dispatchEvent(ptr('pointermove', x0 + i * 8, y0 + Math.sin(i / 2) * 20)) ; await sleep(10) }
+    kc.dispatchEvent(ptr('pointerup', x0 + 160, y0)); await sleep(600)
+    const ink = () => live().filter(i => i.type === 'stroke').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    await step('inked', { attachedTo: ink()?.payload?.attachedTo === W().id, topStage: !!top, topShapes: topShapes() })
+
+    // Sticky tool: a click on the widget places one on it.
+    key('n'); await sleep(300)
+    kc.dispatchEvent(ptr('pointerdown', r.right - 120, r.top + 200)); kc.dispatchEvent(ptr('pointerup', r.right - 120, r.top + 200)); await sleep(600)
+    document.activeElement?.blur?.(); key('Escape'); await sleep(300)
+    const sticky = () => live().filter(i => i.payload?.kind === 'sticky').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    await step('sticky', { attachedTo: sticky()?.payload?.attachedTo === W().id, topShapes: topShapes() })
+
+    // Select tool: a press on the ink, over the widget, selects the ink — Delete removes it, not the widget.
+    key('v'); await sleep(200); key('Escape'); await sleep(200)
+    const inkId = ink().id
+    const p0 = { x: x0 + 8 * 10, y: y0 + Math.sin(5) * 20 }
+    const target = document.elementFromPoint(p0.x, p0.y)
+    target.dispatchEvent(ptr('pointerdown', p0.x, p0.y)); window.dispatchEvent(ptr('pointerup', p0.x, p0.y)); await sleep(400)
+    const widgetSelected = /selected/.test(wEl().className)
+    key('Delete'); await sleep(500)
+    await step('click-through', { pressedOn: target.tagName + '.' + (target.className?.baseVal ?? target.className).toString().slice(0, 30), widgetSelected, inkGone: !live().some(i => i.id === inkId), widgetThere: !!W() })
+    key('z', { ctrlKey: true }); await sleep(500)
+
+    // Move the widget: the ink and the sticky ride along.
+    const i0 = ink(), s0 = sticky(), w0 = W()
+    r = wEl().getBoundingClientRect()
+    const bar = wEl().querySelector('header')
+    await dragEl(bar, r.left + 40, r.top + 10, -150, 80)
+    await step('moved', { widget: [W().x - w0.x, W().y - w0.y], ink: [ink().x - i0.x, ink().y - i0.y], sticky: [sticky().x - s0.x, sticky().y - s0.y] })
+
+    // Eraser on the sticky (over the widget) erases the sticky, not the widget.
+    const sid = sticky().id
+    r = wEl().getBoundingClientRect()
+    const sc = { x: r.left + (sticky().x - W().x + sticky().w / 2) * stage.scaleX(), y: r.top + (sticky().y - W().y + sticky().h / 2) * stage.scaleY() }
+    key('e'); await sleep(300)
+    const t2 = document.elementFromPoint(sc.x, sc.y)
+    t2.dispatchEvent(ptr('pointerdown', sc.x, sc.y)); window.dispatchEvent(ptr('pointerup', sc.x, sc.y)); kc.dispatchEvent(ptr('pointerup', sc.x, sc.y)); await sleep(500)
+    await step('erased', { stickyGone: !live().some(i => i.id === sid), widgetThere: live().some(i => i.id === w0.id) })
+    send('done', true)
+}
+
+if (spec.startsWith('top:') && boardId) runTop().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('frames:') && boardId) runFrames().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', {
     message: `${e?.message} @ ${e?.stack}`,

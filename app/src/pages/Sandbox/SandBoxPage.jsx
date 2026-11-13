@@ -31,7 +31,7 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
-import { attachPatches, stampPatches, boardClips, cutLabel } from '../../components/Sandbox/selection/attach'
+import { attachPatches, stampPatches, boardClips, cutLabel, widgetBorne } from '../../components/Sandbox/selection/attach'
 import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
@@ -152,6 +152,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const styleClipRef = useRef(null)
     const fileRef = useRef(null)
     const stageRef = useRef(null)
+    const topStageRef = useRef(null)   // the top canvas (above the widgets)
 
     useEffect(() => { setTitleDraft(sandbox?.title ?? '') }, [sandbox?.id, sandbox?.title])
 
@@ -178,9 +179,18 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // ONE Konva layer so z-order works across all graphic types.
     // Format widgets are shapes in the file but DOM windows on screen, drawn
     // with the cards (above the Konva layers).
-    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector' && !isFrame(i) && !isFormat(i))), [items])
+    // Graphics riding on a widget go on the top canvas, above the widgets
+    // (selection/attach.js widgetBorne); so do links between two of them.
+    const onWidget = useMemo(() => widgetBorne(items), [items])
+    const graphicItems = useMemo(() => sortByZ(items.filter(i => !CARD_TYPES.has(i.type) && i.type !== 'connector' && !isFrame(i) && !isFormat(i) && !onWidget.has(i.id))), [items, onWidget])
+    const topGraphicItems = useMemo(() => sortByZ(items.filter(i => onWidget.has(i.id))), [items, onWidget])
+
     const frameItems = useMemo(() => sortByZ(items.filter(isFrame)), [items])
-    const connectorItems = useMemo(() => sortByZ(items.filter(i => i.type === 'connector')), [items])
+    const [connectorItems, topConnectorItems] = useMemo(() => {
+        const onTop = (c) => onWidget.has(c.payload?.from?.itemId) && onWidget.has(c.payload?.to?.itemId)
+        const links = sortByZ(items.filter(i => i.type === 'connector'))
+        return [links.filter(c => !onTop(c)), links.filter(onTop)]
+    }, [items, onWidget])
     const cardItems = useMemo(() => sortByZ(items.filter(i => CARD_TYPES.has(i.type) || isFormat(i))), [items])
     const selectedItems = useMemo(() => items.filter(i => canvas.selectedIds.has(i.id)), [items, canvas.selectedIds])
 
@@ -190,10 +200,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const z = partial.payload?.highlighter
             ? highlighterZ({ x: partial.x, y: partial.y, w: partial.w, h: partial.h }, items, nextZ())
             : nextZ()
-        const created = act.addItem({ ...partial, z_index: z })
+        // Drawn on a widget (or in a frame): attached as it lands.
+        const created = addCard({ ...partial, z_index: z })
         bump()
         return created
-    }, [act, items, nextZ, bump])
+    }, [addCard, items, nextZ, bump])
 
     // Smart drawing: the ink lands first (one undo step), then — if it reads as a
     // shape — it is swapped for the clean shape (a second step). So Ctrl+Z
@@ -206,9 +217,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const width = Math.max(2, Math.min(8, Math.round((p.options?.size ?? 6) / 2)))
         const shape = shapeFromRecognition(rec, { stroke: p.color, strokeWidth: width, fill: 'transparent' },
             { points: p.points, options: p.options, color: p.color })
+        // The clean shape stays wherever the ink was attached.
+        const att = ink.payload?.attachedTo
         beginTransaction()
         act.removeItem(ink.id)
-        act.addItem({ ...shape, z_index: ink.z_index })
+        act.addItem({ ...shape, z_index: ink.z_index, ...(att ? { payload: { ...shape.payload, attachedTo: att } } : null) })
         endTransaction()
         bump()
     }, [onStrokeCommit, canvas.viewport.zoom, act, beginTransaction, endTransaction, bump])
@@ -236,6 +249,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                 flatOutline: flat.map((v, i) => v - (i % 2 === 0 ? minX : minY)), points: src.points,
                 color: src.color, options: src.options, baseW: bw, baseH: bh,
                 ...(it.payload.groupId ? { groupId: it.payload.groupId } : null),
+                ...(it.payload.attachedTo ? { attachedTo: it.payload.attachedTo } : null),
             },
         })
         endTransaction()
@@ -281,15 +295,15 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             return
         }
         if (kind === 'sticky') {
-            const created = act.addItem({ ...partial, z_index: nextZ(), payload: { kind: 'sticky', fill: STICKY_DEFAULT, text: '', textAlign: 'center' } })
+            const created = addCard({ ...partial, z_index: nextZ(), payload: { kind: 'sticky', fill: STICKY_DEFAULT, text: '', textAlign: 'center' } })
             canvas.setTool('pointer')
             canvas.selectOnly(created.id)
             setEditingShapeId(created.id)
             bump()
             return
         }
-        act.addItem({ ...partial, z_index: nextZ() }); bump()
-    }, [act, nextZ, bump, items, canvas])
+        addCard({ ...partial, z_index: nextZ() }); bump()
+    }, [act, addCard, nextZ, bump, items, canvas])
     const onCreateConnector = useCallback((payload) => {
         act.addItem({
             type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: nextZ(),
@@ -373,16 +387,16 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
     const onExport = useCallback(() => {
-        const res = exportStagePNG(stageRef.current, [...frameItems, ...graphicItems], sandbox?.title)
+        const res = exportStagePNG(stageRef.current, [...frameItems, ...graphicItems, ...topGraphicItems], sandbox?.title, null, topStageRef.current)
         if (!res.ok) toast.error(res.reason === 'empty' ? 'Nothing to export yet.' : 'Export failed.')
         else toast.success('Exported PNG (cards not included)')
-    }, [frameItems, graphicItems, sandbox?.title])
+    }, [frameItems, graphicItems, topGraphicItems, sandbox?.title])
 
     // Export one frame — exactly its rectangle (spec §11.9).
     const onExportFrame = useCallback((id) => {
         const f = items.find(i => i.id === id)
         if (!f) return
-        const res = exportStagePNG(stageRef.current, [f], `${sandbox?.title || 'sandbox'} - ${f.payload?.title || 'Frame'}`, { x: f.x, y: f.y, w: f.w, h: f.h })
+        const res = exportStagePNG(stageRef.current, [f], `${sandbox?.title || 'sandbox'} - ${f.payload?.title || 'Frame'}`, { x: f.x, y: f.y, w: f.w, h: f.h }, topStageRef.current)
         if (!res.ok) toast.error('Export failed.')
         else toast.success('Exported the frame (cards not included)')
     }, [items, sandbox?.title])
@@ -1062,6 +1076,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     editingShapeId={editingShapeId}
                     clips={board.clips}
                     frameCutLabels={frameCutLabels}
+                    topGraphicItems={topGraphicItems}
+                    topConnectorItems={topConnectorItems}
+                    onWidgetIds={onWidget}
+                    topStageRef={topStageRef}
                 />
 
                 {editingShapeId && (() => {

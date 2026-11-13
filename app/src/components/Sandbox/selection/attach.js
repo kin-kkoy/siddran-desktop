@@ -11,9 +11,11 @@
  * = 'clip' (the floating bar's crop button) — absent or 'hang' means hang.
  *
  * What may attach to what:
- *   - a widget takes only DOM things above it (cards, smaller widgets) —
- *     board shapes paint beneath the DOM, and a widget doesn't carry what's
- *     underneath it (decided);
+ *   - a widget takes anything stacked ABOVE it but frames and connectors
+ *     (cards, smaller widgets, shapes, ink, images) — a widget doesn't carry
+ *     what's underneath it (decided). Board graphics on a widget are drawn on
+ *     a second canvas above the widgets (`widgetBorne`, SandboxCanvas), or the
+ *     widget's DOM would hide them;
  *   - a frame takes anything but connectors (they follow their ends) whose
  *     centre is inside it; another frame only if it is the smaller of the two
  *     (so two frames can never hold each other).
@@ -41,7 +43,7 @@ const area = (b) => (b.w || 0) * (b.h || 0)
 /** Could `item` attach to `c` where they both are now? */
 function fits(item, c) {
     if (!item || item.id === c.id || item.type === 'connector') return false
-    if (isFormat(c)) return isDomItem(item) && (item.z_index ?? 0) > (c.z_index ?? 0) && holds(c, centre(item))
+    if (isFormat(c)) return !isFrame(item) && (item.z_index ?? 0) > (c.z_index ?? 0) && holds(c, centre(item))
     if (isFrame(c)) return holds(c, centre(item)) && (!isFrame(item) || area(item) < area(c))
     return false
 }
@@ -180,6 +182,29 @@ export function boardClips(items, byId = new Map(items.map(i => [i.id, i]))) {
         cut.set(it.payload.attachedTo, c)
     }
     return { clips, cut }
+}
+
+/**
+ * Board graphics (strokes, shapes, images — not frames) that ride on a widget,
+ * directly or through other things attached to it: they must be drawn ABOVE
+ * the widgets (the top canvas), not on the board's canvas beneath the DOM.
+ * Returns a Set of ids.
+ */
+export function widgetBorne(items, byId = new Map(items.map(i => [i.id, i]))) {
+    const out = new Set()
+    for (const it of items) {
+        if (!it.payload?.attachedTo || isDomItem(it) || isFrame(it) || it.type === 'connector') continue
+        let id = it.payload.attachedTo
+        const seen = new Set([it.id])
+        while (id && !seen.has(id)) {
+            seen.add(id)
+            const c = byId.get(id)
+            if (!c) break
+            if (isFormat(c)) { out.add(it.id); break }
+            id = c.payload?.attachedTo
+        }
+    }
+    return out
 }
 
 /** "2 cropped · 1 out of view" — or '' when nothing is cut. */

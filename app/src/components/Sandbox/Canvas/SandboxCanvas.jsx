@@ -54,6 +54,10 @@ const BUCKET_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="2
     + '<g stroke="#fff" stroke-width="1.8"><path d="M12 3l8 8-7 7-8-8z"/><path d="M5 10c-2 3-3 7-1 10"/></g></svg>'
 const BUCKET_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(BUCKET_SVG)}") 4 20, crosshair`
 const CARD_PASS_THROUGH = new Set(['pen', 'highlighter', 'smart', 'precisionEraser', 'lasso', 'fill'])
+// Shape, sticky and text tools pass through too, so you can draw them ON a
+// card or widget (what lands on a widget attaches to it and is drawn on the
+// top canvas). The frame tool doesn't: frames never go on widgets.
+const passesCards = (tool) => CARD_PASS_THROUGH.has(tool) || tool === 'text' || (SHAPE_TOOLS.includes(tool) && tool !== 'frame')
 
 function SandboxCanvas({
     canvas,
@@ -78,6 +82,10 @@ function SandboxCanvas({
     onEmptyDoubleClick,    // (world) — double-click empty canvas to make a box there
     editingShapeId,        // shape currently text-editing → hide its committed text
     clips,                 // Map(itemId → world rect): cropped to a frame/widget (selection/attach.js)
+    topGraphicItems = [],  // graphics riding on a widget — drawn on the top canvas, above the widgets
+    topConnectorItems = [],// links between two of those
+    onWidgetIds,           // Set of their ids (selection/attach.js widgetBorne)
+    topStageRef,           // the top canvas's <Stage> (PNG export composites it)
     frameCutLabels,        // Map(frameId → "2 cropped") for the frame titles
     beginTransaction,
     endTransaction,
@@ -104,7 +112,7 @@ function SandboxCanvas({
 
     const latestRef = useRef(null)
     latestRef.current = {
-        canvas, items, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
+        canvas, items, onWidgetIds, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
         onErase, onPrecisionErase, onPrecisionEraseEnd, onSmartStroke, onPaint, onPlaceText, onImageDrop, onShapeDoubleClick, onEmptyDoubleClick, beginTransaction, endTransaction,
     }
 
@@ -198,6 +206,15 @@ function SandboxCanvas({
             return null
         }
 
+        // Something drawn on a widget (top canvas) under `world`, or near enough
+        // that its connection dot has caught the pointer.
+        const overTop = (world) => {
+            const { onWidgetIds: ids, items: all, canvas: cv } = latestRef.current
+            if (!ids?.size) return false
+            if (cv.hoverId != null && cv.hoverSide && ids.has(cv.hoverId)) return true
+            return all.some(it => ids.has(it.id) && itemHitTest(it, world.x, world.y, 2))
+        }
+
         const eraseAt = (world) => {
             const hit = topHitAt(world)
             if (hit) latestRef.current.onErase?.(hit.id)
@@ -276,11 +293,15 @@ function SandboxCanvas({
                 return
             }
             const target = e.target
-            if (target && target !== el && (
-                target.closest('[data-sb-card="true"]') || target.closest('[data-sb-handle="true"]')
-            )) return
-
             const { screen, world } = screenPointerWorld(e)
+            if (target && target !== el && target.closest('[data-sb-handle="true"]')) return
+            if (target && target !== el && target.closest('[data-sb-card="true"]')) {
+                // Over a card or widget: it takes the press — unless what's under
+                // the pointer is something drawn ON a widget (the top canvas).
+                if (!overTop(world)) return
+                e.stopPropagation()
+            }
+
             const tool = canvas.tool
 
             if (e.pointerType === 'pen') penDownRef.current = e.pointerId
@@ -716,11 +737,11 @@ function SandboxCanvas({
             // shape body and is wrapped in a data-sb-handle root — let a
             // double-click there through so it still opens text editing.
             const onMoveRegion = target?.closest?.('[data-sb-move="true"]')
-            if (!onMoveRegion && target && target !== el && (
-                target.closest('[data-sb-card="true"]') || target.closest('[data-sb-handle="true"]')
-            )) return
             const rect = el.getBoundingClientRect()
             const world = cv.worldFromScreen({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+            if (!onMoveRegion && target && target !== el && (
+                (target.closest('[data-sb-card="true"]') && !overTop(world)) || target.closest('[data-sb-handle="true"]')
+            )) return
             const hit = topHitAt(world)
             if (hit && hit.type === 'shape') cb(hit.id)
             // Nothing there (cards and handles returned above): make a box on the spot.
@@ -843,16 +864,36 @@ function SandboxCanvas({
                 <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} clips={clips} cutLabels={frameCutLabels} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
                 <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} clips={clips} />
+            </Stage>
+
+            <OverlayLayer viewport={canvas.viewport} width={size.width} height={size.height} passThrough={passesCards(tool)}>
+                {overlayChildren}
+            </OverlayLayer>
+
+            {/* The top canvas: above the cards and widgets. It draws what rides on
+                a widget (or the widget's DOM would hide it) and the live previews
+                of ink, shapes and links — so drawing over a widget shows. Same pan
+                and zoom as the board; it takes no pointer events. */}
+            <Stage
+                ref={topStageRef}
+                width={size.width}
+                height={size.height}
+                x={canvas.viewport.x}
+                y={canvas.viewport.y}
+                scaleX={canvas.viewport.zoom}
+                scaleY={canvas.viewport.zoom}
+                pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
+                listening={false}
+                style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+            >
+                {topConnectorItems.length > 0 && <ConnectorLayer connectorItems={topConnectorItems} byId={byId} selectedIds={canvas.selectedIds} />}
+                {topGraphicItems.length > 0 && <GraphicsLayer graphicItems={topGraphicItems} editingShapeId={editingShapeId} clips={clips} />}
                 <ActiveLayer
                     activeStrokeRef={canvas.activeStrokeRef}
                     activeShapeRef={canvas.activeShapeRef}
                     activeConnectorRef={canvas.activeConnectorRef}
                 />
             </Stage>
-
-            <OverlayLayer viewport={canvas.viewport} width={size.width} height={size.height} passThrough={CARD_PASS_THROUGH.has(tool)}>
-                {overlayChildren}
-            </OverlayLayer>
 
             {selectionOverlay}
 

@@ -747,3 +747,41 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     there, as no frames come.
   - Answered, not built: the cost of a top canvas for shapes and strokes on
     widgets (see the reply in session 5).
+- 2026-11-13 · session 5 · **the top canvas: shapes, ink and images on
+  widgets** (user said yes after the cost estimate).
+  - Widgets now take anything stacked above them except frames and
+    connectors (`selection/attach.js` `fits`). They still never take what's
+    underneath them.
+  - Board graphics whose attachment chain reaches a widget (`widgetBorne`)
+    are drawn on a SECOND Konva stage. It sits above the cards and widgets,
+    pans and zooms with the board, and takes no pointer events
+    (SandboxCanvas). Links between two such items are drawn there too. The
+    main canvas leaves them out.
+  - The live previews (ActiveLayer: ink, shapes, links being drawn) moved to
+    the top stage, so drawing over a widget or card shows as you draw.
+  - Strokes, shapes and stickies attach as they're created (`addCard`): drawn
+    on a widget, they're on it. Smart drawing and "Back to drawing" keep the
+    attachment; precision-eraser pieces keep it too (they copy the payload).
+  - Shape, sticky and text tools now pass through cards and widgets like the
+    pen, so you can draw on them. The frame tool doesn't.
+  - A press over a widget that lands on something drawn on it goes to that
+    thing (select, move, erase, double-click to edit), not the widget
+    (SandboxCanvas `overTop`). The same goes for a connection dot that has
+    caught the pointer. **Trade-off:** ink over a widget's controls takes
+    clicks there, as layers do in Figma.
+  - PNG export composites the top stage over the board (`exportStagePNG`
+    `topStage`).
+  - Known limits: something drawn on a widget always paints above cards on
+    that widget, and above any widget overlapping it.
+  - Checked in a hidden window (`top:` probe):
+    - ink drawn across a widget attached and was on the top stage;
+    - a sticky placed on it attached;
+    - a press on the ink (over the widget's add box) selected the ink, and
+      Delete removed the ink, not the widget;
+    - moving the widget carried the ink and the sticky by the same offset;
+    - the eraser on the sticky erased the sticky, not the widget.
+
+    The attach, frames and format walks re-run green. Two probe fixes: aim at
+    the inserted widget and at the source menu's own entries (the test Bag now
+    holds the user's own widgets), and read undo from the live store. 644
+    tests pass, lint 25, build and `cargo check` pass. Not seen on screen.
