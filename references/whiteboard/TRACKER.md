@@ -204,9 +204,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       checked by the user, except the last change (a dissolve between
       slides, 6736bcc), checked only in a hidden window. Merged into
       `whiteboard` (session 7, 2026-11-13).
-- [ ] **10 · Prototype:** screens with click-through hotspots and a preview
+- [~] **10 · Prototype:** ✗ dropped by the user (2026-11-13) — see Not planned. screens with click-through hotspots and a preview
       mode (§13.11).
-- [ ] **11 · Engage activities + Talktrack, solo versions (decided):**
+- [ ] **11 · Engage activities + Talktrack, solo versions (decided):** Talktrack ✗ dropped
+      by the user (2026-11-13); Engage undecided (session 7 recommends dropping it too — see Not planned).
       self-quizzes, flashcards, polls and votes; screen and voice recording of
       the board, saved as video in the Bag (§13.12–13.13).
 
@@ -230,6 +231,15 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 ## Not planned (user decision, 2026-11-12)
 
 - Stickers and emojis. They need an asset library; dropped for now.
+- **Prototype (section 10)** — dropped 2026-11-13. The user prototypes in
+  Figma; Siddran isn't made for it and shouldn't become a "kitchen sink"
+  (everything-in-one). If the Sandbox ever grows that way, it would rather
+  become its own standalone app.
+- **Talktrack (section 11)** — dropped 2026-11-13, same reason.
+- **Engage (section 11)** — polls/votes make no sense solo; session 7
+  recommended dropping self-quizzes/flashcards too (they're about remembering
+  notes, not boards — if ever, a notes feature, not a widget). Awaiting the
+  user's word.
 
 ## Log
 
