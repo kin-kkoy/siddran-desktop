@@ -47,6 +47,10 @@ import { useSandboxView } from '../../contexts/SandboxViewContext'
 import { useApi } from '../../contexts/ApiContext'
 import { uploadImageFile } from '../../utils/imageUpload'
 import { toast } from '../../utils/toast'
+import SlidesPanel from '../../components/Sandbox/slides/SlidesPanel'
+import Presentation from '../../components/Sandbox/slides/Presentation'
+import { usePresentation } from '../../components/Sandbox/slides/usePresentation'
+import { presentedFrames, reorderPatches, isHiddenSlide } from '../../components/Sandbox/slides/slides'
 
 const CARD_TYPES = new Set(['note', 'task', 'text', 'pdf'])
 
@@ -153,6 +157,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const fileRef = useRef(null)
     const stageRef = useRef(null)
     const topStageRef = useRef(null)   // the top canvas (above the widgets)
+    const [slidesOpen, setSlidesOpen] = useState(false)   // the Slides panel (slides/)
+    const presentation = usePresentation({ canvas, items })
+    const presenting = !!presentation.session
 
     useEffect(() => { setTitleDraft(sandbox?.title ?? '') }, [sandbox?.id, sandbox?.title])
 
@@ -628,8 +635,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const frameCutLabels = useMemo(() => {
         const m = new Map()
         for (const [id, c] of board.cut) if (isFrame(itemsById.get(id))) m.set(id, cutLabel(c))
+        // A frame left out of the presentation says so in its title (slides/).
+        for (const it of items) if (isFrame(it) && isHiddenSlide(it)) m.set(it.id, m.has(it.id) ? `${m.get(it.id)}  ·  hidden from slides` : 'hidden from slides')
         return m
-    }, [board, itemsById])
+    }, [board, itemsById, items])
     const diagramColors = useMemo(() => ({
         stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke,
         fill: canvas.shapeStyle.fill || 'transparent',
@@ -690,6 +699,31 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         act.updateItem(id, { payload })
         bump()
     }, [items, canvas.paintColor, act, bump])
+
+    // ---- Slides (components/Sandbox/slides/) ----
+    // `from`: false = first slide, true = from here, or a frame id.
+    const presentSlides = useCallback((from = false) => {
+        setOpenMenu(null); setEditingShapeId(null); setEditingFrameId(null)
+        if (!presentation.start(from)) toast.error('No slides yet: every frame is a slide. Press F and drag to make one.')
+    }, [presentation])
+    const reorderSlide = useCallback((id, to) => {
+        const patches = reorderPatches(items, id, to)
+        if (!patches.length) return
+        beginTransaction()
+        for (const p of patches) {
+            const it = items.find(i => i.id === p.id)
+            if (it) act.updateItem(p.id, { payload: { ...it.payload, slideOrder: p.slideOrder } })
+        }
+        endTransaction()
+        bump()
+    }, [items, act, beginTransaction, endTransaction, bump])
+    const toggleSlideHidden = useCallback((id) => {
+        const it = items.find(i => i.id === id)
+        if (!it) return
+        const { slideHidden, ...rest } = it.payload || {}
+        act.updateItem(id, { payload: slideHidden ? rest : { ...rest, slideHidden: true } })
+        bump()
+    }, [items, act, bump])
 
     // ---- Format widgets ----
     // A widget's own records change through its payload: `fn` gets the payload
@@ -811,8 +845,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     useEffect(() => {
         const onKeyDown = (e) => {
             if (isEditable(document.activeElement)) return
-            if (diagram || focusFormatId) return   // the pop-up / full-screen widget handles its own keys
+            if (diagram || focusFormatId || presenting) return   // the pop-up / full-screen widget / presentation handles its own keys
             const meta = e.metaKey || e.ctrlKey
+            // F5 presents from the first slide, Shift+F5 from here (slides/).
+            if (e.key === 'F5' && !meta) { e.preventDefault(); presentSlides(e.shiftKey); return }
 
             if (meta && (e.key === 'z' || e.key === 'Z')) {
                 e.preventDefault()
@@ -846,6 +882,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             if (e.altKey && ARROW_DIRS[e.key] && oneShape && !isFrame(oneShape)) { e.preventDefault(); flow.createNext(oneShape.id, ARROW_DIRS[e.key]); return }
             if ((e.key === 'c' || e.key === 'C') && !e.shiftKey && sel.length === 2) { e.preventDefault(); flow.connectSelected(); return }
             if (e.key === 'T' && e.shiftKey) { e.preventDefault(); flow.tidySelection(); return }
+            if (e.key === 'F' && e.shiftKey) { e.preventDefault(); setSlidesOpen(o => !o); return }
             // D: edit the selected diagram, or start a new one.
             if (e.key === 'd' || e.key === 'D') { e.preventDefault(); openDiagram(flow.diagramSource()); return }
 
@@ -878,7 +915,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [undo, redo, deleteSelection, onZOrder, canvas, duplicateSelection, selectAll, resetZoom, fitToContent, nudgeSelection, items, flow,
-        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleDockMenu, diagram, openDiagram, focusFormatId])
+        copyStyle, pasteStyle, groupSelection, ungroupSelection, toggleLock, toggleTextFlag, stepTextSize, onEditText, toggleDockMenu, diagram, openDiagram, focusFormatId,
+        presenting, presentSlides])
 
     const onTitleCommit = () => {
         const next = titleDraft.trim()
@@ -949,6 +987,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     <span className={styles.titleId}>{sandbox.id.slice(0, 6)}</span>
                 </div>
                 <div className={styles.headerActions}>
+                    <button className={styles.headerBtn} title="Slides: every frame is a slide (Shift+F)" aria-pressed={slidesOpen} onClick={() => setSlidesOpen(o => !o)}>Slides</button>
+                    <button className={styles.headerBtn} title="Present (F5 from the start, Shift+F5 from here)" onClick={() => presentSlides(true)}>▶ Present</button>
                     <button className={styles.headerBtn} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setShortcutsOpen(true)}>⌨ Keys</button>
                     {mode === 'half' && (
                         <button className={styles.headerBtn} onClick={() => navigate(`/sandboxes/${sandboxId}`)}>Expand</button>
@@ -962,7 +1002,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                 </div>
             </header>
 
-            <div className={styles.canvasShell}>
+            <div className={presenting ? `${styles.canvasShell} ${styles.presenting}` : styles.canvasShell}>
+                {!presenting && (
                 <SandboxToolbar
                     tool={canvas.tool}
                     onToolChange={chooseTool}
@@ -995,8 +1036,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onOpenDiagram={() => openDiagram(null)}
                     onOpenTemplates={() => setTemplatesOpen(true)}
                 />
+                )}
 
-                {isInkTool(canvas.tool) && !openMenu && (
+                {isInkTool(canvas.tool) && !openMenu && !presenting && (
                     <DrawFlyout
                         tool={canvas.tool}
                         onToolChange={canvas.setTool}
@@ -1030,7 +1072,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     beginTransaction={beginTransaction}
                     endTransaction={endTransaction}
                     overlayChildren={cardEls}
-                    selectionOverlay={
+                    plain={presenting}
+                    selectionOverlay={presenting ? null :
                         <SelectionOverlay
                             canvas={canvas}
                             selectedItems={selectedItems}
@@ -1045,7 +1088,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onFrameGesture={onFrameGesture}
                         />
                     }
-                    contextToolbar={
+                    contextToolbar={presenting ? null :
                         <ContextToolbar
                             selectedItems={selectedItems}
                             items={items}
@@ -1061,6 +1104,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onToggleLock={toggleLock}
                             onFrameSelection={frameSelection}
                             onExportFrame={onExportFrame}
+                            onPresentFrame={presentSlides}
                             onEditText={onEditText}
                             onRevertInk={revertToInk}
                             beginTransaction={beginTransaction}
@@ -1081,6 +1125,16 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onWidgetIds={onWidget}
                     topStageRef={topStageRef}
                 />
+
+                {slidesOpen && !presenting && (
+                    <SlidesPanel items={items} byId={itemsById} canvas={canvas}
+                        onPresent={presentSlides} onReorder={reorderSlide} onToggleHidden={toggleSlideHidden}
+                        onClose={() => setSlidesOpen(false)} />
+                )}
+                {presenting && (
+                    <Presentation key={presentation.session.n} frames={presentedFrames(items)}
+                        start={presentation.session.start} canvas={canvas} onExit={presentation.stop} />
+                )}
 
                 {editingShapeId && (() => {
                     const editItem = items.find(i => i.id === editingShapeId)

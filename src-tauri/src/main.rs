@@ -621,6 +621,16 @@ fn alarm_show_window(window: tauri::Window) {
     let _ = window.set_focus();
 }
 
+// Sandbox slides: presenting fills the screen. Returns whether the window was
+// fullscreen before, so leaving the presentation can put it back as it was.
+// A Rust command rather than a window capability, like the tray commands.
+#[tauri::command]
+fn set_presentation_fullscreen(window: tauri::Window, enabled: bool) -> bool {
+    let was = window.is_fullscreen().unwrap_or(false);
+    let _ = window.set_fullscreen(enabled);
+    was
+}
+
 // The installed WebKitGTK, read from the library itself (these return constants
 // baked into the .so; they do not start WebKit). Only the releases known to
 // flicker get the CPU-painting workaround.
@@ -784,6 +794,7 @@ fn main() {
             tray_available,
             notify_deadline,
             alarm_show_window,
+            set_presentation_fullscreen,
             bag_allow_asset,
             viewer_set_bag,
             viewer_set_fonts,

@@ -93,6 +93,7 @@ function SandboxCanvas({
     overlayChildren,
     selectionOverlay,
     contextToolbar,
+    plain = false,         // no dot grid (presenting slides)
 }) {
     const containerRef = useRef(null)
     const [size, setSize] = useState({ width: 0, height: 0 })
@@ -859,7 +860,7 @@ function SandboxCanvas({
                 WebkitUserSelect: 'none', // WebKitGTK ignores the unprefixed one
                 overflow: 'hidden',
                 backgroundColor: 'var(--bg-surface)',
-                ...gridStyle,
+                ...(plain ? null : gridStyle),
             }}
         >
             <Stage

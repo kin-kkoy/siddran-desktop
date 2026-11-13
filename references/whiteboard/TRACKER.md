@@ -196,7 +196,9 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 - [ ] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
 - [ ] **9 · Slides:** frames as slides plus a presentation mode with
-      F5/arrows/Esc (§11.8, §13.10).
+      F5/arrows/Esc (§11.8, §13.10). Checkpoint 1 (deck order, Slides panel,
+      presentation mode) built by session 9 on branch `whiteboard-slides`;
+      awaiting the user's hands-on check.
 - [ ] **10 · Prototype:** screens with click-through hotspots and a preview
       mode (§13.11).
 - [ ] **11 · Engage activities + Talktrack, solo versions (decided):**
@@ -1255,4 +1257,109 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     7. Switch a Kanban to Timeline (its Due becomes milestones); link one to
        All tasks.
     8. Full screen and the text size.
-
+- 2026-11-13 · session 9 · **section 9, checkpoint 1 of 2: frames as slides,
+  the Slides panel, presentation mode.** Worktree `../Siddran-Desktop-wb9`,
+  branch `whiteboard-slides` (off 53d5e84). The CLI is untouched so far. New
+  folder `components/Sandbox/slides/`:
+  - **Model** (`slides.js`, tested): every frame is a slide. There is no
+    Slides item and no new type. The deck is an ordering layer on the frames'
+    payloads, with two optional fields. `slideOrder` (number): frames without
+    one follow the numbered ones, in reading order (rows top to bottom, then
+    left to right). `slideHidden: true`: skipped when presenting, still on the
+    board, and the frame's title reads "· hidden from slides". Reordering
+    numbers every frame 1…n in one undo step and never moves a frame (R11.11).
+  - **Slides panel** (`SlidesPanel.jsx`): the header's **Slides** button or
+    Shift+F. A column on the board's right edge. Each row has a number, the
+    title, an eye (hide/show) and ▶ (present from this slide), plus a
+    thumbnail. Drag a row to reorder (pointer events, no HTML5 drag). Click a
+    row and the board glides there, with the frame selected.
+  - **Thumbnails** (`Thumbnail.jsx`): SVG in the frame's own coordinates.
+    Shapes come from the registry outlines (flow/svgPath), and ink from its
+    outline. Stickies, images and links are drawn. Text, cards and widgets
+    show as labelled boxes. Chosen over a Konva snapshot because cards and
+    widgets are DOM (a snapshot would miss them), and off-screen frames would
+    need a repaint.
+  - **Presentation** (`Presentation.jsx`, `usePresentation.js`):
+    - How it shows a slide: it reuses the LIVE board, steering the viewport
+      onto each frame (fit and letterbox). So a slide looks exactly like its
+      frame, cards, widgets and ink included. The canvas shell turns
+      `position: fixed; inset: 0` and goes over the header, footer and
+      sidebar. The dock, floating bar, selection overlay and dot grid are
+      hidden. A frame-sized hole in a black mask covers the rest.
+    - Keys: F5 starts from the first slide; Shift+F5, the header's
+      **▶ Present** and the frame bar's new ▶ start from here (the selected
+      frame, else the frame in view). → ↓ PageDown Space Enter go to the next
+      slide, and ← ↑ PageUp Backspace to the previous one. Home/End work, and
+      "n Enter" jumps to slide n. B or . blanks the screen. F toggles
+      fullscreen. Esc un-blanks, else leaves.
+    - Clicks: the left third goes back, anywhere else forward.
+    - A 140 ms fade through black between slides. An end screen after the
+      last slide.
+    - The HUD (‹ n / N title › · blank · fullscreen · ×) and the cursor fade
+      out after 2.2 s of rest.
+    - Keys are captured on the window and stopped, so board shortcuts and
+      Space-to-pan never see them.
+    - Entering goes fullscreen through a new Rust command
+      `set_presentation_fullscreen` (main.rs; no webview window capability,
+      like the tray commands). Leaving restores the exact viewport, selection
+      and tool (R11.18), and leaves fullscreen only if presenting entered it,
+      also on unmount. Presenting writes nothing to the board or the undo
+      stack.
+  - Small additive edits to shared files:
+    - SandBoxPage: the header buttons, F5/Shift+F5/Shift+F, the `presenting`
+      class, and the hidden label in `frameCutLabels`.
+    - SandboxCanvas: a `plain` prop (no grid).
+    - ContextToolbar: an `onPresentFrame` ▶ button on a single frame.
+    - ShortcutsModal: a Slides group.
+    - perfProbe: a `slides:` scenario.
+  - **Shared dev-app lock with session 8**: `mkdir
+    /tmp/claude-1000/siddran-devapp.lock` before a walk. Back up the dev
+    localStorage, seed your own Bag copy, walk, restore, then `rmdir`.
+  - Checks: 740 tests pass (17 new), lint at 25, build and `cargo check`
+    pass. The `slides:` walk ran in a HIDDEN window (ws 19) on a TestBag
+    copy, with the dev localStorage restored afterwards. It made 3 frames and
+    a sticky. All of these were observed:
+    - Shift+F opened the panel (inside the window). The sticky showed in its
+      frame's thumbnail.
+    - Dragging row 3 to the top gave orders 2, 3, 1.
+    - Hiding a slide set the flag, and the board title read "Frame 1 ·
+      hidden from slides". The panel count dropped to 2.
+    - F5: on slide 1 of 2. The mask's hole matched the frame's screen rect
+      exactly, letterboxed. Toolbar and panel gone, grid off, HUD inside the
+      window.
+    - → went to slide 2 (the hidden one skipped). B blanked and B again
+      unblanked. A left-third click went back.
+    - End, then →, showed the end screen. Esc restored the exact viewport.
+      The board JSON was unchanged.
+    - Shift+F5 with the last frame selected started on it. The frame bar's ▶
+      was present, inside the window.
+    - **A real F5 sent by Hyprland** (`send_shortcut`) started the deck and
+      did NOT reload the webview.
+    - Hyprland reported the window fullscreen while presenting (2) and back
+      to normal after Esc (0).
+    - Two Ctrl+Z undid the hide and the reorder.
+  - **Not seen:** what it looks like, since there are no screenshots while
+    the user is at the computer. In the hidden window the Konva stage kept
+    its old size (1600×962) while the shell filled the window (1820×1040),
+    because ResizeObserver doesn't fire without rendering updates. On screen
+    it should resize; the user's check confirms.
+  - **Please try:**
+    1. Make 3–4 frames with things in them (a sticky, ink, a text card, a
+       Table). Open **Slides** (Shift+F): are the thumbnails recognisable?
+    2. Drag rows to reorder. The frames shouldn't move on the board.
+    3. Hide one with the eye. Does its title say so on the board? Is it
+       skipped when presenting?
+    4. **▶ Present** / F5 / Shift+F5 / the ▶ on a frame's floating bar.
+       Does the slide fill the screen, letterboxed, with nothing of the board
+       around it? Does it go fullscreen?
+    5. Arrows, Space, clicks (left third = back), B, F, a number + Enter,
+       Esc. Is the fade between slides too slow or too fast?
+    6. After Esc: are you back exactly where you were, with the same
+       selection?
+    7. Present on the HDMI monitor (0.83 scale): any blur on the HUD?
+  - **Proposed checkpoint 2** (not built; the user picks): presenter notes
+    per slide (`payload.notes`) and a speaker view (current and next slide,
+    notes, timer), either a second window on the other monitor or a side
+    strip. "Present selected". A transition choice (none or fade).
+    `sandbox_read` listing the deck (order, hidden, notes) in the CLI, which
+    means telling session 8 first. Possibly PDF export of the deck.
