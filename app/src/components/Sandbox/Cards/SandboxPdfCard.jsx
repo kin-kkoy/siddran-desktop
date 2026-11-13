@@ -15,11 +15,11 @@ import { resolveImageUrl } from '../../../utils/imageUpload'
  * can skip re-rendering the PDF to every intermediate size (the pages re-render
  * once, crisply, when the drag settles) — keeps resize smooth.
  */
-function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction }) {
+function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const p = item.payload || {}
     const src = p.path ? resolveImageUrl(p.path) : ''
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
-        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction,
+        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
     })
 
     // Detect an in-progress resize (body size changing) and cover the iframe until
@@ -58,7 +58,8 @@ function SandboxPdfCard({ item, onUpdate, onRemove, zoom, tool, selected, onSele
             <div className={styles.header}>
                 <span className={styles.label}>PDF</span>
                 <span className={styles.name} title={p.name}>{p.name || 'document.pdf'}</span>
-                <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove PDF">×</button>
+                {/* Selected: the floating bar's trash does this, so no × over the handles. */}
+                {!selected && <button className={styles.removeBtn} onClick={() => onRemove(item.id)} title="Remove PDF">×</button>}
             </div>
             <div ref={bodyRef} className={styles.body} data-sb-noedit="true">
                 {src

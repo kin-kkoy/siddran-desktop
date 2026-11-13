@@ -1,24 +1,29 @@
 import { useRef } from 'react'
 
 /**
- * Shared pointer behaviour for DOM cards (note / task / text):
- *   - eraser tool  → click deletes
- *   - otherwise    → select on down (shift = additive) + drag to move
+ * Shared pointer behaviour for DOM cards (note / task / text): select on down
+ * (shift = additive) + drag to move. The erasers never delete a card — while
+ * one is active the cards let presses through to the board (SandboxCanvas
+ * CARD_PASS_THROUGH).
  * Drag is wrapped in a history transaction so a move is one undo step, and
  * zoom-compensated like the original AttachedNoteCard.
  *
  * Children that should NOT start a drag/select (links, buttons, edit areas)
  * carry `data-sb-card-title`, a <button>, or `data-sb-noedit`.
  */
-export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction }) {
+export function useCardPointer({ item, zoom, onSelect, onUpdate, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const elRef = useRef(null)
     const dragRef = useRef(null)
 
     const onPointerDown = (e) => {
         if (e.target.closest('button') || e.target.closest('[data-sb-card-title]') || e.target.closest('[data-sb-noedit]')) return
-        if (tool === 'eraser') { e.stopPropagation(); onRemove?.(item.id); return }
         e.stopPropagation()
+        // The board's own move (SelectionOverlay): the same drag shapes get —
+        // snapping and guides, groups, what's attached riding along, the drag
+        // shield over PDFs. The card's own drag below is the fallback.
+        if (onGrab) { onGrab(e, item.id, !!item.payload?.locked); return }
         onSelect?.(item.id, e.shiftKey)
+        if (item.payload?.locked) return   // locked: selectable, not movable
         beginTransaction?.()
         dragRef.current = {
             startX: e.clientX, startY: e.clientY,
@@ -55,7 +60,10 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0 }
         dragRef.current = null
         elRef.current?.releasePointerCapture?.(e.pointerId)
-        if (d.moved) onUpdate(item.id, { x: d.lastX, y: d.lastY })
+        if (d.moved) {
+            onUpdate(item.id, { x: d.lastX, y: d.lastY })
+            onMoveEnd?.([item.id])   // dropped: attach to / detach from a frame or widget (selection/attach.js), same undo step
+        }
         endTransaction?.()
     }
 

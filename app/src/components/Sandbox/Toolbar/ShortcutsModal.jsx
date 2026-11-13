@@ -8,8 +8,10 @@ const GROUPS = [
     {
         title: 'Tools',
         rows: [
-            ['Select', ['V']], ['Hand · pan', ['H']], ['Pen', ['P']], ['Eraser', ['E']],
+            ['Select', ['V']], ['Pan tool (toggle)', ['V', 'V']], ['Pen', ['P']], ['Highlighter', ['P', 'P']],
+            ['Eraser (whole strokes)', ['E']], ['Precision eraser', ['E', 'E']],
             ['Lasso select', ['G']], ['Shapes', ['S']], ['Text', ['T']],
+            ['Sticky note', ['N']], ['Frame', ['F']],
         ],
     },
     {
@@ -17,6 +19,14 @@ const GROUPS = [
         rows: [
             ['Undo', ['⌘', 'Z']], ['Redo', ['⌘', '⇧', 'Z']], ['Duplicate', ['⌘', 'D']],
             ['Select all', ['⌘', 'A']], ['Delete', ['Del']], ['Deselect', ['Esc']],
+            ['Copy style', ['⌘', 'Alt', 'C']], ['Paste style', ['⌘', 'Alt', 'V']],
+        ],
+    },
+    {
+        title: 'Text',
+        rows: [
+            ['Edit text', ['Enter']], ['Bold', ['⌘', 'B']], ['Italic', ['⌘', 'I']], ['Underline', ['⌘', 'U']],
+            ['Bigger text', ['⌘', '⇧', '>']], ['Smaller text', ['⌘', '⇧', '<']],
         ],
     },
     {
@@ -24,6 +34,7 @@ const GROUPS = [
         rows: [
             ['Bring to front', [']']], ['Send to back', ['[']],
             ['Nudge', ['←', '↑', '↓', '→']], ['Nudge ×10', ['⇧', 'Arrows']],
+            ['Group', ['⌘', 'G']], ['Ungroup', ['⌘', '⇧', 'G']], ['Lock / unlock', ['⌘', '⇧', 'L']],
         ],
     },
     {
@@ -32,7 +43,9 @@ const GROUPS = [
             ['New box here', ['Double-click']], ['Edit box text', ['Enter']],
             ['Next step, connected', ['Tab']], ['Next branch beside it', ['⇧', 'Tab']],
             ['Step in a direction', ['Alt', 'Arrows']], ['Connect two boxes', ['C']],
-            ['Tidy the layout', ['⇧', 'T']], ['Diagram from text', ['D']],
+            ['Tidy the layout', ['⇧', 'T']], ['Diagram — nodes or text (edits the selected one)', ['D']],
+            ['Connected box from a dot', ['Shift', 'Click dot']], ['New box at the drop', ['Drag dot', 'Shift', 'release']],
+            ['Free-ended arrow', ['Drag dot', 'Alt']],
         ],
     },
     {
@@ -40,6 +53,14 @@ const GROUPS = [
         rows: [
             ['Pan', ['Space', 'drag']], ['Zoom', ['Scroll']],
             ['Zoom to fit', ['1']], ['Reset zoom', ['⌘', '0']], ['This help', ['?']],
+        ],
+    },
+    {
+        title: 'Slides (media menu → Slides)',
+        rows: [
+            ['Slides panel', ['⇧', 'F']], ['Present from the start', ['F5']], ['Present from here', ['⇧', 'F5']],
+            ['Next / previous slide', ['→', '←']], ['Go to slide n', ['n', 'Enter']],
+            ['Blank the screen', ['B']], ['Fullscreen', ['F']], ['Stop presenting', ['Esc']],
         ],
     },
 ]

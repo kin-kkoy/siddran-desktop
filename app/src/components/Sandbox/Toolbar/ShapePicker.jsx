@@ -1,23 +1,56 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './ShapePicker.module.css'
-import { SHAPES, QUICK_SHAPES, ALL_SHAPES } from '../shapes/registry'
+import { SHAPES, SHAPE_GROUPS, shapesInGroup } from '../shapes/registry'
+import { SHAPE_COLORS } from '../ink/presets'
 
 /**
- * Shape picker flyout — anchored beside the single shape button in the dock.
+ * Shape picker flyout — anchored beside the single shape button in the dock:
+ * every shape as a small canvas-drawn icon, in sections (Basic / Flowchart /
+ * Callouts / Lines).
  *
- * Two-level:
- *   1. Quick menu: the 4 most-used shapes (rect/ellipse/line/arrow) with key
- *      hints, plus a "More shapes" row.
- *   2. Grid: a 4-column grid showing all ~16 shapes as small canvas-drawn
- *      thumbnails, with a back-arrow to return to the quick menu.
- *
- * Portal + fixed positioning + click-outside + Escape mirrors ColorPalette.
+ * Portal + fixed positioning + click-outside + Escape mirrors ColorMenu's Popover.
  */
+
+/**
+ * Border and fill for the NEXT shape you draw. A row of swatches each plus a
+ * native picker for anything else; fill also has "none". Shapes already on the
+ * board are recoloured from their own floating bar.
+ */
+function StyleRows({ style, onChange }) {
+    const row = (label, key, allowNone) => {
+        const value = style[key]
+        const none = !value || value === 'transparent'
+        return (
+            <div className={styles.styleRow}>
+                <span className={styles.styleLabel}>{label}</span>
+                {allowNone && (
+                    <button className={none ? styles.styleNoneActive : styles.styleNone} title="No fill" aria-label="No fill"
+                        onClick={() => onChange({ [key]: 'transparent' })} />
+                )}
+                {SHAPE_COLORS.map(c => (
+                    <button key={c} className={c === value ? styles.styleCellActive : styles.styleCell}
+                        style={{ backgroundColor: c }} title={c} aria-label={`${label} ${c}`}
+                        onClick={() => onChange({ [key]: c })} />
+                ))}
+                <input type="color" className={styles.styleCustom} aria-label={`Custom ${label.toLowerCase()} colour`}
+                    title="Custom colour" value={/^#[0-9a-f]{6}/i.exec(none ? '#ffffff' : value)?.[0] || '#ffffff'}
+                    onChange={(e) => onChange({ [key]: e.target.value })} />
+            </div>
+        )
+    }
+    return (
+        <>
+            <div className={styles.divider} />
+            {row('Border', 'stroke', false)}
+            {row('Fill', 'fill', true)}
+        </>
+    )
+}
 
 // ── Tiny shape thumbnail drawn on a <canvas> ──
 
-function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
+export function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
     const canvasRef = useRef(null)
     useLayoutEffect(() => {
         const cvs = canvasRef.current
@@ -76,25 +109,31 @@ function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
             ctx.stroke()
             return
         }
+        if (kind === 'taperedArrow') {
+            ctx.beginPath()
+            ctx.moveTo(1, h / 2 + 0.6); ctx.lineTo(w - 6, h / 2 + 1.6); ctx.lineTo(w - 6, h / 2 + 4.5)
+            ctx.lineTo(w - 1, h / 2); ctx.lineTo(w - 6, h / 2 - 4.5); ctx.lineTo(w - 6, h / 2 - 1.6)
+            ctx.lineTo(1, h / 2 - 0.6); ctx.closePath()
+            ctx.fillStyle = ctx.strokeStyle
+            ctx.fill()
+            return
+        }
         if (kind === 'arrow' || kind === 'elbowArrow') {
+            // Shaft, then a two-barbed head aimed along the last segment. (The
+            // old head drew one barb straight back down the shaft, so it looked
+            // like a single line.)
+            const tip = { x: w - 2, y: 2 }
+            const from = kind === 'elbowArrow' ? { x: w - 2, y: h - 2 } : { x: 2, y: h - 2 }
             ctx.beginPath()
-            if (kind === 'elbowArrow') {
-                ctx.moveTo(1, h - 1)
-                ctx.lineTo(w - 1, h - 1)
-                ctx.lineTo(w - 1, 1)
-            } else {
-                ctx.moveTo(1, h - 1)
-                ctx.lineTo(w - 1, 1)
-            }
+            if (kind === 'elbowArrow') { ctx.moveTo(2, h - 2); ctx.lineTo(w - 2, h - 2) } else ctx.moveTo(from.x, from.y)
+            ctx.lineTo(tip.x, tip.y)
             ctx.stroke()
-            // arrowhead
-            const tipX = w - 1, tipY = 1
-            const aLen = 5
+            const ang = Math.atan2(tip.y - from.y, tip.x - from.x)
+            const aLen = 5.5, spread = Math.PI / 6
             ctx.beginPath()
-            ctx.moveTo(tipX, tipY)
-            ctx.lineTo(tipX - aLen, tipY + aLen)
-            ctx.moveTo(tipX, tipY)
-            ctx.lineTo(tipX - aLen, tipY)
+            ctx.moveTo(tip.x - aLen * Math.cos(ang - spread), tip.y - aLen * Math.sin(ang - spread))
+            ctx.lineTo(tip.x, tip.y)
+            ctx.lineTo(tip.x - aLen * Math.cos(ang + spread), tip.y - aLen * Math.sin(ang + spread))
             ctx.stroke()
             return
         }
@@ -113,24 +152,23 @@ function ShapeThumb({ kind, size = 20, color = 'currentColor' }) {
 
 // ── ShapePicker ──
 
-function ShapePicker({ open, tool, anchorRef, onPick, onClose }) {
+/**
+ * Every shape as an icon, in sections — no labels (each icon's tooltip names
+ * it). Then the border and fill for the next shape, when the dock passes them.
+ */
+function ShapePicker({ open, tool, anchorRef, onPick, onClose, shapeStyle, onShapeStyleChange }) {
     const panelRef = useRef(null)
     const [pos, setPos] = useState(null)
-    const [showGrid, setShowGrid] = useState(false)
-
-    // Reset to quick menu when re-opened
-    useLayoutEffect(() => {
-        if (open) setShowGrid(false)
-    }, [open])
+    const styled = !!(shapeStyle && onShapeStyleChange)
 
     // Position beside anchor
     useLayoutEffect(() => {
         if (!open || !anchorRef.current) return
         const r = anchorRef.current.getBoundingClientRect()
         const GAP = 12
-        const PANEL_W = 172
-        setPos({ top: r.top - 6, left: Math.max(8, r.left - GAP - PANEL_W) })
-    }, [open, anchorRef, showGrid])
+        const PANEL_W = styled ? 262 : 256
+        setPos({ top: Math.round(r.top - 6), left: Math.max(8, Math.round(r.left - GAP - PANEL_W)) })
+    }, [open, anchorRef, styled])
 
     // Close on outside-click + Escape
     useEffect(() => {
@@ -156,60 +194,32 @@ function ShapePicker({ open, tool, anchorRef, onPick, onClose }) {
         onClose?.()
     }
 
-    // ── Grid view ──
-    if (showGrid) {
-        return createPortal(
-            <div ref={panelRef} className={styles.panel} style={{ top: pos.top, left: pos.left }}>
-                <div className={styles.gridHeader}>
-                    <button className={styles.gridBackBtn} onClick={() => setShowGrid(false)} title="Back" aria-label="Back">←</button>
-                    <span className={styles.gridTitle}>All shapes</span>
-                </div>
-                <div className={styles.divider} />
-                <div className={styles.grid}>
-                    {ALL_SHAPES.map(kind => {
-                        const s = SHAPES[kind]
-                        const isActive = tool === kind
-                        return (
-                            <button
-                                key={kind}
-                                className={isActive ? styles.gridCellActive : styles.gridCell}
-                                onClick={() => pick(kind)}
-                                title={s.label}
-                                aria-label={s.label}
-                            >
-                                <ShapeThumb kind={kind} size={20} />
-                            </button>
-                        )
-                    })}
-                </div>
-            </div>,
-            document.body,
-        )
-    }
-
-    // ── Quick menu view ──
     return createPortal(
-        <div ref={panelRef} className={styles.panel} style={{ top: pos.top, left: pos.left }}>
-            {QUICK_SHAPES.map(kind => {
-                const s = SHAPES[kind]
-                const isActive = tool === kind
-                return (
-                    <button
-                        key={kind}
-                        className={isActive ? styles.menuItemActive : styles.menuItem}
-                        onClick={() => pick(kind)}
-                    >
-                        <ShapeThumb kind={kind} size={16} />
-                        <span>{s.label}</span>
-                    </button>
-                )
-            })}
-            <div className={styles.divider} />
-            <button className={styles.menuItem} onClick={() => setShowGrid(true)}>
-                <span style={{ fontSize: 14, width: 16, textAlign: 'center' }}>⊞</span>
-                <span>More shapes</span>
-                <span className={styles.menuKey}>›</span>
-            </button>
+        <div ref={panelRef} className={styles.panel} style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Shapes">
+            <div className={styles.sections}>
+                {SHAPE_GROUPS.map(g => (
+                    <div key={g.id}>
+                        <div className={styles.sectionLabel}>{g.label}</div>
+                        <div className={styles.grid}>
+                            {shapesInGroup(g.id).map(kind => {
+                                const s = SHAPES[kind]
+                                return (
+                                    <button
+                                        key={kind}
+                                        className={tool === kind ? styles.gridCellActive : styles.gridCell}
+                                        onClick={() => pick(kind)}
+                                        title={s.label}
+                                        aria-label={s.label}
+                                    >
+                                        <ShapeThumb kind={kind} size={20} />
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {styled && <StyleRows style={shapeStyle} onChange={onShapeStyleChange} />}
         </div>,
         document.body,
     )

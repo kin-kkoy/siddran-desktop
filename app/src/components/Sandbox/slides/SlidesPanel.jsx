@@ -1,0 +1,156 @@
+import { useMemo, useRef, useState } from 'react'
+import { LuPlay, LuEye, LuEyeOff, LuX, LuGripVertical, LuPlus, LuFileDown, LuMonitor } from 'react-icons/lu'
+import { deckOrder, isHiddenSlide, frameContents, sizePresets } from './slides'
+import { flyToRect } from './fly'
+import { useDisplays } from './useDisplays'
+import Thumbnail from './Thumbnail'
+import styles from './SlidesPanel.module.css'
+
+const DRAG_PX = 5
+/**
+ * The Slides panel (spec §11.6 and §13.9): the deck. "+ New slide" adds one
+ * after the last; the size menu sets every slide to a display's resolution;
+ * Export PDF writes the deck. Drag to reorder (the slides stay where they are
+ * on the board), the eye hides one from the presentation, ▶ presents from it,
+ * and a click takes the board there.
+ */
+export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder, onToggleHidden, onClose, onNewSlide, onResizeAll, onExportPdf }) {
+    const { displays, refresh } = useDisplays()
+    const [sizeOpen, setSizeOpen] = useState(false)
+    const rootRef = useRef(null)
+    const rowRefs = useRef(new Map())
+    const drag = useRef(null)   // { id, from, y0, moved }
+    const [dragId, setDragId] = useState(null)
+    const [dropAt, setDropAt] = useState(-1)
+
+    const deck = useMemo(() => deckOrder(items), [items])
+    const contents = useMemo(() => new Map(deck.map(f => [f.id, frameContents(f, items)])), [deck, items])
+    let shownNo = 0
+    const numbers = deck.map(f => (isHiddenSlide(f) ? null : ++shownNo))
+
+    const goTo = (f) => {
+        const shell = rootRef.current?.parentElement
+        const panel = rootRef.current?.getBoundingClientRect()
+        const shellR = shell?.getBoundingClientRect()
+        // Fit it in the part of the board the panel doesn't cover.
+        canvas.setSelection([f.id])
+        flyToRect(canvas, f, shell, panel && shellR ? shellR.right - panel.left : 0)
+    }
+    const deckSize = deck.length && deck.every(f => f.w === deck[0].w && f.h === deck[0].h) ? `${Math.round(deck[0].w)}×${Math.round(deck[0].h)}` : (deck.length ? 'Mixed' : null)
+    const presets = sizePresets(displays)
+
+    const targetIndex = (clientY) => {
+        let i = 0
+        for (const f of deck) {
+            const el = rowRefs.current.get(f.id)
+            if (!el) continue
+            const r = el.getBoundingClientRect()
+            if (clientY > r.top + r.height / 2) i++
+        }
+        return i
+    }
+
+    const onRowDown = (e, f, i) => {
+        if (e.button !== 0 || e.target.closest('button')) return
+        drag.current = { id: f.id, from: i, y0: e.clientY, moved: false, pid: e.pointerId }
+        try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* a synthetic pointer */ }
+    }
+    const onRowMove = (e) => {
+        const d = drag.current
+        if (!d || d.pid !== e.pointerId) return
+        if (!d.moved && Math.abs(e.clientY - d.y0) < DRAG_PX) return
+        if (!d.moved) { d.moved = true; setDragId(d.id) }
+        setDropAt(targetIndex(e.clientY))
+    }
+    const onRowUp = (e, f) => {
+        const d = drag.current
+        if (!d || d.pid !== e.pointerId) return
+        drag.current = null
+        setDragId(null)
+        setDropAt(-1)
+        if (!d.moved) { goTo(f); return }
+        let to = targetIndex(e.clientY)
+        if (to > d.from) to -= 1
+        if (to !== d.from) onReorder(d.id, to)
+    }
+    const onRowCancel = () => { drag.current = null; setDragId(null); setDropAt(-1) }
+
+    return (
+        <aside ref={rootRef} className={styles.panel} aria-label="Slides" data-slides-panel="1"
+            onWheel={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+            <header className={styles.head}>
+                <span className={styles.heading}>Slides <span className={styles.n}>{shownNo}</span></span>
+                <button className={styles.present} onClick={() => onPresent(false)} disabled={!shownNo} title="Present from the first slide (F5)">
+                    <LuPlay size={14} /> Present
+                </button>
+                <button className={styles.icon} onClick={onClose} title="Close (Shift+F)" aria-label="Close slides"><LuX size={16} /></button>
+            </header>
+            {deck.length > 0 && (
+                <div className={styles.tools}>
+                    <span className={styles.sizeWrap}>
+                        <button className={styles.tool} onClick={() => { if (!sizeOpen) refresh(); setSizeOpen(o => !o) }}
+                            title="Size of every slide" aria-label="Size of every slide" aria-expanded={sizeOpen}>
+                            <LuMonitor size={14} /> {deckSize}
+                        </button>
+                        {sizeOpen && (
+                            <div className={styles.sizeMenu} role="menu">
+                                {presets.map(p => (
+                                    <button key={p.key} role="menuitem" className={styles.sizeItem}
+                                        onClick={() => { onResizeAll({ w: p.w, h: p.h }); setSizeOpen(false) }}>
+                                        <span>{p.label}</span><span className={styles.res}>{p.w}×{p.h}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </span>
+                    <button className={styles.tool} onClick={onExportPdf} disabled={!shownNo} title="Export the deck as a PDF, one page per slide" data-export-pdf="1">
+                        <LuFileDown size={14} /> Export PDF
+                    </button>
+                </div>
+            )}
+
+            {deck.length === 0 ? (
+                <div className={styles.empty}>
+                    No slides yet.
+                    <button className={styles.newFirst} onClick={onNewSlide} data-new-slide="1"><LuPlus size={15} /> New slide</button>
+                    <small>Or select a frame and use <b>Convert to slide</b> on its bar.</small>
+                </div>
+            ) : (
+                <ol className={styles.list}>
+                    {deck.map((f, i) => {
+                        const hidden = isHiddenSlide(f)
+                        const ratio = Math.max(0.35, Math.min(1.6, (f.h || 1) / (f.w || 1)))
+                        return (
+                            <li key={f.id} ref={el => { if (el) rowRefs.current.set(f.id, el); else rowRefs.current.delete(f.id) }}
+                                className={`${styles.row} ${hidden ? styles.hidden : ''} ${dragId === f.id ? styles.dragging : ''}`}
+                                data-frame-id={f.id}
+                                onPointerDown={(e) => onRowDown(e, f, i)} onPointerMove={onRowMove}
+                                onPointerUp={(e) => onRowUp(e, f)} onPointerCancel={onRowCancel}>
+                                {dropAt === i && dragId && <span className={styles.dropLine} style={{ top: -5 }} />}
+                                {dropAt === deck.length && i === deck.length - 1 && dragId && <span className={styles.dropLine} style={{ bottom: -5 }} />}
+                                <div className={styles.rowTop}>
+                                    <LuGripVertical className={styles.grip} size={14} />
+                                    <span className={styles.num}>{numbers[i] ?? '–'}</span>
+                                    <span className={styles.title} title={f.payload?.title || 'Frame'}>{f.payload?.title || 'Frame'}</span>
+                                    <button className={styles.icon} onClick={() => onToggleHidden(f.id)}
+                                        title={hidden ? 'Show in the presentation' : 'Hide from the presentation'}
+                                        aria-label={hidden ? 'Show slide' : 'Hide slide'} aria-pressed={hidden}>
+                                        {hidden ? <LuEyeOff size={15} /> : <LuEye size={15} />}
+                                    </button>
+                                    <button className={styles.icon} onClick={() => onPresent(f.id)} disabled={hidden}
+                                        title="Present from this slide" aria-label="Present from this slide"><LuPlay size={14} /></button>
+                                </div>
+                                <div className={styles.thumb} style={{ aspectRatio: `${1 / ratio}` }}>
+                                    <Thumbnail frame={f} contents={contents.get(f.id) || []} byId={byId} />
+                                </div>
+                            </li>
+                        )
+                    })}
+                    <li className={styles.addRow}>
+                        <button className={styles.add} onClick={onNewSlide} data-new-slide="1"><LuPlus size={15} /> New slide</button>
+                    </li>
+                </ol>
+            )}
+        </aside>
+    )
+}

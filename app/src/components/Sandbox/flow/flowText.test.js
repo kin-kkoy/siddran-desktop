@@ -2,6 +2,10 @@
 // implementations must agree (see the header of flowText.js).
 import { describe, it, expect } from 'vitest'
 import { parseFlow, flowToItems, tidy, itemsToFlow, nodeSize } from './flowText'
+import { SHAPES, isLineKind } from '../shapes/registry'
+import { HEAD_TYPES } from '../connectors/heads'
+import { LINE_STYLES } from '../connectors/lineStyle'
+import { ROUTINGS } from '../connectors/controls'
 
 const ids = () => { let i = 0; return () => `id${++i}` }
 
@@ -76,6 +80,35 @@ describe('itemsToFlow', () => {
     expect(graph.nodes).toHaveLength(3)
     expect(graph.edges).toHaveLength(2)
     expect(text).toContain('|yes|')
+  })
+
+  it('leaves out frames, Format widgets and lines', () => {
+    const shape = (id, kind, x, y) => ({ id, type: 'shape', x, y, w: 120, h: 56, payload: { kind, text: id } })
+    const items = [{ ...shape('F', 'frame', -40, -40), payload: { kind: 'frame', title: 'Plan' } }, shape('A', 'rect', 0, 0), shape('L', 'arrow', 0, 100), shape('S', 'sticky', 200, 0),
+      { ...shape('W', 'format', 0, 300), payload: { kind: 'format', view: 'table', title: 'Table', records: [] } }]
+    expect(itemsToFlow(items)).toBe('flowchart TD\n  n1[A]\n  n2[S]\n')
+  })
+})
+
+describe('the board vocabulary siddran-cli knows', () => {
+  // Pinned to Siddran-CLI diagram.rs BOX_KINDS / LINE_KINDS. A new shape kind
+  // fails here until the CLI learns it (or sandbox_edit will refuse it).
+  it('matches the shape registry', () => {
+    const BOX_KINDS = [
+      'rect', 'roundedRect', 'ellipse', 'circle', 'triangle', 'rhombus', 'parallelogram', 'trapezoid',
+      'pentagon', 'hexagon', 'octagon', 'star', 'blockArrow', 'doubleArrow', 'cross', 'cloud', 'cylinder', 'document',
+      'terminator', 'predefinedProcess', 'manualInput', 'manualOperation', 'preparation', 'delay', 'display',
+      'storedData', 'multiDocument', 'offPageConnector', 'merge', 'card',
+      'speechBubble', 'roundedCallout', 'thoughtBubble', 'banner', 'tag',
+      'sticky',
+    ]
+    const LINE_KINDS = ['line', 'arrow', 'elbowArrow', 'divider', 'taperedArrow']
+    const all = Object.keys(SHAPES)
+    expect(all.filter((k) => k !== 'frame' && !isLineKind(k))).toEqual(BOX_KINDS)
+    expect(all.filter(isLineKind)).toEqual(LINE_KINDS)
+    expect(HEAD_TYPES).toEqual(['none', 'arrow', 'open', 'triangle', 'circle', 'diamond', 'bar'])
+    expect(LINE_STYLES).toEqual(['solid', 'dashed', 'dotted'])
+    expect(ROUTINGS.map((r) => r.v)).toEqual(['straight', 'elbow', 'curved'])
   })
 })
 

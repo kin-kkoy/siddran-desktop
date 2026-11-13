@@ -13,7 +13,7 @@
 // a flush re-reads and three-way merges anything that moved under us before
 // writing, and the watcher brings outside changes in as they land (ingest below).
 
-import { mergeVault, mergeRows } from './sync/merge.js'
+import { mergeVault, mergeSandboxItems } from './sync/merge.js'
 import { merge3 } from './sync/text3.js'
 
 // ── id + time ───────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ async function absorbSandbox(fs, path, id) {
     for (const k of new Set([...Object.keys(board), ...Object.keys(theirs.sandbox)])) {
       if (same(board[k], b.sandbox?.[k])) board[k] = theirs.sandbox[k]
     }
-    const r = mergeRows(b.items || [], db.sandboxItems[id] || [], theirs.items || [])
+    const r = mergeSandboxItems(b.items || [], db.sandboxItems[id] || [], theirs.items || [])
     db.sandboxItems[id] = r.rows
     board.item_count = r.rows.length
     conflicts.push(...r.conflicts)
@@ -678,6 +678,11 @@ export const getBagPath = () => _bag
 // pasted images land in a per-note folder: attachments/<Note title>/<file>.
 let activeNoteId = null
 export function setActiveNote(id) { activeNoteId = id }
+// A board Doc being typed in (formats/doc) overrides that while it has focus:
+// { dir } for its own text (attachments/_boards, beside the board's other files),
+// { noteId } for a Doc showing a note (that note's folder). null = the active note.
+let attachmentTarget = null
+export function setAttachmentTarget(t) { attachmentTarget = t || null }
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -701,8 +706,9 @@ function attachmentName(file) {
 // the Bag-relative path to embed in the markdown, or null if no Bag is open.
 export async function saveAttachment(file) {
   if (!_fs || !_bag) return null
-  const note = db.notes.find(n => String(n.id) === String(activeNoteId))
-  const relDir = `attachments/${safeName(note?.title || 'Untitled')}`
+  const noteId = attachmentTarget?.noteId ?? activeNoteId
+  const note = db.notes.find(n => String(n.id) === String(noteId))
+  const relDir = attachmentTarget?.dir || `attachments/${safeName(note?.title || 'Untitled')}`
   const filename = attachmentName(file)
   const b64 = await fileToBase64(file)
   await _fs.writeBytes(`${_bag}/${relDir}/${filename}`, b64)

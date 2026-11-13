@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom'
 import Sidebar from "./components/Layout/Sidebar/Sidebar.jsx"
 import { SidebarContext } from "./contexts/SidebarContext.jsx"
+import { TasksApiProvider } from "./contexts/TasksApiContext.js"
+import { BagNotesProvider } from "./contexts/BagNotesContext.js"
+import { NotesApiProvider } from "./contexts/NotesApiContext.js"
 import { GlobalExpandButton } from "./components/Layout/Sidebar/ExpandSidebarButton.jsx"
 import StarCanvas from "./components/Layout/StarCanvas/StarCanvas.jsx"
 import RouteMemory from "./components/Session/RouteMemory.jsx"
@@ -513,6 +516,13 @@ function App() {
   const {
     tasks, dailyTasks, bundles, tasksPagination, dailyTasksPagination, bundlesPagination, loadMoreTasks, loadMoreDailyTasks, loadMoreBundles, loadingMore: tasksLoadingMore, loading: tasksLoading, addTask, updateTask, patchTaskInCache, setDailyTime, deleteTask, setTaskOrders, toggleTaskCompletion, addDailyTask, updateDailyTask, deleteDailyTask, toggleDailyTaskCompletion, batchToggleDailyTasks, batchDeleteDailyTasks, addBundle, updateBundle, deleteBundle, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion, batchDeleteBundleTasks
   } = useTasks(authFetch, API, unlocked, dataEpoch + extEpoch.tasks)
+  // The tasks store, for board widgets linked to tasks (contexts/TasksApiContext.js).
+  const tasksApi = useMemo(() => ({
+    tasks, bundles,
+    api: { addTask, updateTask, toggleTaskCompletion, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion },
+  }), [tasks, bundles, addTask, updateTask, toggleTaskCompletion, addBundleTasks, batchUpdateBundleTasks, toggleBundleTaskCompletion])
+  // A board Doc linked to a note writes through these (contexts/NotesApiContext.js).
+  const notesApi = useMemo(() => ({ editBody, addNote }), [editBody, addNote])
 
   // ------------- CALENDAR DATA LOGIC ===================================
   const calView = useCalendarView()
@@ -968,6 +978,9 @@ function App() {
         }} />
       )}
 
+      <TasksApiProvider value={tasksApi}>
+      <BagNotesProvider value={notes}>
+      <NotesApiProvider value={notesApi}>
       <BrowserRouter>
         <NoteTabsProvider>
         <StagedNotesProvider ready={unlocked && notesPagination != null} importMarkdownFiles={importMarkdownFiles}>
@@ -1157,6 +1170,9 @@ function App() {
         </StagedNotesProvider>
         </NoteTabsProvider>
       </BrowserRouter>
+      </NotesApiProvider>
+      </BagNotesProvider>
+      </TasksApiProvider>
     </div>
     </SidePaneProvider>
     </NoteSplitProvider>

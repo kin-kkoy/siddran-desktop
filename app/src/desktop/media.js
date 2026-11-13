@@ -83,6 +83,31 @@ async function attachDocViaPicker({ title, label, extensions, test, noun, fallba
   return { path: rel, name, markdown }
 }
 
+// Pick any files and copy them into the Bag (attachments/_boards/, a short id in
+// front of each name so two files called the same never clash). For a Table's
+// attachment cells. → [{ path, name }] (Bag-relative), [] if none were picked.
+export async function attachFilesViaPicker() {
+  const inv = invoker()
+  const bag = getBagPath()
+  if (!inv || !bag || !isTauri()) { toast.error('Open a Bag first'); return [] }
+  const res = await inv('plugin:dialog|open', { options: { multiple: true, title: 'Attach files' } })
+  const picked = Array.isArray(res) ? res : typeof res === 'string' ? [res] : []
+  const out = []
+  try {
+    if (picked.length) await inv('bag_mkdirp', { path: `${bag}/attachments/_boards` })
+    for (const abs of picked) {
+      const name = abs.split('/').pop() || 'file'
+      const rel = `attachments/_boards/${shortId()}-${name}`
+      const b64 = await inv('bag_read_bytes', { path: abs })
+      await inv('bag_write_bytes', { path: `${bag}/${rel}`, contents: b64 })
+      out.push({ path: rel, name })
+    }
+  } catch (e) {
+    toast.error(e?.message || 'Could not copy a file into the Bag')
+  }
+  return out
+}
+
 // Pick a PDF and copy it into the active note's Bag attachments. → { path, name } | null.
 export function attachPdfViaPicker() {
   return attachDocViaPicker({

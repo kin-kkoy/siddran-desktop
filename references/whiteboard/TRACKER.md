@@ -1,0 +1,1790 @@
+# Whiteboard (Sandbox) upgrade — tracker
+
+One section per chat session. Point a fresh session at this file plus the
+section number: *"Implement section N of references/whiteboard/TRACKER.md"*.
+Tick the boxes as you go and add a dated line under **Log** when a section is
+done, so the next session knows where things stand.
+
+## Shared context (read first)
+
+- **Where:** worktree `../Siddran-Desktop-whiteboard`, branch `whiteboard`.
+  `master` and the installed app are untouched until the user says "keep it".
+- **Source spec:** `~/Downloads/whiteboard-app-spec/PRODUCT-SPEC.md` (Miro-scale;
+  we take what helps, not all of it). The user draws inspiration from Miro and
+  sends screenshots — when one is attached, it is the requirement.
+- **Code map** (all under `app/src/`):
+  - `pages/Sandbox/SandBoxPage.jsx` — wiring, keyboard, commands
+  - `components/Sandbox/Canvas/SandboxCanvas.jsx` — pointer gestures, hit-testing, layers
+  - `components/Sandbox/selection/SelectionOverlay.jsx` — handles, connection dots, connector drags
+  - `components/Sandbox/selection/ContextToolbar.jsx` — the floating bar
+  - `components/Sandbox/shapes/registry.js` — every shape kind
+  - `components/Sandbox/connectors/` — routing, heads, line styles
+  - `components/Sandbox/text/textStyle.js`, `frames/`, `templates/`
+- **Data rules:**
+  - Boards are `<Bag>/sandboxes/<id>.siddran`, written byte-exact (`JSON.stringify(_, null, 2)`).
+  - siddran-cli (`../Siddran-CLI`) round-trips unknown fields raw.
+  - **Never add a new item `type`.** The installed app sends unknown types to
+    the stroke renderer and can crash. Add a `payload.kind` on `type:'shape'`
+    instead (that is how stickies and frames work).
+  - New payload fields must be optional, with old behaviour when absent.
+- **Verify loop:**
+  - In `app/`: `npm test`, `npx eslint .` (baseline: exactly 25 problems) and `npm run build`.
+  - In `src-tauri/`: `cargo check`.
+  - Look at it running: headless Hyprland output, on a *copy* of the test Bag,
+    never the real Bag. See the memory notes `reference-headless-testing` and
+    `reference-verifying-persisted-state`.
+  - Use `pgrep -x siddran` to stop the app, never `pkill -f` (it kills its own shell).
+- **Run it:** from the worktree root, `npm run tauri:dev`.
+
+## Decisions already made by the user (2026-11-12) — don't re-ask
+
+1. **Default shape and pen colour (section 2):** light cream `#e2ddf5`, today's
+   default. It's readable on the dark board, and black stays available in the
+   presets.
+2. **Node editor (section 3):** a **pop-up window**, like today's "Diagram from
+   text". Text mode stays as a tab in the same pop-up. Insert puts the diagram
+   on the board.
+3. **Format data (section 5): both, chosen per widget.**
+   - Each Kanban/Table/Timeline/Matrix is either *linked to Siddran tasks*
+     (shows and edits real tasks, filtered by tag or project) or uses *its own
+     records* stored in the board.
+   - Design one view layer over two data sources (an adapter interface).
+     Don't build two copies of each view.
+   - Linked mode must go through the existing tasks store and the live-sync
+     path (`desktop/localStore.js`), never write `tasks.siddran` directly.
+4. **Engage and Talktrack (section 11): solo versions.**
+   - Engage means self-quizzes, flashcards, and polls or votes you fill in yourself.
+   - Talktrack means recording your screen and voice over the board, saved
+     as a video in the Bag.
+   - No multi-user server.
+
+5. **Where a widget's own records live (section 5): inside the board file**
+   (decided 2026-11-13). One file: the CLI carries it, undo works as for
+   everything else, and a copied board keeps its data. No sibling file.
+
+6. **A widget doesn't carry what's underneath it** (2026-11-13). Board shapes
+   paint beneath widgets, so any under one stay put when it moves.
+
+7. **Sticky attachment on frames AND widgets, with a crop ⇄ hang toggle
+   per container; hang is the default** (2026-11-13). It began as a trial on
+   widgets only; the user kept it and asked for frames too.
+
+**Check-ins:** the user reviews by hand after **section 2** and after
+**section 5**. Stop at those points and ask them to try it. Other sections can
+run straight on, and the user reviews them at the end.
+
+## Parallel or sequential?
+
+Sections 1–4 all edit the same hot files (the page, canvas, overlay and
+toolbar), so they run **one after another**. Running them in parallel would
+mean constant merge conflicts.
+
+Section 5 builds the Format shell. Once it has landed, sections 6–11 each live
+mostly in their own new folder, so those **can** run in parallel: one worktree
+per section, merged back into `whiteboard` one at a time.
+
+---
+
+## Section 1 — Canvas polish & fixes  ✅ built (session 1) — awaiting the user's hands-on check
+
+- [x] Floating bar centred on the selection. Bug: the fade-in animation's
+      `transform` overrode `translate(-50%)`, so the left edge sat at centre.
+- [x] Floating bar about 2× bigger: larger icons, more spacing, a bigger gap
+      from the shape. Constant size at any zoom.
+- [x] Press-and-drag moves an unselected shape, stroke or image in one motion.
+      Connectors keep click-then-drag.
+- [x] Magnetic connection dots: they appear when the pointer is within a
+      radius around the shape (larger than the shape); the nearest dot "pulls"
+      the pointer, and pressing within its catch radius starts an arrow.
+- [x] Connector bend handle: a midpoint dot on every arrow (straight, elbow,
+      curved) that can be dragged to bend or move the middle.
+- [x] Custom colour with alpha (transparency) in every colour menu.
+- [x] Shift while drawing a line or arrow snaps to 0/45/90°. It used to
+      constrain to a square, which gave diagonals only.
+- [x] Hand tool button removed. Press `V` again to toggle Select ⇄ Pan, and show
+      a hint (Space / middle-drag / two fingers to pan).
+- [x] Tapered arrow (the user's screenshot): a filled arrow whose shaft widens
+      to the head. Available as a shape and as a connector body.
+- [x] Sticky-note dock icon that doesn't look like a document.
+
+## Section 2 — Drawing tools flyout (Miro-style)  ✅ done (session 2) — checked by the user, committed
+
+Screenshot reference: clicking the pen opens a second column, top to bottom:
+
+- [x] Pen, Highlighter, Smart drawing, Eraser, Precision eraser, Lasso.
+- [x] Three preset circles under the tools. Each preset is a thickness plus a
+      colour. Clicking an active preset opens its editor (size, colour,
+      smoothing). The pen and the highlighter each have their own three.
+- [x] Highlighter: translucent (~35%), flat caps, drawn beneath text
+      (spec §10.3). Store as a stroke with `payload.highlighter: true`.
+- [x] Precision eraser: removes only the part of a stroke under it, splitting
+      the stroke. Re-run `strokeOutline` on each piece. The ordinary eraser
+      still removes whole strokes.
+- [x] Move the dock's stroke colour into the pen flyout. Give the fill bucket
+      its own fill colour.
+- [x] Shapes: the shape picker shows border and fill colour choices. The default
+      is cream `#e2ddf5` (decided).
+- [x] Smart drawing (spec §10.4): a rough stroke becomes a clean
+      rectangle/ellipse/triangle/diamond/arrow, keeping the source ink for
+      undo. Rule-based recogniser first. This could be its own session if it
+      runs long.
+
+## Section 3 — Diagram from nodes (node editor)  ✅ done (session 3) — checked by the user, committed
+
+The user loves "Diagram from text" (Mermaid) but wants a **human, node-based**
+way to build the same thing. Keep the text mode for AI and paste.
+
+- [x] A node-editor panel/mode: add nodes, drag from a node's port to another
+      to link, label edges, pick a node's kind (box/decision/start-end/
+      data/database). Live preview using `flow/flowText.js` layout, then insert.
+- [x] Two-way: open an existing diagram selection in the node editor, and
+      round-trip with `itemsToFlow`.
+- [x] Build it as a **pop-up window** (decided), with Nodes and Text tabs.
+- [x] Give it its own dock icon. The user asked for a new look; it's now
+      `LuWaypoints` as a stopgap. Pick one that reads as "node graph" once
+      the node editor exists.
+- [x] `flowText.js` mirrors the CLI's `core::diagram`. Change one and you must
+      change both.
+
+## Section 4 — CLI follow-ups (repo `../Siddran-CLI`)  ✅ done (session 4) — checked headless, committed
+
+- [x] `sandbox_read`: list frames as frames (title plus contents), not as empty
+      boxes. Stickies read as sticky notes.
+- [x] `sandbox_edit`/`sandbox_diagram`: accept the new shape kinds, `headStart`,
+      `lineStyle` and `routing: "curved"`.
+- [x] Also from section 3: a connector's `avoid` (go around boxes) and
+      `body: "tapered"`, and a shape's `flowDrop` (the node editor's lowered
+      level). The CLI only needs to keep them when round-tripping; it doesn't
+      have to lay them out. Layout stays CLI-mirror only: the families and
+      lowering are desktop-only (user's decision).
+- [x] Keep the parity tests between `flowText.js` and `diagram.rs` green.
+
+## Section 5 — Format shell + shared record model (prerequisite for 6–11)  ✅ done (session 5) — checked by the user, committed
+
+- [x] **First, before any Format work: measure drag smoothness.** The user
+      felt dragging shapes was a bit laggy (2026-11-12). It was unmeasured, and
+      likely the dev build plus a nearly full RAM (7.1 GB, ~1.6 GB free, video
+      playing). It is not the WebKit flicker workaround: 2.54.2 is installed,
+      so the workaround is off. Formats are heavy canvas widgets, so settle this
+      first. With the dev app CLOSED, use the perf-probe recipe in the memory
+      note `reference-webkit-render-mode` to sample frame times while moving a
+      selection on a busy board. Compare against a release build. If the app
+      code is at fault: each pointer move re-renders the page, the overlay and
+      the floating bar.
+
+The spec's §5.13 and §13.1–13.2: a "Format" is a structured widget on the
+canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
+(`table` | `kanban` | …), per the "no new types" rule.
+
+- [x] Window chrome on the canvas: a title bar, resize, and focus mode
+      (fullscreen) as an overlay.
+- [x] Shared dataset model. Records and fields live in the board file
+      (decided: inside the board, not a sibling file). Table, Timeline, Kanban and Matrix
+      are views of one dataset.
+- [x] Undo, merge (`mergeRows` is per item; a dataset may need per-record
+      merging) and CLI round-trip.
+- [x] Data source per widget, **linked tasks or own records** (decided: both).
+      One adapter interface, one set of views.
+
+## Sections 6–11 — Formats (can run in parallel after section 5)
+
+- [x] **6 · Table:** field types, sort, filter, group (spec §13.4). ✅ built (session 6) — awaiting the user's hands-on check
+- [x] **7 · Timeline + Kanban + Matrix:** views over the same records
+      (§13.5–13.7). ✅ built (session 7): checkpoint 1 (view switcher, Kanban,
+      Matrix) checked by the user; checkpoint 2 (Timeline) awaiting the user's
+      hands-on check.
+- [x] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
+      editor (CodeMirror), or embedding a real note as the Doc (§13.3).
+      ✅ built (session 8, branch `whiteboard-doc`); both rounds checked by the
+      user. Merged into `whiteboard` (session 7, 2026-11-13).
+- [x] **9 · Slides:** frames as slides plus a presentation mode with
+      F5/arrows/Esc (§11.8, §13.10). ✅ built (session 9, branch
+      `whiteboard-slides` in both repos): checkpoint 1 tried by the user;
+      checkpoint 2 (slides as their own thing, display sizes, fade, CLI, PDF)
+      checked by the user, except the last change (a dissolve between
+      slides, 6736bcc), checked only in a hidden window. Merged into
+      `whiteboard` (session 7, 2026-11-13).
+- [~] **10 · Prototype:** ✗ dropped by the user (2026-11-13) — see Not planned. screens with click-through hotspots and a preview
+      mode (§13.11).
+- [ ] **11 · Engage activities + Talktrack, solo versions (decided):** ✗ dropped by the user
+      (2026-11-13): Talktrack and Engage both — see Not planned.
+      self-quizzes, flashcards, polls and votes; screen and voice recording of
+      the board, saved as video in the Bag (§13.12–13.13).
+
+## Deferred (do near the end, around section 11)
+
+- [x] **Connection outlines on the board** (agreed 2026-11-13; the node editor
+      already dims). Select a box (or several) and its links, plus the boxes
+      at their other ends, get a thick, semi-transparent cyan/teal glow:
+      just outside each box's edge, and as a halo under each link. Select a
+      link and its two end boxes get it. Rules:
+      - No dimming and no toggle.
+      - The glow keeps a constant width on screen at any zoom.
+      - Deeper teal on a light theme.
+      - Hidden while dragging.
+      - Nothing shows when the selection has no connections.
+      - The clicked item keeps its normal selection handles.
+      Build it as ONE overlay drawn from item bounds and connector points, not
+      by touching each layer. Share the "what's connected" logic with
+      NodeEditor's `focus`.
+
+## Not planned (user decision, 2026-11-12)
+
+- Stickers and emojis. They need an asset library; dropped for now.
+- **Prototype (section 10)** — dropped 2026-11-13. The user prototypes in
+  Figma; Siddran isn't made for it and shouldn't become a "kitchen sink"
+  (everything-in-one). If the Sandbox ever grows that way, it would rather
+  become its own standalone app.
+- **Talktrack (section 11)** — dropped 2026-11-13, same reason.
+- **Engage (section 11)** — dropped 2026-11-13. It's Miro's live-workshop
+  tool (polls, word clouds, scales, rankings, quizzes answered by a room of
+  people); solo, every activity just records what you already think.
+  Self-quizzes/flashcards, if ever, would be a notes feature, not a widget.
+
+## Log
+
+- 2026-11-12 · session 1 · base upgrade committed (c516ea6, 5f92dc7): text
+  typography, 35 shapes, curved connectors and heads, stickies, frames,
+  10 templates, group/lock, copy style, connection-dot hover fix.
+- 2026-11-12 · session 1 · section 1 built. Logic is unit-tested: hover/magnet
+  (`selection/hover.js`), bend routing, tapered geometry. The pointer gestures
+  (press-drag, magnet press, bend drag) could NOT be driven headlessly, because
+  there is no click/move dispatcher. The user is checking them by hand.
+- 2026-11-12 · session 1 · user feedback round. The floating bar was too big:
+  now ~10% smaller (36 px buttons). It wrapped near the right edge: now
+  `width: max-content` with no wrapping. The sticky now looks like paper (gradient,
+  adhesive strip, lifted shadow, folded corner). Dock icons are bigger (44 px
+  buttons). The diagram icon is now `LuWaypoints`.
+- 2026-11-12 · session 1 · blurry toolbars: the user's HDMI monitor is scaled
+  0.83. Composited layers (backdrop-filter, translate(-50%), lingering
+  animations) rasterise soft there. They were removed and the bar is now
+  placed on whole pixels. **Don't reintroduce backdrop-filter or transform-based
+  centring on these bars.** Not yet confirmed by the user on the real display.
+  Next: section 2.
+- 2026-11-12 · session 2 · section 2 built and committed after the user's check. New
+  `components/Sandbox/ink/`: `presets.js` (tools, 3 presets each for pen and
+  highlighter, persisted at `siddran_sandbox_ink_v1`; the old brush migrates to
+  the pen's middle preset), `precisionErase.js`, `recognize.js`,
+  `highlighterZ.js`, all unit-tested. UI: `Toolbar/DrawFlyout.jsx`, plus
+  `Toolbar/ColorMenu.jsx` (shared Popover and CustomColor; `BrushSettings` and
+  `ColorPalette` were removed). Choices made:
+  - One dock button opens the flyout. P/P toggles Pen ⇄ Highlighter, E/E
+    toggles Eraser ⇄ Precision.
+  - The highlighter colour has its alpha baked in (`#rrggbb59`), so old builds
+    also draw it translucent. No multiply blend: on the dark board it would go black.
+  - The highlighter sits beneath crossed pen ink and outline-only shapes, and
+    above filled things.
+  - Smart drawing gives two undo steps (ink, then shape). The shape keeps
+    `payload.sourceInk`, and the floating bar has "Back to drawing".
+  - Text and connector colour now follow the shape border colour (the pen
+    colour moved into presets).
+- Checked headless on a copy of the test Bag (dev localStorage backed up and
+  restored afterwards):
+  - Precision cuts render in place, including on a moved, stretched and
+    rotated stroke.
+  - The highlighter stacks as intended.
+  - All 5 recognised shapes render.
+  - The P/P and E/E flyouts and the picker's Border/Fill rows look right.
+- **Fixed a regression from 816e3ae:** committed `ellipse` shapes rendered
+  nothing (the Konva ellipse fast-path had been dropped).
+- Gestures (drawing, erasing, preset clicks) can't be driven headlessly; the
+  user must try them. **Check-in: the user reviews section 2 before section 3.**
+- 2026-11-12 · session 2 · user feedback round on section 2:
+  - Cards (text, notes, tasks, PDFs) let presses through while drawing,
+    highlighting, lassoing or painting. The plain eraser still deletes them.
+  - New precision-eraser icon: a cut line with a ring over the gap.
+  - The dock's menus and the draw flyout are one slot: opening one closes the others.
+  - The shape picker is icons only, in one sectioned grid. Arrow thumbnails
+    now have both barbs. Its transform animation was removed (blur rule).
+  - A single selected line or arrow SHAPE gets end handles plus a middle bend
+    handle instead of a box (`selection/lineHandles.js`). Curved lines store
+    3 points plus `payload.curved` and render with tension. The line bar has
+    − / + thickness.
+  - The paint bucket is now a tool (`fill`, `ink/paint.js`): pick a colour,
+    click things to paint them. It is separate from the default fill for new
+    shapes (shape picker).
+  - Verified headless: arrow handles, single menu, picker, icon, Esc.
+  - Precision-eraser icon redone again (the ring version read as a "black hole"):
+    a smaller lucide eraser whose tip sits in a gap cut in a line. Thickness
+    steppers (−  n  +) made compact on every bar.
+  - Last round: the floating bar is ONE row (the groups sit side by side, so
+    with everything showing it runs ~1300 px and the half-width dock view clips
+    it). Font size is − n +. Cards hide their × while selected (the bar's
+    trash does it). Next: section 3.
+- 2026-11-12 · session 3 · section 3 built. "Diagram from text" is now the
+  **Diagram** pop-up (`flow/DiagramModal.jsx`), with Nodes and Text tabs.
+  FlowTextModal is gone.
+  - Nodes tab (`flow/NodeEditor.jsx`): the drawing IS the preview. Positions
+    come from `layoutGraph`, so nothing is dragged into place. + / N adds a
+    node. Dragging from a node's dot onto another links them; dropping on
+    empty space makes a new linked node. Tab adds the next step, Del removes,
+    Enter renames. The side panel has the label, 8 kinds (step, rounded,
+    start/end, decision, data, database, circle, prep), and per link: label,
+    arrowhead, dashed, reverse.
+  - Model (`flow/flowGraph.js`, tested): graph edits, `graphToText` ⇄
+    `textToGraph` (the Text tab, lossless when the text isn't edited),
+    `itemsToGraph` (numbers nodes exactly as `itemsToFlow` / the CLI's
+    `describe` do), and `planDiagram`. For a new graph, `planDiagram` gives
+    byte-for-byte what `flowToItems` gives (tested), so the CLI parity holds.
+    **flowText.js and diagram.rs are unchanged.**
+  - Two-way: D (or the floating bar's new Workflow button) on a selected
+    diagram opens it as "Edit diagram". Update re-lays it out at the same
+    top-left, in place, as ONE undo step. Boxes keep their ids and styles; an
+    untouched label keeps its size. Removed boxes take their links (even
+    those to outside boxes) with them. Old link bends are dropped. With
+    nothing selected, D or the dock button starts a new diagram.
+  - Dock icon is now `LuWorkflow`. Shape outlines in the editor come from the
+    registry render fns (`flow/svgPath.js` records the ctx calls as SVG).
+  - Keys stay in the pop-up: the page ignores keys while it's open, and the
+    pop-up stops propagation. A backdrop click only closes it when nothing
+    has been changed.
+- Checked headless on a copy of the test Bag (localStorage backed up and
+  restored): opening a selection, adding nodes with N / typing / Tab,
+  Ctrl+Enter Update, a single Ctrl+Z, Ctrl+Y. The preview routes links round
+  other boxes the way the board does. Port dragging and clicking kinds can't
+  be driven headlessly; the user checks those at the end. Next: section 4.
+- 2026-11-12 · session 3 · user feedback round on the node editor:
+  - **Nothing jumps any more.** The view no longer re-fits after every
+    change. It holds still around the node you're on (the camera shifts by
+    that node's move), other nodes glide to their new places in 200 ms
+    (new ones grow out of their linked node), and the selected node is
+    panned into view if needed.
+  - **Zoom and pan:** the wheel zooms at the pointer (as on the board); drag
+    empty space or middle-drag to pan; a − n% + ⛶ pill sits bottom-left;
+    keys `=`/`-` zoom on the selected node and `1` fits everything.
+  - **One "+" handle** on the outgoing side, in place of the four dots:
+    click it for the next step, drag it onto a node to link.
+  - **Families as rows:** unlinked groups stack top to bottom, 144 px apart.
+    (Superseded in the next round: families now sit side by side, desktop only.)
+  - **Shapes:** the kind picker is the shape menu's own Basic / Flowchart /
+    Callouts sections (`ShapeThumb` is exported from ShapePicker). Kinds
+    with no text form are written as `[box]` and kept when that line comes
+    back unchanged; `terminator` is written as `([pill])`.
+  - **Icons:** a custom `DiagramIcon` (box → diamond → pill) on the dock and
+    the floating bar, and a `NextStepIcon` (box → ⊕) for "next step", both
+    in `flow/icons.jsx`.
+  - **Dock: one item active at a time.** Opening the shapes or media menu
+    drops the held tool (text, pen, sticky…) to Select, so a board click
+    with the menu up no longer drops text. While a menu is open, its button
+    is the only one lit.
+  - Esc / Ctrl+Enter work even when focus slips out of the pop-up, and other
+    keys pull focus back in (seen headless: Ctrl+A selected the whole page).
+  - Verified headless (Bag copy, localStorage restored): the T→S dock fix,
+    the new family's row, the camera following, zoom on the selection, the
+    shape picker, both icons.
+- 2026-11-12 · session 3 · second feedback round: arranging. **Desktop only
+  (the user's decision): the CLI/MCP layout is NOT to follow.** `flowText.js`
+  is back to the CLI mirror, plus one opt-in hook (below) that diagram.rs
+  doesn't need.
+  - **Families side by side, across the flow:** in columns when the flow runs
+    down, in rows when it runs right, `GAP_FAMILY` (144) apart. This lives in
+    `flowGraph.layoutFor` (one `layoutGraph` call per family). Family order is
+    node order, so **Arrange → Family ‹ ›** (or Alt + an arrow across the
+    flow) swaps whole node blocks (`moveFamily`). On re-open, reading order
+    gives back the same order.
+  - **Lowering a node** (Arrange → Level, or Alt + an arrow along the flow):
+    only a node with no children; never past its family's deepest level; a
+    parent always stays directly above its children. Stored on the graph as
+    `node.drop` and on the board as the optional `payload.flowDrop` (kept by
+    the Text tab by key). `layoutGraph(…, { drop })` applies it, and only
+    then adds invisible **lane nodes** on the levels a lowered link skips (the
+    classic layered-layout dummy, `LANE` = 48), so the link has a clear
+    column. It returns `turns`, and `laneBend` turns them into a connector
+    `bend` (jog just past the parent, then straight down the lane), used by
+    both the preview and the board. Tested: in both directions the link
+    crosses no box and no boxes overlap.
+  - "**+ Root node**" is a labelled button. The how-to is a card toggled by a
+    ? button (or the `?` key) that stays up while you edit (remembered in
+    `siddran_sandbox_diagram_help`). The side panel says what to do when
+    nothing is selected.
+  - Fixed: the view could open scrolled wrong when the first fit ran while the
+    pop-up was still settling its size. It now keeps fitting until you zoom,
+    pan or edit.
+  - Verified headless: the user's example (the right child lowered beside
+    the left branch's deepest leaf, its link down a clear lane), the family
+    columns and Alt+← reorder, the Arrange panel, Update matching the
+    preview, and the help toggle.
+- 2026-11-12 · session 3 · third feedback round:
+  - **Camera only follows near the edge** (`flow/camera.js`, tested). No more
+    holding the node still. When the layout changes, the view stays put
+    unless the node you're on gets into the outer 10% band of the view (or
+    out of it). Then it pans, on that axis only, so the node sits halfway
+    between the middle and that band. Zoomed out with everything in view,
+    nothing moves.
+  - **Link styles in the editor**, the same choices as the floating bar's
+    connector row (shared constants in `connectors/controls.js`): route
+    (straight = separate arrows fanning out to each child, elbow = one
+    trunk that splits, curved), start and end heads, solid/dashed/dotted,
+    tapered, width, colour, and the label. Per link when one is selected;
+    **All links** when nothing is. The preview draws them exactly as
+    ConnectorLayer does (trim, heads, dash, taper; selection is a halo, so
+    the colour still shows).
+  - Model: a link's text-expressible facts stay `head` / `dashed`; the rest
+    is an optional `edge.look` (routing, head, headStart, stroke,
+    strokeWidth, lineStyle, body). It is read from and written to the
+    connector payload, and kept across Text-tab edits by matching ends.
+    Lowered-node lanes only bend elbow links.
+  - Verified headless: board vs preview with five styled links, the All
+    links panel, and the camera (a new root at the edge pans the view;
+    moving a family that stays in view doesn't).
+- 2026-11-12 · session 3 · fourth feedback round (the user's last for section 3):
+  - **Go around boxes** for straight and curved links (`connectors/avoid.js`,
+    tested). It is optional `payload.avoid` on a connector, off by default
+    (= straight through, as before). When on and the direct path would run
+    through a box (its own two included), the link takes the shortest way
+    round instead: a visibility graph over the corners of the boxes grown by
+    14 px, searched with A*, leaving and arriving square to its sides. Curved
+    links take the same path with rounded corners. A box holding either end
+    (a frame) is ignored. It lives in `routeConnector`, so the board, the
+    editor preview and anything else that routes connectors agree. Toggle:
+    Go direct / Go around in the editor's link panel (and All links), and a
+    button on the floating bar's connector row (straight/curved only).
+  - **Selection focus in the node editor:** select a node and it, its links
+    and the nodes at their other ends stay bright while everything else dims
+    (opacity 0.22). Select a link: it and its two ends. Nothing selected:
+    nothing dims. Editor only; the board is unchanged.
+  - Verified headless: a board link set to go around clears the box in its
+    way, the editor draws it the same, and dimming works for a new root and
+    for a Tab-added child.
+- 2026-11-13 · session 3 · fixes from the user's hands-on check:
+  - **The editor lays out as a family tree** (`layoutGraph(…, { tidy })`,
+    desktop only; text-to-diagram, Tidy and the CLI are unchanged). Each node
+    hangs from one parent: the one on the level just above it, else the
+    first. Each branch gets its own band. Children sit in the order they were
+    added, and a parent is centred over its first and last child. This fixed
+    two bugs:
+    - A new child landed on the far side of a cousin and its link crossed
+      over. Cause: the barycentre up-sweep compared positions from two
+      different rows.
+    - A parent sat off-centre over its children.
+    For a straight chain the result is identical to text-to-diagram (tested);
+    for branches only positions differ.
+  - **Dimming only on a deliberate click.** A node selected because you just
+    added it (Tab, the + handle, Root node, a drag-link) doesn't dim anything.
+  - **New links take the diagram's link style.** "All links" also sets
+    `graph.look`, which `connect` applies to every new link. Reopened from
+    the board, it is the look most links share. The Text tab keeps it.
+  - The link palette fills the panel (8 per row, centred).
+  - Verified headless: the user's tree is centred all the way down, new
+    nodes don't dim, and links added in a curved diagram are saved as curved.
+  - Note for the user: "go around" rarely shows in the editor because its
+    layout keeps boxes out of the way. It matters on the board once boxes
+    are moved by hand.
+- 2026-11-13 · session 3 · bug: panning over a card. The bug was in all four
+  cards (text, note, task, PDF) through the shared `useCardPointer`.
+  Middle-drag panned AND dragged the card. Space-drag only dragged it,
+  because the canvas skipped card presses before checking for a pan. Fix,
+  in SandboxCanvas's native pointerdown, which runs before the cards' React
+  handlers:
+  - a middle press, or Space / the pan tool, now takes the press over cards
+    too (selection handles excepted);
+  - it calls `stopPropagation`, so the card never starts a drag.
+  Gestures can't be driven headlessly; the user checks it by hand.
+- 2026-11-13 · session 4 · section 4 built. The CLI work is on a new branch
+  `whiteboard` in `../Siddran-CLI` (its `master` is untouched), uncommitted
+  until the user says so.
+  - **The vocabulary lives in `diagram.rs`:** `BOX_KINDS` (all 35 box shapes
+    plus `sticky`), `LINE_KINDS`, `HEADS`, `LINE_STYLES`, `ROUTINGS`. A new
+    desktop test pins the same lists against the registry and connector
+    constants, so a new shape kind fails there until the CLI learns it.
+  - **`describe` and `itemsToFlow` both skip frames and line shapes** (the
+    rule is `isDiagramShape`, which now lives in flowText.js and is
+    re-exported by flowGraph.js). Both have a matching test. Stickies stay
+    boxes, so links to them still show, and the node editor numbers keys the
+    same way.
+  - **`sandbox_read`** adds `shape` to each `box_ids` entry, a
+    `sticky_notes` list (key, id, text, colour) and `frames`. Each frame
+    lists its title and what is inside it: box keys, text ids, nested frame
+    ids and counts of the rest. An item belongs to the smallest frame that
+    holds its centre. A frame belongs to another only if it fits wholly
+    inside it. Line shapes are counted as `lines`.
+  - **`sandbox_edit`:**
+    - `add` takes any box kind, `sticky` (192 px, `#FFE45C`, the templates'
+      payload), `frame` (`around` boxes with 40 px padding, like "Frame
+      selection", z below everything, the `framePayload` fields), `fill`, and
+      `w`/`h`.
+    - Arrows (from `after`, and in `connect`) take `routing`, `head`,
+      `headStart` and `lineStyle`. Setting `lineStyle` removes the old `dash`.
+    - `update` takes a connector id (label and style), renames a frame
+      through `text`, and refuses an unknown shape. A typo would otherwise
+      draw nothing.
+    - New boxes can now land inside a frame (frames are no longer obstacles
+      for free space).
+  - **`sandbox_diagram`:** `shapes` (node key → kind) and `links` (a style
+    for every arrow; a `---` or `-.->` in the text wins).
+  - `avoid`, `body`, `bend` and `flowDrop` survive an edit (tested). The CLI
+    still doesn't lay them out.
+  - Checks: CLI `cargo test` passes (6 new tool tests, 1 new core test);
+    clippy shows only its 3 old warnings. Desktop `npm test` passes (616),
+    lint is at the baseline of 25, build and `cargo check` pass. Checked with
+    the real `siddran call` on a copy of the test Bag: a real board with two
+    frames reads correctly, and draw → frame `around` → sticky `after` →
+    read gives the expected frame contents. Then seen headless in the dev app
+    (Bag copy; dev localStorage backed up and restored; opened with the CLI's
+    `app_open`): all of it renders as intended. That's the titled frame, the
+    sticky, the `document` shape, dotted curved links with circle start
+    heads, the dashed `no` loop and the diamond head.
+- 2026-11-13 · session 4 · the user had already checked section 3 by hand (see the "fixes from the user's hands-on check" entry), so no review is outstanding. **Next: section 5**, starting with the drag-smoothness measurement.
+- 2026-11-13 · session 5 · **drag smoothness measured** (before any Format
+  work). The dev app was already closed when the session started, so nothing
+  was stopped. A dev-only probe (`app/src/dev/perfProbe.js`, loaded only when
+  `VITE_PERF_PROBE=drag:<board>` is set) drives drags with synthetic pointer
+  events on the busy test board (164 items, headless, Bag copy) and samples
+  per-frame timings. Medians, 3 runs each:
+
+  | | dev build | production bundle |
+  |---|---|---|
+  | drag one shape | 17 ms, 20–28 of 178 frames over 20 ms | 17 ms, 1–7 over 20 ms |
+  | drag all 164 items | 30 ms on every frame (≈33 fps) | 21 ms (≈47 fps) |
+
+  JS work per frame (React render + Konva draw) is only about 4–5 ms + 3–5 ms;
+  the rest of a whole-board drag is browser paint. **Conclusion: the lag the
+  user felt is mostly the dev build (React dev mode); the app code is not at
+  fault for ordinary drags.** On top of that, one cheap paint fix: a
+  multi-selection no longer redraws one outline per item while it moves
+  (SelectionOverlay). That brought a whole-board drag to 20 ms, with
+  17–79 frames over 20 ms instead of ~150. "Production" here means the
+  production frontend bundle (`vite build` + `vite preview`, VITE_PERF_PROBE
+  baked in) loaded by the debug shell. A real release binary would have used
+  the installed app's own localStorage, so it was not run; the Rust side does
+  nothing during a drag.
+- 2026-11-13 · session 5 · **section 5 built** (Format shell + shared record
+  model). New `app/src/components/Sandbox/formats/`:
+  - **Model** (`formats.js`, tested): `type:'shape', kind:'format'` with
+    `payload.view` (table|kanban|timeline|matrix), `title`, `source`,
+    `fields` and `records: [{ id, values, updated_at }]`. Own records live in
+    the payload (decision #5). A new widget has Title / Status (To do, Doing,
+    Done) / Due.
+  - **One adapter** (`dataSource.js`, tested): `{ fields, records, editable,
+    canAdd, canRemove, add, update, remove }`.
+    - `ownSource` writes the widget (one undo step per change, applied to
+      the payload as it is at commit time).
+    - `taskSource` reads the Bag's tasks (or one project's) with an
+      open/all/done filter. It writes only through the app's tasks store
+      (`useTasks` mutators, given to every board mount by the new
+      `contexts/TasksApiContext.js`), so it goes through localStore and live
+      sync and never touches tasks.siddran. Linked rows can't be deleted from
+      a widget (too easy to delete real tasks by accident), and board undo
+      doesn't cover task edits; the source menu says so.
+    - Tasks have no tags in this app, so "filter by tag" became filter by
+      project + open/all/done.
+  - **Views**: `views/index.js` maps `payload.view` → component. Only the
+    plain list (`ListView`) exists: done check, title edited in place, chips
+    for the other fields, × on own records, "+ Add" at the bottom. Every view
+    falls back to it until sections 6–7 add theirs. The Insert (media) menu
+    has **Table**; other entries come with their views.
+  - **Chrome** (`FormatWidget.jsx`): a DOM window drawn with the cards (above
+    the Konva layers):
+    - title bar = the handle; double-click renames;
+    - a source chip with the record count opens the source menu;
+    - ⛶ opens **focus mode** (full-window overlay of the same widget; Esc or
+      the button goes back). Enter on a selected widget does the same.
+    - Resizing uses the normal selection handles; no rotate knob.
+    - The floating bar shows Full screen and Rename plus the usual actions.
+  - **Moving carries what's on it, like a frame.** The title-bar press goes
+    through the overlay's own move (snapping, groups, one undo step). Riders
+    are decided at grab time: cards and smaller widgets stacked ABOVE it.
+    Board shapes always paint beneath DOM, so any under a widget are hidden
+    and are deliberately not carried. A frame carries the widgets in it.
+  - **Merge** (`desktop/sync/merge.js` `mergeSandboxItems`, tested; used by
+    localStore `absorbSandbox`): ordinary items still merge row by row. A
+    widget edited on both sides merges key by key, and its `records` and
+    `fields` record by record. Two sides adding or editing different records
+    both keep their work. Only a record (or key) changed on both sides is a
+    conflict, and the newer change wins.
+  - Excluded from flowcharts everywhere: `isDiagramShape` (flowText.js) and
+    `is_diagram_shape` (diagram.rs) both skip `kind: 'format'`. No connection
+    dots, not a text target. Tab/Alt+arrows don't make "next steps" from it.
+  - **CLI** (`../Siddran-CLI`, branch `whiteboard`): `FORMAT_KIND` /
+    `is_format` in diagram.rs. `sandbox_read` lists `formats`: id, title,
+    view, source; for own records, field names and records with values.
+    Inside a frame a widget counts as `other.formats`. `sandbox_edit`
+    `update` can rename a widget by id or title (`text`) and refuses
+    shape/fill. Records survive any edit byte for byte (tested).
+  - Checks: desktop `npm test` 631 pass, lint at the baseline 25, build and
+    `cargo check` pass; CLI `cargo test` passes (2 new tests), clippy adds
+    nothing. Seen headless in the dev app (Bag copy; dev localStorage backed
+    up and restored afterwards; the headless output removed and every
+    workspace back on eDP-1/HDMI-A-1), scripted by the probe's `format:`
+    scenario. All of these were observed working:
+    - insert from the menu; add 3 records; tick one done;
+    - drag by the title bar: widget and a text card on it both moved
+      (240, 88);
+    - resize from the corner (420×320 → 540×420); no rotate knob;
+    - Enter → full screen;
+    - link to All tasks: 5 open tasks shown, ticking one wrote
+      tasks.siddran in the copy;
+    - back to own records: still 3;
+    - Ctrl+Z / Ctrl+Y over the source change;
+    - the board file holds the widget and its records; `siddran call
+      sandbox_read` lists them.
+  - **Please try (the hand-feel half, which headless can't do):**
+    1. Media menu → Table. Drag it by its title bar. Does it feel like a
+       frame?
+    2. Drop a text box or note card on it, then move the widget.
+    3. Resize it from the corners and edges.
+    4. ⛶ or Enter for full screen, Esc to come back.
+    5. Add and rename records, tick them, delete one; Ctrl+Z each step.
+    6. Source chip → All tasks / a project, Open/All/Done. Tick a task, then
+       check it on the Tasks page.
+    7. Mouse-wheel over a long list scrolls the list; over the board it still
+       zooms.
+    8. Put a widget in a frame and move the frame.
+    9. Say whether a widget should also carry hidden board shapes under it
+       (it doesn't now).
+  - Not done / for later: field editing beyond title and status (section 6
+    Table), per-view settings, record reordering (a merge currently keeps
+    base order, then new records). **Stopped at the planned check-in;
+    section 6 not started.**
+- 2026-11-13 · session 5 · user feedback on section 5: all 9 "please try"
+  items work. #9 answered: a widget doesn't carry what's under it (decision
+  6). Two follow-ups built:
+  - **Sticky attachment + clipping — TRIAL, widgets only** (decision 7;
+    `formats/attach.js`, tested).
+    - A card or smaller widget DROPPED on a widget (or inserted onto one)
+      gets `payload.attachedTo`; dragged off on its own, it detaches. Both
+      are part of the same undo step as the move or insert.
+    - A widget carries what's attached to it (recursively), wherever it
+      hangs. Resizing never detaches. What sticks out past the widget's edge
+      is clipped (CSS `clip-path` on a zero-size wrapper round every card,
+      so attaching never remounts a card — a PDF iframe would reload). The
+      widget shows "+N hidden" while anything is cut off.
+    - Duplicating a widget with its riders re-points the copies at the copy.
+    - Bug found and fixed on the way: moving a widget re-checked its riders
+      on drop, and a card hanging past a shrunk widget's edge (centre
+      outside) was detached. Items that moved with their own widget are now
+      left alone.
+    - **To remove the trial:**
+      - delete `formats/attach.js` and its test;
+      - in SandBoxPage: `addCard` → `act.addItem`, and drop `onMoveEnd`, the
+        clip wrapper and `hiddenOn`;
+      - drop the `onMoveEnd` prop in SelectionOverlay, useCardPointer and the
+        four cards;
+      - in SelectionOverlay startMove, give widgets back positional riders
+        (DOM items above the widget whose centre is inside, as in 4eef61f),
+        or none;
+      - drop the duplicate re-pointing and the `.hiddenBadge` style.
+
+      Old boards keep a harmless `attachedTo` field.
+  - **Text size per widget**: `payload.fontSize` (default 15), set with
+    − n + on the floating bar (any number of widgets selected) or
+    Ctrl+Shift+> / <. The body is sized in em off it; full screen reads 15%
+    larger.
+  - Checked by the probe's `attach:` scenario (this time in a HIDDEN window on
+    an unused workspace, no headless output; frames fall back to 50 ms
+    ticks). All observed:
+    - placing a text card on a widget attaches it;
+    - shrinking past it keeps it attached with "+1 hidden";
+    - moving the widget carries it (still attached, still clipped);
+    - growing shows it whole (badge gone, still attached);
+    - text 15 → 16 → 18;
+    - dragging it off detaches;
+    - Ctrl+Z re-attaches.
+    **What the clipping looks like was NOT seen** (see the next entry); the
+    user checks it by hand.
+  - **Headless trap, twice this session:** creating the headless output
+    moves the user's workspaces 3, 6 and 9 onto it, every time. The app
+    once landed on the user's workspace 10 on HDMI. `grim` of the output then
+    captured the user's browser instead of the app. Those captures were
+    deleted, the output removed and the workspaces checked back. While the
+    user is at the computer, run probes in a hidden window instead
+    (`[workspace 19 silent]`, data only, no screenshots).
+
+- 2026-11-13 · session 5 · user feedback (bright room): the floating bar's
+  outline is now high-contrast. It uses a new theme token
+  `--outline-contrast`: white on dark themes, black on light ones (set by
+  every palette in SettingsContext). The widget badge now says "N cropped"
+  (part of it shows) and/or "N out of view" (none of it shows) instead of
+  "+N hidden". Not seen on screen: the user is at the computer, so no
+  headless screenshots. The user is weighing a per-widget clip ⇄ hang toggle.
+- 2026-11-13 · session 5 · **crop ⇄ hang toggle, per widget** (the user
+  uses both): `payload.overflow` = 'clip' (the default; absent means clip)
+  or 'hang'. The floating bar's crop button, lit while cropping, sets it for
+  every selected widget (one undo step). A widget set to hang adds no crop
+  and shows no badge. A rider of a hanging widget nested in a cropping one
+  still gets the outer crop (`attach.js` `clipRect`, tested). Attachment is
+  the same in both modes. It's on the floating bar rather than the widget's
+  title bar: it's an occasional setting, and the title bar is the grab
+  handle. If frames adopt sticky attachment, give them the same toggle.
+- 2026-11-13 · session 5 · **sticky attachment extended to frames; hang is
+  now the default** (decision 7). `formats/attach.js` became
+  `selection/attach.js` (tested):
+  - **Frames** take anything but connectors (another frame only if it fits
+    wholly inside). A widget on top wins over the frame beneath; among frames,
+    the smallest wins. Widgets still take only DOM things above them.
+  - **Old boards:** things in frames with no `attachedTo` still ride by
+    position. The first time a frame on the board is moved or resized, they
+    are all stamped as attached (`stampPatches`, inside that gesture's undo
+    step), so from then on a shrinking frame keeps them. Things drawn in a
+    frame later are stamped the same way at the next frame gesture, or
+    attached when dropped.
+  - **Crop ⇄ hang** for frames too: the same floating-bar crop button, now
+    OFF (= hang) by default for both. `payload.overflow: 'clip'` crops;
+    absent or 'hang' hangs. Widgets that never set it now hang.
+  - Cropping on the canvas: each cropped graphic is wrapped in a Konva
+    `Group` clipped in world coordinates (GraphicsLayer; FrameLayer for
+    nested frames). Cards still use the clipped wrapper. A cropping frame's
+    title reads "Frame 1 · 1 cropped · 1 out of view".
+  - **CLI** `frame_of`: an item attached to a frame belongs to it wherever it
+    hangs; otherwise the old positional rule applies (tested). `attachedTo`
+    and `overflow` survive edits.
+  - Checked in a HIDDEN window (`frames:` probe scenario, live store, no
+    screenshots) on the test board's "Frame 1" (a rect and ink, neither
+    attached):
+    - dragging the frame by its title moved both with it by (57, 40) and
+      stamped both;
+    - shrinking it to a quarter kept both attached, hanging, with no crop;
+    - the crop button was off; turning it on cropped both (2 clipped Konva
+      groups) and the title read "Frame 1 · 1 cropped · 1 out of view";
+    - 3× Ctrl+Z restored the frame, the overflow setting and the
+      attachments exactly.
+    Desktop 642 tests pass, lint 25, build and `cargo check` pass. CLI 87
+    tests pass, clippy unchanged. How it looks is unseen (the user is at the
+    computer).
+
+- 2026-11-13 · session 5 · user feedback:
+  - **Sub-frames attach by centre, the smaller only** (user's choice). Was
+    "fits wholly inside". Now a frame attaches to another when its centre is
+    inside and it is the smaller, so two frames never hold each other. The
+    CLI's `frame_of` has the same rule. Frames inside widgets: no (user
+    agreed).
+  - **Snapping everywhere the magnet is on:**
+    - Cards (text, note, task, PDF) now move through the board's own move
+      (`useCardPointer` → `onGrab` → SelectionOverlay `beginMove`), as
+      widgets already did. So they snap to edges, centres and the grid, show
+      guides, move with the group, carry what's attached and get the drag
+      shield. Their own drag remains only as a fallback.
+    - **Resizing snaps too:** the dragged edge snaps to other items' edges
+      and centres (a frame's or widget's, so things line up inside them) and
+      to the grid. Unrotated boxes only (`snapping.js` `snapEdge`, tested).
+    - Connectors are no longer snap targets: their stored 0×0 box at the
+      origin made a phantom line at 0.
+  - Checked in a hidden window. The attach and frames walks still pass in
+    full. A card dragged to 3 px from a widget's edge snapped to the NEAREST
+    line: a pen stroke's edge 0.9 units away, which is correct. The drag
+    shield isn't observable in a hidden window: moves apply only on release
+    there, as no frames come.
+  - Answered, not built: the cost of a top canvas for shapes and strokes on
+    widgets (see the reply in session 5).
+- 2026-11-13 · session 5 · **the top canvas: shapes, ink and images on
+  widgets** (user said yes after the cost estimate).
+  - Widgets now take anything stacked above them except frames and
+    connectors (`selection/attach.js` `fits`). They still never take what's
+    underneath them.
+  - Board graphics whose attachment chain reaches a widget (`widgetBorne`)
+    are drawn on a SECOND Konva stage. It sits above the cards and widgets,
+    pans and zooms with the board, and takes no pointer events
+    (SandboxCanvas). Links between two such items are drawn there too. The
+    main canvas leaves them out.
+  - The live previews (ActiveLayer: ink, shapes, links being drawn) moved to
+    the top stage, so drawing over a widget or card shows as you draw.
+  - Strokes, shapes and stickies attach as they're created (`addCard`): drawn
+    on a widget, they're on it. Smart drawing and "Back to drawing" keep the
+    attachment; precision-eraser pieces keep it too (they copy the payload).
+  - Shape, sticky and text tools now pass through cards and widgets like the
+    pen, so you can draw on them. The frame tool doesn't.
+  - A press over a widget that lands on something drawn on it goes to that
+    thing (select, move, erase, double-click to edit), not the widget
+    (SandboxCanvas `overTop`). The same goes for a connection dot that has
+    caught the pointer. **Trade-off:** ink over a widget's controls takes
+    clicks there, as layers do in Figma.
+  - PNG export composites the top stage over the board (`exportStagePNG`
+    `topStage`).
+  - Known limits: something drawn on a widget always paints above cards on
+    that widget, and above any widget overlapping it.
+  - Checked in a hidden window (`top:` probe):
+    - ink drawn across a widget attached and was on the top stage;
+    - a sticky placed on it attached;
+    - a press on the ink (over the widget's add box) selected the ink, and
+      Delete removed the ink, not the widget;
+    - moving the widget carried the ink and the sticky by the same offset;
+    - the eraser on the sticky erased the sticky, not the widget.
+
+    The attach, frames and format walks re-run green. Two probe fixes: aim at
+    the inserted widget and at the source menu's own entries (the test Bag now
+    holds the user's own widgets), and read undo from the live store. 644
+    tests pass, lint 25, build and `cargo check` pass. Not seen on screen.
+- 2026-11-13 · session 5 · **magnet: stronger and cheaper** (user: a bit
+  laggy on a busy board, and not strong enough).
+  - The catch radius went from 6 to 10 screen px (`SNAP_PX`, moves and
+    resizes).
+  - Targets are built ONCE per gesture, sorted (`snapTargets`), and each
+    frame finds the nearest line by binary search (`computeSnapTo`; tested
+    equal to the old full scan). Before, every frame re-measured every item
+    on the board. In Node, 500 items: 0.53 ms → 0.0006 ms per frame, plus
+    0.44 ms once per drag.
+  - Only items on screen (plus a 200 px margin) are targets (`inView`), so
+    far-off, unrelated things neither pull nor cost anything.
+  - Guides re-render only when they change (`showGuides`), not on every
+    pointer move.
+  - Honest note: snapping was a modest share of a frame; this morning's
+    measurement puts most of the dev-mode lag on the dev build itself.
+  - The attach and top walks re-run green in a hidden window. 646 tests pass,
+    lint 25, build passes.
+- 2026-11-13 · session 5 · **Section 5 closed with the user** (all checks
+  done by hand). Handed to the next session for section 6.
+- 2026-11-13 · session 6 · **section 6 built (Table view)**. Desktop and CLI
+  both on `whiteboard`. A `view: 'table'` widget now renders as a real table
+  (`formats/views/TableView.jsx`); Kanban/Timeline/Matrix still fall back to
+  the plain list until section 7.
+  - **Field types** (`formats/fields.js`, tested): text, long text, number
+    (0–4 decimals or auto), select, multi-select, date, checkbox, URL, email.
+    Values stay plain JSON per type; empty = key absent. Options stay plain
+    labels (as in section 5); a chip's colour is hashed from its label, so it
+    never shifts. Field ids are stable (`f_…`), so renames break nothing.
+    - Add a field from the **+** header (name + type); click a header for
+      its menu: rename, change type, options (add / rename — cells follow /
+      remove — cells cleared), decimals, sort, group, hide, move left/right,
+      delete (warns with the number of values; Ctrl+Z restores).
+    - Changing type converts every value (text→number parses "1,200";
+      number→text is plain digits; text→select/multi gathers the options)
+      and drops that field's filters and calculations (sorts stay).
+    - At most 50 fields, 100 options per field.
+  - **View settings in `payload.table`** (`formats/query.js`, tested):
+    `filters` + `match` (all/any, one level), `sorts` (multi-key, empties
+    last), `groupBy` (one level, collapsible; options in their order, a
+    multi-select record in each of its groups), `hidden`, `widths`, `calcs`,
+    `wrap`. Per widget, so a linked widget keeps them too. Merge treats
+    `table` as one key (newer wins on a clash).
+  - **Cells:** click to edit; Tab / Shift+Tab along the row, Enter commits
+    and moves down, Esc cancels; one undo step per cell. Select and
+    multi-select open a picker (type to find; Enter creates a new option —
+    joining the field in the same undo step); long text opens a larger
+    editor (Shift+Enter for a new line; a click outside saves). Checkboxes
+    toggle in one click. URL/email cells have an open button that goes
+    through the app's external-link prompt.
+  - **Footer calculations** per column (sum, average, min, max, median,
+    filled, empty, count, % checked, earliest/latest date), shown overall
+    and under each group.
+  - Records added while a filter is on stay visible (dimmed) until the
+    filter changes, so a new row doesn't vanish as you type it.
+  - Column widths: drag a header's right edge (stored at the default text
+    size, drawn in em, so they grow with the widget's text size).
+  - **Linked tasks:** the task fields are fixed (no + header, no
+    rename/type/delete); sort, filter, group, hide and calculations work.
+  - **Wheel:** over a widget it now scrolls the nearest scroller that can
+    move (the table), and Shift+wheel or a sideways swipe scrolls across
+    (SandboxCanvas). `SELECT` now counts as editing for board shortcuts.
+  - **CLI** (`../Siddran-CLI`): `sandbox_read` lists each own-records
+    widget's `fields` as `{ id, name, type, options? }` (was names only —
+    record values are keyed by field id, so the ids are needed).
+  - Not built (spec items left out on purpose): formulas, relations /
+    nesting, synced cards, row detail panel, multi-row selection, paste
+    from spreadsheets, fill handle, row drag-reordering (records keep their
+    added order unless sorted, so no `order` key was needed), virtualized
+    rows (fine at hundreds; 1,000 rows would be heavy), person / attachment
+    / created-time fields.
+  - Checked in a HIDDEN window (`table:` probe, live store, Bag copy, dev
+    localStorage backed up and restored, no screenshots):
+    - insert → Title/Status/Due columns; 3 records added;
+    - + header: Points (number) and Tags (multi-select);
+    - Points 5, Enter → next row, "1,200" → 1200, Tab → Tags picker; typing
+      "ui", "api" created both options and set them;
+    - Status picked "Done"; sort Points ↓ → 1200, 5, 3;
+    - filter Points > 4 → "2 of 3"; a record added under it stayed shown;
+    - group by Status → To do 0 · Doing 0 · Done 1 · No Status 2; Sum under
+      Points per group (5 / 1,200) and overall (1,205);
+    - Points → Text gave "5", "1200", "3"; its filter and sum went, sort
+      stayed;
+    - Title column dragged +60 → width 280; Ctrl+Z removed it;
+    - Shift+wheel over the table scrolled it 120 px across; the board's zoom
+      didn't change;
+    - All tasks: Title/Status/Priority/Due, no + header, settings kept;
+      back to own records: 3 records. No console errors.
+    Two bugs found by the walk and fixed: the filter hid nothing (every
+    record counted as "just added"), and number→text wrote the locale's
+    "1,200". Desktop 664 tests pass, lint 25, build and `cargo check`
+    pass; CLI 87 tests pass, clippy unchanged.
+  - **Please try (looks and feel, which the hidden window can't show):**
+    1. Insert a Table. Add records; click cells, Tab / Enter / Esc through
+       them. Does editing feel like a spreadsheet?
+    2. + header → add a Number, a Select and a Date field. Rename one; change
+       a type; delete one and Ctrl+Z.
+    3. Select cell: pick, type a new option, Enter. Do the option colours
+       read well on your theme (dark and light)?
+    4. Filter / Sort / Group / Fields in the table's toolbar. Try "is past"
+       and "next 7 days" on a date.
+    5. Footer: hover under a column → Calculate → Sum (or % checked).
+    6. Drag a column edge; scroll a wide table with Shift+wheel.
+    7. Long text and URL cells (the ↗ button asks before opening).
+    8. Link it to All tasks: edit a title, status, priority, due date.
+    9. Full screen (Enter) with a big table — is it readable?
+- 2026-11-13 · session 6 · user feedback on the Table (the rest works):
+  - Record delete is a **trash icon**, sized in em, so it follows the
+    widget's text size; it's always shown (dimmed until the row is hovered).
+    The + in the header and the add row are in the accent colour.
+  - **Full screen has its own text size**: − n + in its title bar, or
+    Ctrl+= / Ctrl+−, stored as `payload.focusFontSize` (absent = 15% over
+    the widget's size, as before).
+  - **Wrap is the default** (`table.wrap` absent = wrap; the Fields menu
+    toggle stores false).
+  - The "cropped / out of view" badge sits above the table's sticky header
+    and footer (z-index, and the widget isolates its stacking so the badge
+    can't paint over other cards).
+  - Grid lines a step stronger (`--tbl-line`, from --border-strong).
+  Not seen on screen (user at the computer); lint 25, 664 tests, build pass.
+- 2026-11-13 · session 6 · **Table follow-up, checkpoint 1 of 2** (the user
+  asked for: drag rows AND columns, paste/CSV, detail panel, basic formulas,
+  fonts per selected cells, select whole rows/columns, attachments, and
+  both speed fixes; agreed: two checkpoints). Checkpoint 1 = speed,
+  selection, fonts, reordering. Checkpoint 2 = formulas (a formula COLUMN,
+  option A, Notion-style; plus making the Calculate row discoverable: faint
+  "Σ Calculate" always, a "Show totals row" toggle), attachment field,
+  detail panel, paste from a spreadsheet + CSV import with a preview.
+  - **Spreadsheet-style editing now:** a click SELECTS a cell; a second click,
+    double-click, Enter, F2 or just typing edits it (typing replaces the
+    value). Arrows move, Shift+arrows / Shift+click / drag extend a block,
+    Tab moves right, Enter commits and moves down, Esc cancels (a second
+    Esc clears the selection, a third leaves full screen). Delete clears the
+    block (one undo step; linked tasks never lose their title). Ctrl+A
+    selects all, Ctrl+C copies the block as tab-separated text. A press
+    outside the widget ends the selection. Checkboxes still toggle in one
+    click.
+  - **Whole rows / columns:** the row grip (left) selects its row; a column
+    header click selects its column (Shift extends); the top-left corner
+    selects everything. A header's ⋮ button (or right-click) opens the
+    field menu that a header click used to open.
+  - **Fonts per cell, row or column** (`layout.js`, tested): a style bar
+    always in the table's toolbar (dimmed until something is selected —
+    nothing jumps): font, bold, italic, underline, strike, text colour,
+    fill, size (60–240 %), alignment, clear. Ctrl+B/I/U. Kept in
+    `payload.table.styles` as { col, row, cell }; a cell reads column <
+    row < cell; styling a whole column or row clears the same keys from
+    the cells inside it. Styles go with a deleted record or field.
+  - **Reordering:** drag a row by its grip (own records, not while sorted —
+    the sort decides the order then); drag a column by its header (also for
+    linked tasks). Rows: each record may carry `order`; a move sets only the
+    moved record's (stamped), so merging stays per record. Columns:
+    `payload.table.fieldOrder` (a view setting; the fields array is
+    untouched). The field menu's Move left/right use the same order.
+  - The trash button moved to the right end of the row; the grip took its
+    place on the left.
+  - **Speed:** rows are memoized (`views/table/Row.jsx`): an edit re-renders
+    its own row (linked tasks compare by value, since their records are
+    rebuilt on every change). Over 200 rows only those in view (+500 px)
+    are drawn (`views/table/useVirtualRows.js`), with spacers for the
+    rest; heights are measured as rows appear (wrap makes them differ), so
+    the scrollbar can settle slightly on a first scroll through.
+  - Checked in a hidden window (`grid:` and `table:` probes, Bag copy,
+    localStorage backed up and restored):
+    - select one cell → 1; Shift+click → a 3×2 block (6); drag → 3×3 (9);
+      an arrow → 1;
+    - grip → whole row (3 cells, marked); header → whole column (4,
+      marked); Bold → `styles.col.title.bold`, weight 700 on screen;
+    - a 2×2 block → Serif + Ctrl+I: 4 cell styles, Lora on screen;
+    - Delete on 2 titles cleared them; Ctrl+Z restored them;
+    - row 4 dragged above row 1 → Delta, Alpha, Bravo, Charlie (only
+      Delta got a new `order`); Due dragged before Title →
+      `fieldOrder` due, title, status;
+    - 404 records → 20 rows drawn; scrolled to the bottom → Row 399, 400
+      shown; a type-to-edit on row 1 landed;
+    - the whole `table:` walk passes on the new model (type-to-edit,
+      Enter down, Tab then Enter opens the picker, sort, filter, group,
+      sums, retype, resize + undo, wheel, linked).
+    Two bugs found and fixed on the way: a click on the grip or a header
+    didn't count (the release was only heard on the element itself; now on
+    the window), and a long table didn't follow the scroll in a hidden
+    window (the read waited for a frame; it now reads on the scroll event).
+    The console's "key prop spread into JSX" warning comes from the
+    sidebar's notebook list (useDragReorder), not the table — left alone.
+    Desktop 676 tests, lint 25, build and `cargo check` pass.
+- 2026-11-13 · session 6 · user feedback on checkpoint 1:
+  - **Editing starts with a double-click** (typing on a selected cell does
+    nothing now; Enter / F2 still edit from the keyboard). On a touch
+    screen ONE tap edits (pointerType 'touch'), so the on-screen keyboard
+    comes up — untested, no touch device here; a pen behaves like a mouse.
+    The caret lands at the end of the value instead of selecting it.
+  - **The table's toolbar scales with the widget's text size** at 80 %
+    (sized in em; 15 px text → a 12 px bar), the style bar included.
+  - **The erasers never delete cards or widgets** (user's call): the plain
+    eraser now passes through cards and widgets like the precision eraser
+    (CARD_PASS_THROUGH), so it erases what's drawn over them; on the canvas
+    it erases strokes, shapes (stickies, frames, lines) and connectors, not
+    images. The precision eraser already only cut pen strokes.
+  - Checked in a hidden window: typing on a selected cell made no editor;
+    double-click opened one with the caret at the end; the whole `table:`
+    and `grid:` walks pass; with the eraser, the point over a widget's
+    title bar is the board canvas and a press there left the widget.
+    Lint 25, 676 tests, build pass.
+- 2026-11-13 · session 6 · **Table follow-up, checkpoint 2 of 2** (user
+  confirmed checkpoint 1):
+  - **Formula column** (`formats/formula.js`, tested; option A, a column, not
+    per-cell): `field.expr` like `{Price} * {Qty}`. + − × ÷ (also * / -),
+    fractions and decimals, ( ), ^ (right to left), ² ³, √ / sqrt( ),
+    cbrt( ), round(x, n), abs, floor, ceil, min, max, pi, 50 %. A small
+    parser — never eval. Fields by name in braces, case-insensitive;
+    renaming a field rewrites the formulas (R13.21). An empty input leaves
+    the result empty; errors are cell values (#DIV/0, #VALUE, #NAME,
+    #CYCLE, #ERROR, with the reason on hover) and never break the view.
+    Formulas can use formulas; cycles are caught. Computed in `tableRows`
+    before filtering, so they filter, sort, group and total like numbers.
+    Not stored and not editable (R13.31). The column menu has the editor:
+    a live check, field names and operators to insert, decimals. A new
+    Formula column opens straight into it. Formula → another type keeps the
+    values it showed; another type → Formula drops stored values.
+  - **Number cells read fractions and decimal commas** too (`parseNumber`):
+    3/4, 1 1/2, 1,5 (= 1.5); groups of exactly three digits after a comma
+    are thousands (1,200).
+  - **Totals row**: the "Σ Calculate" hint shows faintly all the time (it
+    was invisible until hovered); the Fields menu has "Show the totals row"
+    (`table.showTotals`).
+  - **Attachment field** (`files`): [{ path, name }] files copied into
+    `attachments/_boards/` (a short id before the name) by the native
+    multi-file picker (`media.js attachFilesViaPicker`), and/or
+    [{ note, name }] notes from the Bag (`contexts/BagNotesContext.js`, its
+    own context so editing a note doesn't re-render every widget).
+    Double-click a cell to add/remove; chips open what they point at — a
+    note in the notes page, an image or PDF in a preview over the window
+    (with Show in folder), anything else in the file manager. Removing an
+    attachment leaves the file in the Bag.
+  - **Detail panel** (`views/table/DetailPanel.jsx`): a row's ⤢ (beside the
+    grip) or Space on a selected cell opens a sheet at the window's right
+    with every field (hidden ones too), editable by type, formulas shown
+    with their expression, attachments managed in place. ↑/↓ step through
+    records in the table's order, Esc closes, "Hidden by the table's filter"
+    when it is, Delete record at the foot. Ctrl+Z reaches the board.
+  - **Paste and import** (`formats/importer.js`, tested): Ctrl+V on the
+    table. One value fills every selected cell (one step). Rows (tabs from a
+    spreadsheet, or CSV) open a preview: first row as headers (guessed),
+    each column → a field (matched by name, else by position), a new field
+    (type guessed: number, date, checkbox, URL, email, select, long, text),
+    or skip; with a cell selected, add as new records or fill from that
+    cell (rows past the end are added). "Import" in the toolbar reads a
+    CSV/TSV file the same way. Quotes, "" escapes, CRLF, BOM, ; separators;
+    at most 500 rows × 30 columns at once, with a notice. New options are
+    added. One undo step. Own records only (linked tasks: a notice).
+  - **CLI**: `sandbox_read` lists a formula field's `expr` (values aren't
+    stored); `files` values are listed as stored.
+  - Checked in a hidden window (`extras:` walk; `table:` and `grid:`
+    re-run green; Bag copy, localStorage backed up and restored):
+    - + → Formula opened its editor; "{Price} * {Cost}" showed “No field
+      named Cost” live; "{Price} * {Qty}" gave 20, 15 and nothing for a
+      row without Qty; renaming Price → Cost rewrote it; a formula cell
+      didn't open an editor; nothing stored;
+    - the hint reads "Σ Calculate" at opacity 0.5; Sum under Total → 35;
+    - ⤢ on Pens opened "Record: Pens"; Qty 4 there → Total 8 in the
+      panel; ↓ → Paper; Esc closed it;
+    - "7" pasted onto two selected Qty cells → both 7; pasted rows opened
+      the preview with Cost and Qty matched by name and Item, Colour as new
+      fields; Item mapped to Title; imported Glue (6) and Tape (1,5 × 4 = 6);
+    - a CSV file through Import read "Stapler, red" whole;
+    - an Attachment field took a note from the Bag (chip shown).
+    Two gaps found and fixed: "1/2" typed in a Number cell gave nothing,
+    and pasted "1,5" read as 15.
+    **Not driven** (needs the native file dialog or a real click): adding
+    files, opening the image/PDF preview, opening a note from a chip.
+    Desktop 693 tests, lint 25, build and `cargo check` pass; CLI 87 tests,
+    clippy unchanged.
+- 2026-11-13 · session 6 · user feedback on checkpoint 2 (the rest is good):
+  - **An empty cell edits on one click; a filled one needs a double-click.**
+    The edit starts on release, only if the press didn't drag across cells
+    (so drag-selecting from an empty cell still works). Checkboxes toggle
+    as before.
+  - **Bug: double-clicking an attachment cell showed nothing.** Since
+    checkpoint 1, cell pop-ups (attachments, options, long text) were
+    anchored to the cell's wrapper, whose ref React attaches AFTER the
+    pop-up measures itself — so the pop-up stayed off-screen. The probe
+    clicked inside it anyway and missed it. Fixed twice over: the anchor is
+    the cell button again (attached first), and Popover retries for a few
+    frames if its anchor isn't there yet. The walk now checks the pop-up's
+    on-screen position.
+  - **The detail panel's record is highlighted in the table** (accent tint
+    and a bar on the left) and kept in view as ↑/↓ step.
+  - Checked in a hidden window: one click on a filled Title selected it
+    only; one click on an empty Due / Points edited it; one click on an
+    empty attachment cell opened its pop-up ON SCREEN (1568, 579); the
+    panel's row highlighted, and moved with ↓; the `table:`, `grid:` and
+    `extras:` walks pass. Lint 25, 693 tests, build pass.
+- 2026-11-13 · session 7 · **section 7, checkpoint 1 of 2: view switcher,
+  Kanban, Matrix** (checkpoint 2 = Timeline). Desktop and CLI on `whiteboard`.
+  - **View switcher** in the widget's title bar ("Table ▾"): Table, Kanban,
+    Matrix (Timeline joins in checkpoint 2). Same records and fields; each view
+    keeps its own settings (`payload.table` / `kanban` / `matrix`); one undo
+    step; the new view fades in (150 ms). The title-bar icon follows the
+    view. Insert (Media) now offers Table, Kanban and Matrix; a new Kanban is
+    920×420 (all four columns show), a new Matrix 600×540.
+  - **Kanban** (`views/KanbanView.jsx`, settings in `payload.kanban`,
+    pure logic in `formats/boards.js`, tested): a column per option of a
+    select field (Status by default, else the first select), in the option
+    order, then "No Status" (hideable). Optional swimlanes by a second select
+    (collapsible). Column header: option chip (colour from its label, as in
+    the Table), count, ⋮ menu (rename, collapse, a card limit — the count
+    turns red over it, never blocks — move left/right, which changes the
+    option order in every view), a click on the name collapses it. "+" at the
+    end adds a column (a new option). "Add a card" at a column's foot: Enter
+    adds and stays open for the next, Esc closes.
+  - **Matrix** (`views/MatrixView.jsx`, `payload.matrix`): rows and columns
+    by two select fields (first six options each). A new Matrix gets Impact
+    (High/Low) × Effort (Low/High) with Quick wins / Big bets / Fill-ins /
+    Thankless tasks named and tinted. A cell's name edits in place (one click
+    when empty, double-click when set); 🎨 picks its tint; + adds a card into
+    it. Over 8 cards: "+N more". Records missing a value wait in the **Not
+    placed** tray below; dragging into the tray clears both values. A widget
+    with fewer than two select fields shows a prompt with a button that adds
+    what's missing (Effort, or Impact + Effort).
+  - **Cards (both views, `views/board/`):** title + up to 3 fields (Matrix
+    2), chosen in View settings, which also has card size (compact /
+    default / detailed) and "Colour by" a select (a coloured left edge).
+    Your Table rules: a click selects; the title edits on a double-click, or
+    one click when empty; one tap on touch. ⤢ (or Space) opens the Table's
+    detail panel, ↑/↓ step through the cards in view order; trash deletes
+    (own records). Both icons always there, dimmed until hover. Arrows move
+    the selection. Filter and Sort are the Table's menus over this view's own
+    settings (view-scoped). Formula fields show their values on cards.
+  - **Dragging a card:** to another column / lane / cell sets those fields;
+    within one it sets the record's `order` (the same order the Table's row
+    drag uses) — field change and order are ONE commit, one undo step
+    (`source.moveTo`). Sorted views and linked tasks change fields only. Esc
+    mid-drag puts the card back; edges auto-scroll.
+  - **Linked tasks:** Kanban by Status (To do / Done) or Priority; "Add a
+    card" only in the cell a new task lands in (To do); Matrix can't add.
+  - Renaming an option renames its keys in Kanban/Matrix settings (limits,
+    collapsed columns, cell names); deleting/retyping a field drops it from
+    every view's filters.
+  - **CLI:** `sandbox_read` gives a Kanban/Matrix `layout`: `columns_by`,
+    `lanes_by` / `rows_by`, `columns_by`, and the Matrix's `cell_names`
+    (only keys that are set).
+  - Not built: R13.13 "apply filter to all views", WIP "enforce", dragging
+    column headers (the menu's Move left/right does it), "suggest placement",
+    1,000-card virtualization (fine at hundreds).
+  - Checked in a hidden window (`cards:` walk, Bag copy, localStorage backed
+    up and restored): Kanban insert → 4 columns; Alpha dragged To do → Done
+    above Charlie (status + order), Ctrl+Z undid both in one step, Ctrl+Y
+    redid; Delta dragged above Bravo (only Delta got an `order`); one click on
+    a filled title selected only, double-click edited; ⤢ panel on screen, ↓
+    stepped, Esc closed; column menu on screen, limit 1 → red, collapse, +
+    column; switched to Matrix → prompt → Effort added; Alpha into Done×High
+    set both, tray cleared both; cell tint; Table and back keep everything;
+    a fresh Matrix showed the four names and a drag into Quick wins was one
+    undo step; linked to All tasks → To do / Done / No Status, Add only in
+    To do. The walk caught that four 17em columns didn't fit a 640 px
+    widget (fixed: 14em columns, wider default Kanban).
+    Desktop 707 tests, lint 25, build and `cargo check` pass; CLI 87 tests,
+    clippy unchanged.
+  - **Please try:**
+    1. Media → Kanban. Add cards in two columns (Enter keeps adding). Drag a
+       card to another column and within one; Ctrl+Z — one step?
+    2. A column's ⋮: rename it, set a card limit of 1, Move left. Click a
+       column name to fold it; + at the end for a new column.
+    3. View (in the widget's toolbar): Swimlanes by a second select (add one
+       in the Table first), card fields, size, Colour by.
+    4. Click a card, double-click its title, ⤢ for the panel, arrows.
+    5. Title bar "Kanban ▾" → Table → Matrix: same records, nothing lost?
+    6. Media → Matrix: drag cards from "Not placed" into Quick wins etc.;
+       name a cell, tint it; drag one back to the tray.
+    7. Link a Kanban to All tasks: drag a task to Done.
+    8. Full screen (Enter) and the text size — do cards and headers read well
+       on your theme?
+- 2026-11-13 · session 7 · user feedback on checkpoint 1:
+  - **Kanban columns: no pills, no stripes.** A column is a quiet tint of its
+    option's colour (header and cells alike) with a plain semibold name;
+    lanes are plain names too. Collapse is a ⇥⇤ button beside ⋮.
+  - **A folded column is one tall strip** (2.8em) and a click anywhere on it
+    opens it again — header or cells; it still takes a dropped card.
+  - **Matrix labels read better:** cell names in the theme's text colour with
+    a touch of the cell's hue; the axis options are plain text, not pills;
+    cell tints mixed over the surface so text keeps its contrast.
+  - **The Table's style bar on both views** (font, bold/italic/underline/
+    strike, colour, fill, − 100% +, alignment, clear; Ctrl+B/I/U): with a
+    card selected it formats that card, otherwise every card ("All cards" /
+    "This card" shown beside it, so it's never dimmed). Kept in the view's
+    settings as `styles = { all, card: { [recordId]: look } }`
+    (boards.js `applyCardStyle`; formatting every card clears those keys
+    from each card's own). A press on empty space lets go of the card. A
+    deleted record takes its look with it. The widget's whole text size
+    (toolbar included) is still the floating bar's −/+ and full screen's.
+  - Checked in a hidden window (`cards:` walk, all steps pass): folded strip
+    42×135 px, a click low on it reopened the column; empty-space press →
+    "All cards"; Bold → `styles.all.bold`, both cards weight 700; Delta
+    selected → "This card", + + → `styles.card[Delta].scale` 1.2, Delta
+    15.7 px vs 13.05 px. Desktop 709 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · user confirmed checkpoint 1 ("this is good").
+  **Section 7, checkpoint 2 of 2: Timeline** (`views/TimelineView.jsx`,
+  `Timeline.module.css`, pure logic in `formats/timeline.js`, tested).
+  Media → Timeline (860×420; fields Title, Status, Start, End); also in the
+  view switcher.
+  - **Dates:** two date fields, both optional to have — start defaults to one
+    named Start (else the first date field), end to End/Finish, else Due,
+    else none. With no end a record is a milestone (diamond, a clip-path —
+    no transforms at rest); with no dates it waits in the **Unscheduled**
+    tray (R13.43). View → Start / End / "None (milestones)", + New date
+    field. A widget without a date field shows a prompt (adds Start + End).
+  - **Axis:** Day / Week / Month / Quarter / Year (two tiers: month over days
+    or weeks, year over months or quarters), a day is `ppd` em so it grows
+    with the text size; weekends shaded at Day/Week; Today line + tag; the
+    range covers every bar and today, padded. **Today** scrolls to it,
+    **Fit** picks the most detailed zoom that shows every bar and scrolls
+    there; **Ctrl+wheel** zooms at the pointer (the board's zoom is
+    untouched); Shift+wheel scrolls across. Zoom is a view setting
+    (`timeline.zoom`, absent = week).
+  - **Bars:** drag to move (both dates), an edge to change start or end (they
+    never cross, R13.41), a milestone to move its day; snaps to days.
+    Shift+click selects several, they drag together; ← / → nudge the
+    selection a day. Each gesture is ONE undo step (`updateMany`). A bar into
+    the tray clears its dates; a tray card onto the axis schedules it there
+    (start + the zoom's usual length, and the swimlane it was dropped in).
+    Labels inside a wide bar, beside a narrow one. A double-click (or Space)
+    opens the detail panel.
+  - **Rail:** titles stay put while the axis scrolls; your Table rule (one
+    click edits an empty title, a double-click a filled one). "New, from
+    today" adds records that start today; Enter keeps adding.
+  - **Dependencies** (`timeline.links: [{ from, to }]` — a view setting, as
+    there is no relation field type): drag a bar's end dot (shown on hover)
+    onto another bar. Orthogonal arrows, in em so they follow zoom; red when
+    the second starts before the first ends. Click an arrow, Delete removes
+    it. A deleted record takes its links (and card looks) with it.
+  - Swimlanes by a select field (collapsible), Colour by a select field, row
+    height compact/default/tall, Filter/Sort, and the same style bar as
+    Kanban/Matrix (fill sets the bar's colour; looks on the rail title and
+    bar label).
+  - **Linked tasks:** Due is the start, no end → milestones; tasks without a
+    due date wait in the tray; dragging one sets its due date (through the
+    tasks store). Project tasks have no dates → the prompt.
+  - **CLI:** `layout` for a Timeline: `starts_by`, `ends_by`, `lanes_by`,
+    and `links` (`to` waits for `from`).
+  - Not built: baseline bars, configurable working days, PNG/PDF export
+    (R13.44), the side table panel (the view switcher covers it), dragging a
+    bar between swimlanes, virtualized rows (fine at hundreds).
+  - Checked in a hidden window (`timeline:` walk, Bag copy, localStorage
+    backed up and restored): insert → week zoom, Today on screen; rail adds
+    Design/Build (today..+6), the tray adds Launch (no dates); Design dragged
+    +3 days → 3..9, Ctrl+Z → 0..6 in one step; end edge +2 → 0..8; start
+    edge dragged past the end → 8..8; Launch from the tray to today+14 →
+    14..20; a link Design → Launch drawn (not late); Shift+click both, → →
+    both +1, one undo; click the arrow + Delete → gone; one click on a filled
+    rail title selected only, a double-click edited it; a bar's double-click
+    opened the panel on screen; Launch into the tray → dates cleared; Month,
+    Ctrl+wheel back to Week (board zoom unchanged), Fit → Day; linked to All
+    tasks → "Due", milestones, undated tasks in the tray. The `cards:` walk
+    still passes. Desktop 723 tests, lint 25, build and `cargo check` pass;
+    CLI 87 tests, clippy unchanged.
+  - **Please try:**
+    1. Media → Timeline. "New, from today" a few records; drag bars, their
+       edges, and Ctrl+Z.
+    2. Add one in Unscheduled and drag it onto the axis; drag a bar back.
+    3. Hover a bar, drag its end dot onto another: an arrow. Move the second
+       before the first — red? Click the arrow, Delete.
+    4. Day … Year, Ctrl+wheel over the axis, Today, Fit. Do the labels read
+       at every zoom?
+    5. Shift+click two bars, ← / →.
+    6. View: swimlanes by Status, Colour by, row height; the style bar's fill
+       on a bar.
+    7. Switch a Kanban to Timeline (its Due becomes milestones); link one to
+       All tasks.
+    8. Full screen and the text size.
+- 2026-11-13 · session 8 · **section 8 built (Doc)**, on its own branches so
+  it runs alongside sections 7 and 9: desktop `whiteboard-doc` in worktree
+  `../Siddran-Desktop-wb8`, CLI `whiteboard-doc` in `../Siddran-CLI-wb8`
+  (both off `whiteboard` at 53d5e84 / 0d1443e). Section 9 is in `-wb9` /
+  `whiteboard-slides`. The user will have one session merge all three.
+  - **User's decisions:** a Doc's text lives **per Doc, either in the board
+    or in a real note** (like decision 3 for records). First pass = editor +
+    4 templates + the `/` menu; export (.md/PDF) and suggestion mode wait
+    for their check. (The user asked what a Doc is for: a long-form page
+    on the board — meeting notes, a brief, a decision log.)
+  - **Model** (`formats/doc/doc.js`, tested): a Format widget with
+    `payload.view: 'doc'`, `source: {type:'own'} | {type:'note', noteId}`,
+    `body` (Markdown). No new kind: attach, riders, crop/hang, the floating
+    bar's text size, full screen and flowchart exclusion all come with
+    `kind:'format'`. An older whiteboard build shows it as an empty list.
+    `formats.js` `formatPayload/formatSize/viewLabel` know `doc`; it is
+    not in VIEWS, so no view switcher offers it.
+  - **Widget** (`formats/doc/DocWidget.jsx`, `Doc.module.css`;
+    FormatWidget.jsx sends view 'doc' there): the notes editor
+    (CodeMirrorEditor, live preview) inside the window chrome. Text follows
+    the widget's text size. A click in the text doesn't select the widget
+    (no floating bar over your writing); the title bar does. Esc leaves
+    the text; in full screen (a 900 px reading page) the first Esc leaves
+    the text, the second closes. Ctrl+F opens the Notes find bar inside the
+    Doc. The footer shows words + reading time, and the count against
+    80,000 characters past 90 %. Never blocks.
+  - **Saving:** own text saves into the board 500 ms after the last key
+    (new `saveDelay` prop on CodeMirrorEditor), one undo step per save;
+    board undo/CLI edits flow back through `externalBody` (merge3). Linked:
+    saves through the notes store (new `contexts/NotesApiContext.js`,
+    `{ editBody, addNote }`, provided in App.jsx), so live sync applies.
+  - **Where the text lives** (chip in the title bar): In this board /
+    a note (search list) / **Save as a new note** (moves the text into a
+    new note, the board keeps the link) / back to the board (copies the
+    note's text in). A deleted note shows "Keep an empty Doc in the board".
+  - **Templates** (data, R13.16): Meeting notes, Project brief, Decision log
+    — chips shown while an own Doc is empty; picking one also names a
+    default-titled Doc. **Slash menu** (`formats/doc/slash.js`, tested):
+    `/` at a line start or after a space — headings, lists, checklist,
+    quote, callout, code, table, divider, diagram; shares the wikilink
+    completion list (new `extraSources` in cm/wikilinks.js).
+  - **Merge:** a Doc's `body` edited on two copies merges line by line
+    (`mergeSandboxItems`, symmetric on clashes, tested).
+  - **CLI:** `sandbox_read` lists a Doc under `formats` with its `text`
+    (or the `noteId`); `sandbox_edit` `update` takes `body` for an own Doc
+    and refuses it for a linked one (tested).
+  - **Shared files touched (small, additive) — mind these when merging:**
+    CodeMirrorEditor.jsx (`saveDelay`, `extraCompletions`), cm/wikilinks.js,
+    App.jsx (NotesApiProvider), formats.js, FormatWidget.jsx (the branch at
+    the bottom), InsertMenu.jsx (a Doc entry), desktop/sync/merge.js,
+    perfProbe.js (`doc:` scenario), CLI sandbox.rs.
+  - Checks: desktop 737 tests, lint 25, build, `cargo check`; CLI tests
+    pass, clippy unchanged. `doc:` walk in a hidden window, all observed:
+    insert (560×640, template chips, footer "Empty"); Meeting notes →
+    title + text; typing saved after the delay, not before; Ctrl+Z undid it
+    in one step, Ctrl+Y redid; `/h2` → "Heading 2" first, Enter → `## `;
+    Esc blurred; Ctrl+F found 1; wheel over the text left the board zoom
+    alone; Save as a new note → linked, board body cleared, text kept;
+    typing then reached the note FILE on disk; back to the board copied it;
+    Enter → full screen on screen, first Esc kept it open, second closed.
+    **Not seen:** where the slash list appears (a hidden window gets no
+    animation frames, so CodeMirror never positions it); the user checks it.
+    **Incident:** session 9 restored its dev-localStorage backup after I
+    seeded, so this walk ran on ~/Documents/Siddran-TestBag (not the real
+    Bag). Its one new note there was deleted and the Doc stripped from
+    the dev cache. Sessions 8 and 9 now share a lock:
+    `mkdir /tmp/claude-1000/siddran-devapp.lock` before seeding/launching,
+    `rmdir` after restoring.
+  - Seen in the walk's console, NOT from the Doc: React warns "<button>
+    cannot contain a nested <button>" inside a records widget's body on
+    board d3bef492 (sections 6/7 code). Left for the merge.
+  - Not built: export (.md/PDF — `printNoteToPdf` exists to reuse),
+    suggestion mode, save-as-template, Doc → Slides/Frame (R13.17, after
+    section 9 merges), images pasted into an own Doc go through the notes'
+    image upload (untested on the board).
+  - **Please try:**
+    1. Media → Doc. Pick "Meeting notes", type under it. Click away and
+       Ctrl+Z: does it undo the last burst of typing?
+    2. Type `/` on a new line: does the block list open right under the
+       caret at any board zoom? Try Checklist, Table, Callout, Diagram.
+    3. Headings, lists, `[[` links, checkboxes — same feel as Notes?
+    4. Chip "In this board" → Save as a new note; open Notes and see it;
+       edit it there and watch the Doc follow. Then back to "In this board".
+    5. Link a Doc to an existing note from the chip's list.
+    6. Enter for full screen; Esc, Esc. Floating bar −/+ text size.
+    7. Ctrl+F inside a Doc; mouse wheel over a long Doc.
+    8. Drop a sticky on a Doc and move the Doc (it should carry it).
+- 2026-11-13 · session 8 · **Doc, round 2** (the user checked round 1: all
+  fine except the slash menu). Suggestion mode, mentions and comments are
+  dropped (user's decision). Doc → Slides waits for the merge with section 9.
+  - **Bug: "/" on a new line showed nothing** (after a word it worked). The
+    list opened but CodeMirror hid it. The notes editor's fold gutter is
+    "fixed", so CodeMirror counts it as a scroll margin and hides any tooltip
+    anchored over it, i.e. the first ~20 px of every line, where the theme
+    pulls the gutter into the padding. Un-fixing the gutter shifted the Notes
+    text 25 px, so it was reverted. The slash menu is now its own tooltip
+    with `clip: false` (`formats/doc/slash.js`: a state field, its keys
+    ↑/↓ Enter Tab Esc, and the completion list's classes), passed in through
+    a new `extraExtensions` prop on CodeMirrorEditor. The Doc no longer adds
+    a completion source, so cm/wikilinks.js is back to the base. Esc closes
+    it until the next "/". **Same trap in Notes:** a `[[` typed at column 0
+    is likely hidden the same way (not fixed here; Notes is untouched).
+  - **⋯ menu** in the Doc's title bar: Export as Markdown (frontmatter:
+    title, exported_at; the Notes download helper), Export as PDF (the Notes
+    `printNoteToPdf`), **Save as a template** (a name, defaulting to the
+    title; the same name replaces it). Your templates live in the Bag's
+    settings (`settings.docTemplates`, saved at once through PUT /settings,
+    since the Settings window only saves on close). Every empty Doc offers
+    them after the built-ins, each with a × to remove it.
+  - **Pasted/dropped images** used to land in `attachments/<the last open
+    note>/`. Now `localStore.setAttachmentTarget` (set while a Doc's text
+    has focus) sends them to `attachments/_boards/` (own Doc) or the linked
+    note's folder.
+  - Not built: board search for Doc text (there is no board/global search
+    over board contents), the "split at 80k" offer (we never block typing).
+  - Checks: desktop 741 tests, lint 25, build. `doc2:` walk (new; it stubs
+    print so no dialog opens): the "/" list on screen after a word, on an
+    empty line and on a new line after text; narrowing picks Checklist /
+    Heading 2 / Quote; Enter inserts `- [ ] ` / `## ` / `> `, and the list
+    closes; .md export file `doc-2.md` with frontmatter and body; the PDF
+    page built with the title and both h2s; a saved template appears in a
+    new Doc and fills title + text; × removes it; a pasted PNG went to
+    `attachments/_boards/…` and was linked, with no image on the board.
+    The `doc:` walk still passes in full. Text offset in the editor -4 px
+    (the Notes layout unchanged).
+  - Coordination: sessions 8 and 9 take the dev-app lock with
+    `locked-walk.sh` (lock, backup, a fresh Bag copy, seed, walk,
+    restore, unlock). The two Docs on board d3bef492 in
+    ~/Documents/Siddran-TestBag are the user's own from their check.
+  - **Please try:**
+    1. `/` on an empty line, on a new line after text, after a word. Then
+       ↑/↓, Enter, Esc (then type on: it stays shut until the next `/`).
+    2. ⋯ → Export as Markdown, and Export as PDF. Where does WebKit put the
+       .md file?
+    3. ⋯ → Save as a template "Weekly". Insert a new Doc and pick Weekly;
+       remove it with ×.
+    4. Paste a screenshot into a Doc: it should show inline and go to
+       attachments/_boards/.
+- 2026-11-13 · session 8 · user checked round 2: everything works.
+  Exports landed in ~/Downloads (`meeting-notes.md`; the PDF is named in
+  the print dialog). One fix: every row of the "/" list showed as selected
+  (blue). The theme colours any `li[aria-selected]`, and the menu set
+  `aria-selected="false"` on the others; now only the chosen row has the
+  attribute, as in CodeMirror's own list (`doc2:` walk: 1 highlighted row in
+  each case). **Section 8 done; ready to merge with 9.**
+- 2026-11-13 · session 9 · **section 9, checkpoint 1 of 2: frames as slides,
+  the Slides panel, presentation mode.** Worktree `../Siddran-Desktop-wb9`,
+  branch `whiteboard-slides` (off 53d5e84). The CLI is untouched so far. New
+  folder `components/Sandbox/slides/`:
+  - **Model** (`slides.js`, tested): every frame is a slide. There is no
+    Slides item and no new type. The deck is an ordering layer on the frames'
+    payloads, with two optional fields. `slideOrder` (number): frames without
+    one follow the numbered ones, in reading order (rows top to bottom, then
+    left to right). `slideHidden: true`: skipped when presenting, still on the
+    board, and the frame's title reads "· hidden from slides". Reordering
+    numbers every frame 1…n in one undo step and never moves a frame (R11.11).
+  - **Slides panel** (`SlidesPanel.jsx`): the header's **Slides** button or
+    Shift+F. A column on the board's right edge. Each row has a number, the
+    title, an eye (hide/show) and ▶ (present from this slide), plus a
+    thumbnail. Drag a row to reorder (pointer events, no HTML5 drag). Click a
+    row and the board glides there, with the frame selected.
+  - **Thumbnails** (`Thumbnail.jsx`): SVG in the frame's own coordinates.
+    Shapes come from the registry outlines (flow/svgPath), and ink from its
+    outline. Stickies, images and links are drawn. Text, cards and widgets
+    show as labelled boxes. Chosen over a Konva snapshot because cards and
+    widgets are DOM (a snapshot would miss them), and off-screen frames would
+    need a repaint.
+  - **Presentation** (`Presentation.jsx`, `usePresentation.js`):
+    - How it shows a slide: it reuses the LIVE board, steering the viewport
+      onto each frame (fit and letterbox). So a slide looks exactly like its
+      frame, cards, widgets and ink included. The canvas shell turns
+      `position: fixed; inset: 0` and goes over the header, footer and
+      sidebar. The dock, floating bar, selection overlay and dot grid are
+      hidden. A frame-sized hole in a black mask covers the rest.
+    - Keys: F5 starts from the first slide; Shift+F5, the header's
+      **▶ Present** and the frame bar's new ▶ start from here (the selected
+      frame, else the frame in view). → ↓ PageDown Space Enter go to the next
+      slide, and ← ↑ PageUp Backspace to the previous one. Home/End work, and
+      "n Enter" jumps to slide n. B or . blanks the screen. F toggles
+      fullscreen. Esc un-blanks, else leaves.
+    - Clicks: the left third goes back, anywhere else forward.
+    - A 140 ms fade through black between slides. An end screen after the
+      last slide.
+    - The HUD (‹ n / N title › · blank · fullscreen · ×) and the cursor fade
+      out after 2.2 s of rest.
+    - Keys are captured on the window and stopped, so board shortcuts and
+      Space-to-pan never see them.
+    - Entering goes fullscreen through a new Rust command
+      `set_presentation_fullscreen` (main.rs; no webview window capability,
+      like the tray commands). Leaving restores the exact viewport, selection
+      and tool (R11.18), and leaves fullscreen only if presenting entered it,
+      also on unmount. Presenting writes nothing to the board or the undo
+      stack.
+  - Small additive edits to shared files:
+    - SandBoxPage: the header buttons, F5/Shift+F5/Shift+F, the `presenting`
+      class, and the hidden label in `frameCutLabels`.
+    - SandboxCanvas: a `plain` prop (no grid).
+    - ContextToolbar: an `onPresentFrame` ▶ button on a single frame.
+    - ShortcutsModal: a Slides group.
+    - perfProbe: a `slides:` scenario.
+  - **Shared dev-app lock with session 8**: `mkdir
+    /tmp/claude-1000/siddran-devapp.lock` before a walk. Back up the dev
+    localStorage, seed your own Bag copy, walk, restore, then `rmdir`.
+  - Checks: 740 tests pass (17 new), lint at 25, build and `cargo check`
+    pass. The `slides:` walk ran in a HIDDEN window (ws 19) on a TestBag
+    copy, with the dev localStorage restored afterwards. It made 3 frames and
+    a sticky. All of these were observed:
+    - Shift+F opened the panel (inside the window). The sticky showed in its
+      frame's thumbnail.
+    - Dragging row 3 to the top gave orders 2, 3, 1.
+    - Hiding a slide set the flag, and the board title read "Frame 1 ·
+      hidden from slides". The panel count dropped to 2.
+    - F5: on slide 1 of 2. The mask's hole matched the frame's screen rect
+      exactly, letterboxed. Toolbar and panel gone, grid off, HUD inside the
+      window.
+    - → went to slide 2 (the hidden one skipped). B blanked and B again
+      unblanked. A left-third click went back.
+    - End, then →, showed the end screen. Esc restored the exact viewport.
+      The board JSON was unchanged.
+    - Shift+F5 with the last frame selected started on it. The frame bar's ▶
+      was present, inside the window.
+    - **A real F5 sent by Hyprland** (`send_shortcut`) started the deck and
+      did NOT reload the webview.
+    - Hyprland reported the window fullscreen while presenting (2) and back
+      to normal after Esc (0).
+    - Two Ctrl+Z undid the hide and the reorder.
+  - **Not seen:** what it looks like, since there are no screenshots while
+    the user is at the computer. In the hidden window the Konva stage kept
+    its old size (1600×962) while the shell filled the window (1820×1040),
+    because ResizeObserver doesn't fire without rendering updates. On screen
+    it should resize; the user's check confirms.
+  - **Please try:**
+    1. Make 3–4 frames with things in them (a sticky, ink, a text card, a
+       Table). Open **Slides** (Shift+F): are the thumbnails recognisable?
+    2. Drag rows to reorder. The frames shouldn't move on the board.
+    3. Hide one with the eye. Does its title say so on the board? Is it
+       skipped when presenting?
+    4. **▶ Present** / F5 / Shift+F5 / the ▶ on a frame's floating bar.
+       Does the slide fill the screen, letterboxed, with nothing of the board
+       around it? Does it go fullscreen?
+    5. Arrows, Space, clicks (left third = back), B, F, a number + Enter,
+       Esc. Is the fade between slides too slow or too fast?
+    6. After Esc: are you back exactly where you were, with the same
+       selection?
+    7. Present on the HDMI monitor (0.83 scale): any blur on the HUD?
+  - **Proposed checkpoint 2** (not built; the user picks): presenter notes
+    per slide (`payload.notes`) and a speaker view (current and next slide,
+    notes, timer), either a second window on the other monitor or a side
+    strip. "Present selected". A transition choice (none or fade).
+    `sandbox_read` listing the deck (order, hidden, notes) in the CLI, which
+    means telling session 8 first. Possibly PDF export of the deck.
+- 2026-11-13 · session 9 · user feedback on checkpoint 1: "amazing". The
+  slide did NOT fill the screen: a 640×400 frame (16:10) on a 16:9 screen
+  left black bars left and right. The user chose checkpoint 2's scope and
+  left the rest for when needed (speaker notes and view, present selected).
+- 2026-11-13 · session 9 · **section 9, checkpoint 2: slides as their own
+  thing, display sizes, fade, CLI, PDF export.** Desktop and CLI both on
+  `whiteboard-slides` (CLI worktree `../Siddran-CLI-wb9`).
+  - **Slides are distinct from frames** (the user's call). On disk a slide is
+    still a frame with `payload.slide: true`: no new type, and older builds
+    and the CLI draw and round-trip it as a frame. Only slides are in the deck
+    now. Checkpoint 1's "every frame is a slide" is gone.
+    - Slides are numbered "Slide 1, 2…" apart from frames.
+    - A frame's floating bar has **Convert to slide** where the ▶ was. A
+      slide's bar has the size menu, + (new slide after this one), ▶ (present
+      from here) and "turn back into a frame". Default titles follow the
+      conversion ("Frame 2" ⇄ "Slide 3"); a typed title stays.
+  - **One click:** media menu → **Slides** makes Slide 1 at the view centre,
+    sized for Display 1. It opens the Slides panel and glides the board to it.
+    More come from the panel's "+ New slide" or the slide bar's +. A new
+    slide goes to the right of the one before (past any frame in the way),
+    takes the deck's size and slots in after it, as one undo step.
+  - **Sizes from the displays:** a Rust command `list_displays` (new
+    `src-tauri/src/slides.rs`) reads the connected connectors from
+    `/sys/class/drm` (native resolution = first mode), laptop panel first,
+    then falls back to the windowing system's monitors. On the user's machine
+    it lists "Display 1 (laptop) 1920×1080" and "Display 2 (HDMI)
+    1600×900", plus "Standard 4:3". 16:9 isn't listed separately when a
+    display already is. New slides default to Display 1, else 1920×1080. The
+    panel has a size menu for the whole deck; the slide bar has one for the
+    selection.
+  - **Fade** is the default and slower: 280 ms out to black, a 60 ms beat,
+    380 ms in (was 140 ms, which the user read as an instant switch).
+  - **PDF export** (panel → Export PDF). A native save dialog, then the
+    presentation steps through the shown slides with no controls on screen.
+    For each slide the shell takes WebKitGTK's own snapshot of the webview,
+    so cards, Tables and ink come out exactly as presented, and crops it to
+    the slide. cairo writes one PDF page per slide at 96 dpi (new deps
+    `webkit2gtk` and `cairo-rs` with `pdf`; both were already in the tree).
+    Esc cancels. Hidden slides are skipped.
+  - **Frame numbering** (the user's ask): the frame tool already numbered
+    new frames. The user's test board held two "Frame 1"s of the same size:
+    Duplicate copies the title. Copies of a default-titled frame or slide now
+    get the next free number, one per copy (`duplicateTitles`).
+  - **CLI**, `sandbox.rs`. Session 8's Doc edits are in the same file; mine
+    are appended blocks, so the merge should be clean:
+    - `sandbox_read` lists `slides` apart from `frames`: deck order, number
+      (null when hidden), hidden, size, contents (`deck_order` mirrors
+      slides.js).
+    - `sandbox_edit`: `add` takes shape `slide` (the last slide's size or
+      1920×1080, placed to its right, "Slide n"). `update` takes `hidden`
+      and `order` (1-based), for slides only. 2 new tests; 19 pass in that
+      crate, and clippy is unchanged.
+  - **Shared dev-app lock** with session 8 (see checkpoint 1's entry). A
+    probe-only window event `siddran-probe-export-pdf` (page, only when
+    VITE_PERF_PROBE is set) skips the native save dialog.
+  - Checks: 747 tests pass, lint at 25, build, `cargo check`, and the Rust
+    `slides` unit test pass. The `slides:` walk ran in a HIDDEN window (ws 19)
+    on a TestBag copy, with the dev localStorage restored afterwards. All of
+    these were observed:
+    - media menu → Slides made "Slide 1", 1920×1080 (from DRM), and the
+      panel opened;
+    - "+ New slide" ×2 added Slides 2 and 3, 120 apart, same size;
+    - a new frame stayed out of the deck; Ctrl+D on it gave "Frame 3" (not a
+      second "Frame 1"); Convert to slide made it "Slide 4";
+    - the slide size menu listed "Display 1 (laptop) 1920×1080 · Display 2
+      (HDMI) 1600×900 · Standard 4:3", inside the window; Display 2 resized
+      the slide to 1600×900; the panel's menu set all four to 1920×1080;
+    - reorder, then hide: 3 shown;
+    - F5: slide 1/3 filled the window, apart from a 10 px letterbox at each
+      side (the hidden window is 1870×1040, not a 16:9 fullscreen);
+    - → : the veil was at full black mid-change (transition 280 ms), then
+      slide 2;
+    - Esc restored the view, and the board JSON was unchanged;
+    - the PDF export wrote 3 pages (hidden slide skipped). Rendered page 1
+      shows the board's ink inside the slide;
+    - Hyprland reported fullscreen while presenting and normal after;
+    - Ctrl+Z undid the hide.
+  - **Not seen:** how it looks on the user's real screen. Ratio lock while
+    resizing a slide by hand isn't built: resizing goes through
+    SelectionOverlay, a hot file shared with session 8. The size menu snaps a
+    slide back to an exact display size.
+  - **Please try:**
+    1. Media menu → **Slides**. Does one slide appear with the panel? Then
+       "+ New slide" and the + on a slide's bar.
+    2. Draw a frame (F). Is it left out of the panel? Use its bar's
+       **Convert to slide**, and the frame icon on a slide's bar to turn it
+       back.
+    3. Ctrl+D a frame: is the copy numbered next?
+    4. A slide's size menu with the HDMI plugged in and unplugged: the
+       Display 1 / Display 2 labels and resolutions.
+    5. F5 on a Display 1-sized slide: does it now fill the laptop screen
+       with no black bars? Is the fade noticeable now, and not too slow?
+    6. Panel → Export PDF: pick a file, watch it step through, open the PDF.
+       Are the cards and Tables there?
+- 2026-11-13 · session 9 · user feedback on checkpoint 2: "this is good".
+  One change: the transition should be a **dissolve**, not a fade through
+  black. Built:
+  - On each slide change, the shell takes a picture of the slide on screen (a
+    new `slides_snapshot_png` in src-tauri slides.rs, the same WebKitGTK
+    snapshot the PDF export uses, as a PNG; cairo-rs gets the `png` feature).
+  - The picture is laid over the slide, and the board moves to the next
+    slide underneath. After 90 ms it fades out over 480 ms.
+  - Keys pressed during a dissolve skip straight ahead.
+  - Without the desktop shell, it falls back to the fade through black.
+  - Checked in the hidden-window walk: the picture covered the screen at the
+    slide's size while the board was already on slide 2; the screen never
+    went black; the picture faded (`opacity 480ms`) and was removed.
+    Lint 25, 747 tests and the build pass. **Section 9 is finished as far as
+    the user wants it.** Speaker notes and view, and "present selected", are
+    deferred ("when needed").
+  - For the merge into `whiteboard`, shared files touched (all additive):
+    - SandBoxPage.jsx, SandboxCanvas.jsx (`plain`), ContextToolbar.jsx
+      (`slideActions`), InsertMenu.jsx / SandboxToolbar.jsx (`onPickSlides` /
+      `onInsertSlides`), ShortcutsModal.jsx, SandBoxPage.module.css,
+      perfProbe.js (`slides:`);
+    - src-tauri main.rs (`mod slides`, 6 commands), Cargo.toml (webkit2gtk,
+      cairo-rs);
+    - CLI sandbox.rs (appended blocks).
+- 2026-11-13 · session 7 · **sections 8 (Doc) and 9 (Slides) merged into
+  `whiteboard`**, in both repos, at the user's request; both sessions
+  confirmed final and stopped committing first. Doc merged cleanly (desktop
+  a1585e9, CLI d379abd). Slides then conflicted only where both added lines,
+  kept both: InsertMenu (Doc and Slides entries + icons), perfProbe (doc:,
+  doc2:, slides: scenarios), this tracker (section boxes, logs), and the CLI's
+  sandbox_read description (the doc and slides sentences). After the merge:
+  desktop 765 tests, lint 25, build, `cargo check`, `cargo test slides`; CLI
+  90 tests, clippy unchanged. The branches `whiteboard-doc` /
+  `whiteboard-slides` and worktrees wb8 / wb9 are left for the user to remove.
+- 2026-11-13 · session 7 · user feedback after the merge (Slides OK):
+  - **Widgets keep their proportions at any board zoom.** Zoomed out, a
+    widget's text and everything sized in em stopped shrinking with it (the
+    toolbar grew 5.5× relative to the widget at 26 % zoom). Cause, measured:
+    WebKit's "smart minimum" font size — text specified at ≥9px is never drawn
+    below 9px when CSS `zoom` shrinks it, and WebKitGTK can't turn it off.
+    Fix (`formats/zoomBox.js`): a widget cancels the board's zoom
+    (`zoom: 1/z`) and is laid out at screen size — box and text size × z, its
+    stylesheets' sizes as `calc(Npx * var(--z, 1))` (all five widget
+    stylesheets; under 2px left alone; pop-ups and full screen sit outside a
+    widget so --z falls back to 1), icons via `zIcon(n)`, base text
+    `calc(15px * var(--z))`. Same sharpness as before (still no transforms).
+    Note/task/image cards are untouched — they may show the same effect.
+  - **Widgets shifted off their selection box** (seen during Ctrl+wheel):
+    the board's clipped card layer could be scrolled by the browser bringing
+    a focused element into view whenever something stuck out past the window
+    (the user's Doc did); every card then sat away from where the board
+    thinks it is. OverlayLayer now resets any such scroll at once.
+  - **Crosshair inside widgets:** the board's tool cursor is set on the
+    layer's container and widgets inherited it (crosshair near a shape's
+    edge). A widget now has its own default cursor.
+  - **Timeline:** the add box comes back empty after Enter; dependency
+    arrowheads are drawn as small triangles in the arrow's colour (the SVG
+    marker was sized in em user units — huge — and WebKit doesn't support
+    `context-stroke`, so it was black).
+  - **Media menu:** bigger rows (20px icons, 14.5px labels), a divider
+    between Note/Task/Image/PDF and the widgets, and it moves up when it
+    would run off the bottom.
+  - Checked in a hidden window: at 26 % zoom the toolbar keeps its height
+    relative to the widget (58.8 vs 58.9; was 324), the widget lands exactly
+    where the old placement put it, cursor `default`; a scrolled layer
+    snapped back to 0; arrowhead 8×8 px, grey; the add box empty after Enter.
+    Walks `timeline`, `cards`, `table`, `grid`, `extras`, `doc`, `doc2`,
+    `slides` all pass (new `zoomfont:` walk). 766 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · user feedback: proportions right, but zooming was
+  flickery and laggy (worst when the wheel changes direction).
+  - **Cause:** the fix above changed every widget's text size, box and
+    paddings on every wheel step (a re-render of each widget, a reflow of all
+    its text, CodeMirror re-measuring the Doc, scrolled widgets sliding since
+    their scroll stayed in px while their content changed size).
+  - **Now** (`formats/zoomBox.js`): the board's CSS zoom scales widgets again,
+    as before; a widget only changes its **inner scale k** — the smallest
+    whole number with zoom × k ≥ 1 (1 at 100 % and above = the original
+    layout) — laid out at 1/k and magnified k× with its own `zoom`. Its text
+    is then specified small enough that WebKit's 9px rule never applies,
+    whatever the zoom. k changes only at 1/2, 1/3, 1/4… of zoom, so a long
+    zoom-out re-renders a widget a handful of times, not every step; at
+    each change the scroll positions inside are read before the change and
+    rescaled after it (`useKeepScroll`).
+  - Why not a fixed big k: WebKit rounds borders thinner than 1px up to 1px
+    *before* zooming (measured: 1px at k = 8 drew 8px). With zoom × k
+    between 1 and ~1.5, hairlines stay 1px.
+  - All px reachable inside a widget follow --z now, borders included: the
+    five widget stylesheets, the notes editor's theme (`cm/theme.js`, only
+    its CSS strings), its stylesheet, the find bar (`NoteSearch`), and
+    CodeMirror's own line/gutter padding inside a Doc. Outside a widget --z
+    is unset, so the Notes page is unchanged.
+  - **Timeline bugs found on the way** (em positions on elements with their
+    own smaller text count in that text): the axis header sat 46px left of
+    the body (its rail corner's 0.72em text), the Today tag at 62 % of its
+    place, tick labels, side labels and swimlane headers likewise. Positioned
+    boxes keep the body's size now; the small text sits inside. A new
+    Timeline also centres on today once it has a width.
+  - **Media menu:** 17px labels, 24px icons, 42px rows, only as wide as its
+    labels (144px; it was 216), placed beside the button after measuring.
+  - Checked in a hidden window (`zoomfont:` walk): at 100 % / 47 % / 26 %
+    the border is 1px on screen and the toolbar keeps its size relative to
+    the widget (58.9 / 58.9 / 58.8); placement exact; a scrolled Timeline
+    keeps today at 0.606 / 0.61 / 0.616 of its view across k changes; Today
+    tag vs line 0px; the Media menu on screen. All section walks pass.
+    766 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · **Prototype, Talktrack and Engage dropped** by the
+  user (not a kitchen sink). Remaining: the deferred connection outlines,
+  then merge `whiteboard` into `master` in both repos (the user wants to keep
+  it), then remove this tracker. The merged worktrees wb8/wb9 and branches
+  `whiteboard-doc` / `whiteboard-slides` were removed (both repos). Handed
+  to the session WhiteboardFeatureImplementation-Final.
+- 2026-11-13 · session Final · **connection outlines** built (deferred item).
+  `Canvas/GlowLayer.jsx` is one Konva layer under the links: rings just
+  outside each box (its oriented bounds), halos under links from
+  `connectorPoints`. Sizes are in screen px ÷ zoom. Cyan #22d3ee on dark,
+  teal #0d7f86 on light (read from --outline-contrast). "What's connected" is
+  `connectors/connected.js` (`connectedTo`, shared with NodeEditor's focus;
+  `glowFor` drops the selection itself). It is hidden while dragging: new
+  `canvas.dragging`, set by SelectionOverlay for move/resize/rotate and link-end
+  drags. Glow for things that ride on a widget is also drawn on the top canvas.
+  The ring is a rounded rectangle for every shape (circles too). 775 tests,
+  lint 25, build pass. Not walked in a hidden window: the user's own
+  tauri:dev was running.
+- 2026-11-13 · session Final · user feedback on the outlines, plus extras.
+  - **Glow width now follows the item, not the screen.** The ring is 3× the
+    box's border and the halo reaches 3.5× the link's width past it (minimum 2),
+    in board units, so it zooms with the shapes.
+  - **Only a single selected item glows its neighbours.** Inserting a diagram
+    (all of it selected), select-all or a marquee light nothing.
+  - **A new diagram lands centred on the view**, like a widget (planned once at
+    0,0 to measure, then shifted). Before, it went to the right of everything.
+  - **Shape floating bar: two rows** (text above, shape and the rest below),
+    justified: both rows the same width and flush at each edge, with the spare
+    room at the dividers (`.twoRows`). Text, arrows, frames and widgets keep
+    one row.
+  - **Dock pills:** "no colour" on the paint bucket is an empty outlined pill
+    (was a red slash). The ink button shows the active preset's colour; for an
+    eraser or lasso the pill's room is kept so nothing jumps.
+  - Checked in a hidden window (new `glow:` walk): diagram centred 0/0 px off,
+    no glow while all is selected, a click glows rings 6 / halos 16, a 6px
+    border gives an 18 ring, unchanged in board units after zooming out, both
+    bar rows 778px wide and flush, nothing glows after select-all. `cards`
+    walk passes. 776 tests, lint 25, build pass.
+- 2026-11-13 · session Final · outlines round 2 (user: "looks like a
+  highlighter passing through, layered, not connected; big gap"). The glow is
+  now ONE outline that hugs each box's real border (registry path: rounded
+  corners, ellipse, diamond…) with no gap. Its band is 1.5× the item's line
+  width past the line. Links carry the same band. Everything is drawn at full
+  strength on the glow layer's own canvas, which is faded once by CSS
+  (0.55), so a link's band and a box's band merge instead of darkening each
+  other. Box interiors (including the clicked box's) are cut out
+  (destination-out), so a band stops exactly at a border. Rotation is now
+  about the centre, as the board draws it. PNG export hides `.sb-glow`.
+  Checked with pixel samples in a hidden window (`glow:` walk): C's band is
+  solid at 2–3.5 units outside its 2px border, empty at 5 and inside; where a
+  link meets a box it is solid above the border and empty below; a 6px border
+  gives a band to 12 units, unchanged in board units after zooming out.
+  776 tests, lint 25, build pass.
+- 2026-11-13 · session Final · user: the outline is "exactly it". Last two
+  fixes. **Connection dots make a box only with Shift:** a plain click on a dot,
+  or a drag released on empty board, makes nothing. Shift+click or Shift+release
+  makes the connected box. Alt+release still leaves a free-ended arrow. While a
+  new arrow points at empty board, a hint sits above its head: "Hold Shift to
+  add a shape here", or "Release to add a shape here" while Shift is held,
+  including when Shift is pressed without moving. **Rotate knob raised** to 40px
+  above the top edge (was 26), clear of the top dot's hit area. The shortcuts
+  sheet is updated. Checked in a hidden window (new `dots:` walk): plain click
+  0 items, plain drag 0, the hint centred 22px above the head, Shift drag +2
+  (shape + connector), Shift click +2, knob 26px from the dot centre and on top
+  at its centre. `glow:` passes. 776 tests, lint 25, build pass.
+

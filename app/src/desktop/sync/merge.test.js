@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeRows, mergeVault } from './merge.js'
+import { mergeRows, mergeVault, mergeSandboxItems } from './merge.js'
 
 const row = (id, title, updated_at = '2026-07-01T00:00:00.000Z', extra = {}) =>
   ({ id, title, is_completed: false, updated_at, ...extra })
@@ -196,5 +196,73 @@ describe('mergeVault', () => {
     const f = mergeVault(base, local, remote).merged
     const b = mergeVault(base, remote, local).merged
     expect(ids(f.tasks.tasks)).toEqual(ids(b.tasks.tasks))
+  })
+})
+
+describe('mergeSandboxItems — a Format merges record by record', () => {
+  const rec = (id, title, at = '2026-11-13T00:00:00.000Z') => ({ id, values: { title }, updated_at: at })
+  const fmt = (records, extra = {}) => ({ id: 'F', type: 'shape', x: 0, y: 0, w: 400, h: 300, payload: { kind: 'format', view: 'table', title: 'T', records, ...extra } })
+  const base = [fmt([rec('a', 'A')])]
+
+  it('keeps records added on both sides, with no conflict', () => {
+    const local = [fmt([rec('a', 'A'), rec('b', 'B')])]
+    const remote = [fmt([rec('a', 'A'), rec('c', 'C')])]
+    const { rows, conflicts } = mergeSandboxItems(base, local, remote)
+    expect(rows[0].payload.records.map((r) => r.id)).toEqual(['a', 'b', 'c'])
+    expect(conflicts).toEqual([])
+    // Same answer whichever side is "local" (both devices must agree).
+    expect(mergeSandboxItems(base, remote, local).rows[0].payload.records.map((r) => r.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('takes a move on one side and a record edit on the other', () => {
+    const local = [{ ...fmt([rec('a', 'A')]), x: 50 }]
+    const remote = [fmt([rec('a', 'Renamed', '2026-11-13T01:00:00.000Z')])]
+    const { rows, conflicts } = mergeSandboxItems(base, local, remote)
+    expect(rows[0].x).toBe(50)
+    expect(rows[0].payload.records[0].values.title).toBe('Renamed')
+    expect(conflicts).toEqual([])
+  })
+
+  it('a record deleted on one side stays deleted unless the other edited it', () => {
+    const local = [fmt([])]
+    expect(mergeSandboxItems(base, local, base).rows[0].payload.records).toEqual([])
+    const edited = [fmt([rec('a', 'Edited', '2026-11-13T02:00:00.000Z')])]
+    expect(mergeSandboxItems(base, local, edited).rows[0].payload.records[0].values.title).toBe('Edited')
+  })
+
+  it('the same record edited on both sides: the newer edit wins and is reported', () => {
+    const local = [fmt([rec('a', 'Mine', '2026-11-13T03:00:00.000Z')])]
+    const remote = [fmt([rec('a', 'Theirs', '2026-11-13T04:00:00.000Z')])]
+    const { rows, conflicts } = mergeSandboxItems(base, local, remote)
+    expect(rows[0].payload.records[0].values.title).toBe('Theirs')
+    expect(conflicts).toHaveLength(1)
+  })
+
+  it('leaves ordinary items to whole-row merging', () => {
+    const s = { id: 'S', type: 'shape', x: 0, payload: { kind: 'rect' } }
+    const { rows } = mergeSandboxItems([s], [{ ...s, x: 1 }], [s])
+    expect(rows[0].x).toBe(1)
+  })
+})
+
+describe('mergeSandboxItems — a Doc merges its text line by line', () => {
+  const doc = (body, extra = {}) => ({ id: 'D', type: 'shape', x: 0, y: 0, w: 500, h: 600, payload: { kind: 'format', view: 'doc', title: 'Doc', source: { type: 'own' }, body, ...extra } })
+  const base = [doc('one\ntwo\nthree')]
+
+  it('keeps edits to different lines from both sides', () => {
+    const local = [doc('ONE\ntwo\nthree')]
+    const remote = [doc('one\ntwo\nTHREE')]
+    const { rows, conflicts } = mergeSandboxItems(base, local, remote)
+    expect(rows[0].payload.body).toBe('ONE\ntwo\nTHREE')
+    expect(conflicts).toEqual([])
+  })
+
+  it('the same line edited on both sides: one answer either way round, reported', () => {
+    const local = [doc('mine\ntwo\nthree')]
+    const remote = [doc('theirs\ntwo\nthree')]
+    const a = mergeSandboxItems(base, local, remote)
+    const b = mergeSandboxItems(base, remote, local)
+    expect(a.rows[0].payload.body).toBe(b.rows[0].payload.body)
+    expect(a.conflicts).toHaveLength(1)
   })
 })

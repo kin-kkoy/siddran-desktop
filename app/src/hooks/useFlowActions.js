@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { newSandboxItemId } from './useSandbox'
 import { facingSide } from '../components/Sandbox/connectors/geometry'
-import { parseFlow, flowToItems, tidy, itemsToFlow, nodeSize } from '../components/Sandbox/flow/flowText'
+import { tidy, itemsToFlow, nodeSize } from '../components/Sandbox/flow/flowText'
+import { itemsToGraph, planDiagram, isDiagramShape } from '../components/Sandbox/flow/flowGraph'
 import { unionAABB } from '../components/Sandbox/selection/snapping'
 import { toast } from '../utils/toast'
 
@@ -70,8 +71,32 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         const id = newSandboxItemId()
         const z = nextZ()
         beginTransaction()
-        act.addItem({ id, type: 'shape', ...at, w, h, rotation: 0, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '' } })
+        act.addItem({ id, type: 'shape', ...at, w, h, rotation: 0, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '', locked: undefined, groupId: undefined } })
         act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, dir, id, OPPOSITE[dir]) })
+        endTransaction()
+        canvas.selectOnly(id)
+        setEditingShapeId(id)
+        bump()
+        return id
+    }, [items, act, beginTransaction, endTransaction, canvas, nextZ, bump, setEditingShapeId, connectorPayload])
+
+    /**
+     * A connector dragged from box `fromId` and released on empty canvas: a box
+     * like the source, centred on the drop point, joined on the side facing back.
+     */
+    const createConnectedAt = useCallback((fromId, fromSide, world) => {
+        const from = items.find((i) => i.id === fromId)
+        if (!from || from.type !== 'shape') return null
+        const decision = from.payload?.kind === 'rhombus'
+        const kind = decision ? 'roundedRect' : (from.payload?.kind || 'roundedRect')
+        const w = decision ? 160 : from.w, h = decision ? 64 : from.h
+        const id = newSandboxItemId()
+        const box = { id, type: 'shape', x: Math.round(world.x - w / 2), y: Math.round(world.y - h / 2), w, h, rotation: 0 }
+        const centre = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
+        const z = nextZ()
+        beginTransaction()
+        act.addItem({ ...box, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '', locked: undefined, groupId: undefined } })
+        act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, fromSide, id, facingSide(box, centre)) })
         endTransaction()
         canvas.selectOnly(id)
         setEditingShapeId(id)
@@ -125,23 +150,47 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         bump()
     }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
-    /** Paste or type flowchart text → a laid-out diagram beside what is there. */
-    const insertFlow = useCallback((text) => {
-        let parsed
-        try { parsed = parseFlow(text) } catch (e) { toast.error(e.message); return false }
-        const b = unionAABB(items.filter((i) => i.type !== 'connector'))
-        const c = viewportCenter()
-        const origin = b && b.w > 0 ? { x: Math.round(b.x + b.w + 160), y: Math.round(b.y) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
+    /**
+     * The selected diagram, ready for the node editor: its graph, where it sits,
+     * and which items it is made of (so Update knows what it may change).
+     * Null when nothing diagram-like is selected. Locked boxes stay out of it.
+     */
+    const diagramSource = useCallback(() => {
+        const shapes = items.filter((i) => canvas.selectedIds.has(i.id) && isDiagramShape(i) && !i.payload?.locked)
+        if (!shapes.length) return null
+        const ids = new Set(shapes.map((i) => i.id))
+        const links = items.filter((i) => i.type === 'connector' && ids.has(i.payload?.from?.itemId) && ids.has(i.payload?.to?.itemId))
+        const { graph, origin } = itemsToGraph([...shapes, ...links])
+        return { graph, origin, scope: { shapeIds: shapes.map((i) => i.id), connectorIds: links.map((i) => i.id) } }
+    }, [items, canvas.selectedIds])
+
+    /**
+     * A graph from the Diagram pop-up onto the board, as one undo step. New
+     * (`source` null): laid out beside what is there. Opened from the board:
+     * re-laid-out where it was, changing those items in place.
+     */
+    const applyDiagram = useCallback((graph, source = null) => {
+        if (!graph?.nodes?.length) return false
         const style = { stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke, fill: canvas.shapeStyle.fill, font: 16 }
-        const { shapes, connectors } = flowToItems(parsed.graph, { origin, style, newId: newSandboxItemId })
+        let origin = source?.origin
+        if (!origin) {
+            // A new diagram lands centred on the view, like a new widget: plan it
+            // once at 0,0 to learn its size, then shift the origin to centre it.
+            const c = viewportCenter()
+            let n = 0
+            const trial = planDiagram(graph, { items, origin: { x: 0, y: 0 }, style, newId: () => `trial${n++}` })
+            const b = unionAABB([...trial.add.filter((i) => i.type !== 'connector'), ...trial.update.map((u) => u.patch).filter((p) => p.w != null)])
+            origin = b ? { x: Math.round(c.x - b.x - b.w / 2), y: Math.round(c.y - b.y - b.h / 2) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
+        }
+        const plan = planDiagram(graph, { items, scope: source?.scope, origin, style, newId: newSandboxItemId })
         let z = nextZ()
         beginTransaction()
-        for (const s of shapes) act.addItem({ ...s, z_index: z++ })
-        for (const k of connectors) act.addItem({ ...k, z_index: z++ })
+        for (const id of plan.remove) act.removeItem(id)
+        for (const u of plan.update) act.updateItem(u.id, u.patch)
+        for (const it of plan.add) act.addItem({ ...it, z_index: z++ })
         endTransaction()
-        canvas.setSelection(new Set(shapes.map((s) => s.id)))
+        canvas.setSelection(new Set(plan.shapeIds))
         bump()
-        if (parsed.problems.length) toast.warning(`Skipped ${parsed.problems.length} line(s) it could not read`)
         return true
     }, [items, viewportCenter, canvas, nextZ, act, beginTransaction, endTransaction, bump])
 
@@ -154,5 +203,5 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         catch { toast.error('Could not reach the clipboard') }
     }, [items, canvas.selectedIds])
 
-    return { createNext, createSibling, createAt, connectSelected, tidySelection, insertFlow, copyAsText }
+    return { createNext, createSibling, createAt, createConnectedAt, connectSelected, tidySelection, diagramSource, applyDiagram, copyAsText }
 }

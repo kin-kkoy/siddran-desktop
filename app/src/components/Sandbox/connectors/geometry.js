@@ -7,6 +7,7 @@
  * All coordinates are WORLD space. `byId` is a Map<id, item>.
  */
 import { getItemBounds, getOrientedAnchors, rotatePoint } from '../selection/itemBounds'
+import { aroundBoxes } from './avoid'
 
 export const SIDES = ['n', 'e', 's', 'w']
 
@@ -74,12 +75,81 @@ export function nearestSide(item, worldPt) {
  * or both ends facing the same way): then the line clears the two boxes it joins
  * AND anything else in the band it travels through. `obstacles` is a function,
  * so the other boxes are only gathered for the few links that need them.
+ *
+ * `ends.avoid` (a link's "go around boxes"): a straight or curved link whose
+ * direct path would run through a box — its own two included — takes the
+ * shortest way round instead (connectors/avoid.js). Off, it goes direct.
  */
 export function routeConnector(a, b, routing = 'elbow', ends = {}) {
-    if (routing === 'straight') return [a.x, a.y, b.x, b.y]
+    // A user bend: the path is pulled through M = midpoint(a, b) + bend. Stored
+    // as an offset from the midpoint so it travels with the shapes it joins.
+    const bend = ends.bend && Number.isFinite(ends.bend.dx) && Number.isFinite(ends.bend.dy) ? ends.bend : null
+    if (bend) {
+        const M = { x: (a.x + b.x) / 2 + bend.dx, y: (a.y + b.y) / 2 + bend.dy }
+        if (routing === 'straight') return [a.x, a.y, M.x, M.y, b.x, b.y]
+        if (routing === 'curved') return curved(a, b, ends.fromSide, ends.toSide, M)
+        return flat(simplify(elbowThrough(a, b, ends.fromSide, ends.toSide, M)))
+    }
+    if (routing === 'straight' || routing === 'curved') {
+        const direct = routing === 'straight' ? [a.x, a.y, b.x, b.y] : curved(a, b, ends.fromSide, ends.toSide)
+        if (!ends.avoid) return direct
+        const boxes = [...(ends.obstacles?.() || []), ends.fromBox, ends.toBox].filter(Boolean)
+        return aroundBoxes(direct, a, b, ends.fromSide, ends.toSide, boxes, routing === 'curved') || direct
+    }
     const da = DIRS[ends.fromSide], db = DIRS[ends.toSide]
     if (!da || !db) return dogLeg(a, b)
     return flat(simplify(orthogonal(a, da, b, db, ends.fromBox, ends.toBox, ends.obstacles)))
+}
+
+// Samples along a curved connector. The curve is stored and drawn as a fine
+// polyline, so hit-testing, the label midpoint, arrowheads and the note SVG all
+// keep working on points without knowing it is a curve.
+export const CURVE_SEGMENTS = 24
+
+/**
+ * A cubic Bézier from a to b, leaving and entering perpendicular to the attached
+ * sides (spec §9.8.3: control points offset along the normal). A free end points
+ * its handle at the other end along the dominant axis.
+ */
+function curved(a, b, fromSide, toSide, through = null) {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y)
+    const k = Math.max(30, Math.min(dist * 0.45, 260))
+    const toward = (p, q) => (Math.abs(q.x - p.x) >= Math.abs(q.y - p.y)
+        ? { x: Math.sign(q.x - p.x) || 1, y: 0 } : { x: 0, y: Math.sign(q.y - p.y) || 1 })
+    const da = DIRS[fromSide] || toward(a, b)
+    const db = DIRS[toSide] || toward(b, a)
+    const c1 = { x: a.x + da.x * k, y: a.y + da.y * k }
+    const c2 = { x: b.x + db.x * k, y: b.y + db.y * k }
+    if (through) {
+        // Shift both controls so the curve's t=0.5 point lands on `through`:
+        // B(0.5) = (a + 3c1 + 3c2 + b) / 8, so moving each control by d moves it by 3d/4.
+        const mx = (a.x + 3 * c1.x + 3 * c2.x + b.x) / 8, my = (a.y + 3 * c1.y + 3 * c2.y + b.y) / 8
+        const dx = (through.x - mx) * 4 / 3, dy = (through.y - my) * 4 / 3
+        c1.x += dx; c1.y += dy; c2.x += dx; c2.y += dy
+    }
+    const out = []
+    for (let i = 0; i <= CURVE_SEGMENTS; i++) {
+        const t = i / CURVE_SEGMENTS, u = 1 - t
+        const w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t
+        out.push(
+            Math.round((w0 * a.x + w1 * c1.x + w2 * c2.x + w3 * b.x) * 100) / 100,
+            Math.round((w0 * a.y + w1 * c1.y + w2 * c2.y + w3 * b.y) * 100) / 100,
+        )
+    }
+    return out
+}
+
+/**
+ * An orthogonal path whose middle passes through M (a dragged bend). Each end
+ * leaves along its side's axis (or the dominant axis for a free end).
+ */
+function elbowThrough(a, b, fromSide, toSide, M) {
+    const vert = (side, p, q) => (side ? side === 'n' || side === 's' : Math.abs(q.y - p.y) >= Math.abs(q.x - p.x))
+    const va = vert(fromSide, a, b), vb = vert(toSide, b, a)
+    if (va && vb) return [a, P(a.x, M.y), P(b.x, M.y), b]
+    if (!va && !vb) return [a, P(M.x, a.y), P(M.x, b.y), b]
+    if (va) return [a, P(a.x, M.y), P(M.x, M.y), P(M.x, b.y), b]
+    return [a, P(M.x, a.y), P(M.x, M.y), P(b.x, M.y), b]
 }
 
 function dogLeg(a, b) {
@@ -211,6 +281,8 @@ export function connectorPoints(conn, byId) {
         toSide: sideOf(p.to, byId),
         fromBox: boxOf(p.from, byId),
         toBox: boxOf(p.to, byId),
+        bend: p.bend,
+        avoid: !!p.avoid,
         obstacles: () => {
             const out = []
             for (const it of byId.values()) {

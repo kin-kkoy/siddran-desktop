@@ -4,22 +4,35 @@
     position: absolute;
     z-index: 10;
     display: flex;
+    /* One row: the text group and the style group sit side by side. */
+    flex-direction: row;
     align-items: center;
-    gap: 2px;
-    padding: 3px 6px;
-    background-color: rgba(18, 18, 30, 0.94);
-    border: 1px solid var(--border-default);
-    border-radius: 10px;
-    backdrop-filter: blur(12px);
+    gap: 0;
+    padding: 7px 11px;
+    background-color: rgb(18, 18, 30);
+    /* High-contrast outline so the bar stands out in a bright room too:
+       white on dark themes, black on light ones. */
+    border: 1px solid var(--outline-contrast, #ffffff);
+    border-radius: 14px;
+    /* No backdrop-filter, no transform, no lingering animation: each puts the
+       bar on its own compositing layer, and on a fractionally-scaled display
+       (0.83 here) WebKit rasterises such layers soft — the blurry text and
+       icons. The bar is positioned on whole pixels from JS instead. */
     box-shadow: 0 8px 24px var(--shadow-color);
     pointer-events: auto;
-    animation: ctxFadeIn 0.12s ease both;
+    animation: ctxFadeIn 0.12s ease backwards;
     white-space: nowrap;
+    /* Size to the content, always. An absolutely-positioned box otherwise
+       shrinks to the room left between its `left` and the container's right
+       edge — so near the right side of the screen the rows wrapped. */
+    width: max-content;
 }
 
+/* Opacity only, fill-mode `backwards`: once the fade ends nothing is left
+   applied, so the bar drops back to plain, crisp painting. */
 @keyframes ctxFadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 /* ── Compact button ── */
@@ -27,14 +40,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.1s, color 0.1s;
@@ -54,9 +67,9 @@
 /* ── Small divider ── */
 .sep {
     width: 1px;
-    height: 18px;
+    height: 24px;
     background-color: var(--border-default);
-    margin: 0 3px;
+    margin: 0 5px;
     flex-shrink: 0;
 }
 
@@ -65,12 +78,12 @@
     appearance: none;
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
-    border-radius: 5px;
+    border-radius: 8px;
     color: var(--text-secondary);
     font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 2px 6px;
-    height: 26px;
+    font-size: 12px;
+    padding: 2px 9px;
+    height: 34px;
     cursor: pointer;
     outline: none;
     transition: border-color 0.1s, color 0.1s;
@@ -81,10 +94,19 @@
     color: var(--text-primary);
 }
 
+/* Font size between the − / + stepper: just wide enough for the number. */
+.sizeSelect {
+    composes: fontSelect;
+    padding: 2px 4px;
+    min-width: 34px;
+    text-align: center;
+    text-align-last: center;
+}
+
 /* ── Colour swatch ── */
 .swatch {
-    width: 18px;
-    height: 18px;
+    width: 23px;
+    height: 23px;
     border-radius: 50%;
     border: 2px solid var(--border-default);
     cursor: pointer;
@@ -101,18 +123,18 @@
 /* ── Align/distribute grid (multi-select) — 4×2 compact buttons ── */
 .alignGrid {
     display: grid;
-    grid-template-columns: repeat(4, 20px);
-    grid-auto-rows: 20px;
-    gap: 1px;
+    grid-template-columns: repeat(4, 26px);
+    grid-auto-rows: 22px;
+    gap: 2px;
     flex-shrink: 0;
 }
 .miniBtn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
+    width: 26px;
+    height: 22px;
+    border-radius: 6px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
@@ -140,29 +162,135 @@
     gap: 4px;
 }
 .radiusSlider {
-    width: 48px;
+    width: 72px;
     height: 4px;
     accent-color: var(--accent-warning);
     cursor: pointer;
 }
 .radiusValue {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 13px;
     color: var(--text-muted);
-    min-width: 18px;
+    min-width: 22px;
     text-align: right;
+}
+
+/* Thickness stepper: narrow − / + with the number centred between them, so
+   the three read as one control. */
+.stepBtn {
+    composes: btn;
+    width: 24px;
+}
+.stepValue {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    min-width: 14px;
+    text-align: center;
 }
 
 /* Arrow label — a small inline field in the connector bar. */
 .labelInput {
-    width: 96px;
-    height: 26px;
-    padding: 0 8px;
-    font-size: 12px;
+    width: 120px;
+    height: 34px;
+    padding: 0 10px;
+    font-size: 14px;
     color: var(--text-primary);
     background: var(--bg-primary);
     border: 1px solid var(--border-default);
-    border-radius: 6px;
+    border-radius: 8px;
     outline: none;
 }
 .labelInput:focus { border-color: var(--accent-warning); }
+
+/* One line of controls; the bar stacks a text row above the style row. */
+.row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 3px;
+}
+.row + .row {
+    border-left: 1px solid var(--border-default);
+    margin-left: 5px;
+    padding-left: 5px;
+}
+
+/* Two rows (a shape): stacked, both as wide as the wider one, and justified —
+   the spare room goes to the gaps between groups (the dividers), so each row
+   runs flush from edge to edge while a group's buttons stay together. */
+.twoRows {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+}
+.twoRows > .row {
+    justify-content: space-between;
+}
+.twoRows > .row + .row {
+    border-left: none;
+    margin-left: 0;
+    padding-left: 0;
+    border-top: 1px solid var(--border-default);
+    padding-top: 5px;
+}
+.twoRows > .row > .sep {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ── Colour menus ── */
+.menuWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    flex-shrink: 0;
+}
+.menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 8px;
+    background-color: rgba(18, 18, 30, 0.98);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px var(--shadow-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.paletteGrid {
+    display: grid;
+    grid-template-columns: repeat(8, 26px);
+    gap: 6px;
+}
+.paletteCell, .paletteCellActive, .paletteNone {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    padding: 0;
+}
+.paletteCell:hover { transform: scale(1.12); }
+.paletteCellActive { outline: 2px solid var(--accent-warning); outline-offset: 1px; }
+.paletteNone {
+    background: linear-gradient(135deg, transparent 44%, #e05c5c 44%, #e05c5c 56%, transparent 56%), var(--bg-primary);
+}
+.iconSwatch {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+.iconBar {
+    width: 18px;
+    height: 4px;
+    border-radius: 1px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+

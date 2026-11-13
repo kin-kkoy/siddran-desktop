@@ -1,3 +1,5 @@
+import styles from './OverlayLayer.module.css'
+
 /**
  * DOM overlay that shares the canvas viewport transform. Cards (notes, tasks
  * in Phase 2, images later) live here as real React DOM nodes — so they
@@ -6,7 +8,7 @@
  * The container itself has `pointer-events: none` so it doesn't intercept the
  * pen; each card opts back in with `pointer-events: auto`.
  */
-function OverlayLayer({ viewport, width, height, children }) {
+function OverlayLayer({ viewport, width, height, passThrough = false, children }) {
     return (
         <div
             style={{
@@ -16,6 +18,10 @@ function OverlayLayer({ viewport, width, height, children }) {
                 overflow: 'hidden',
                 pointerEvents: 'none',
             }}
+            // Clipped, but the browser can still scroll it to bring a focused or
+            // off-screen element into view — every card would then sit away from
+            // where the board (its selection, its hit-testing) thinks it is. Never.
+            onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop || el.scrollLeft) { el.scrollTop = 0; el.scrollLeft = 0 } }}
         >
             {/* Pan with a plain translate, ROUNDED to whole pixels + promoted to its
                 own compositor layer (translate3d + will-change). A fractional
@@ -35,7 +41,7 @@ function OverlayLayer({ viewport, width, height, children }) {
                     re-lays-out the cards at the target size so text stays razor-sharp
                     at any zoom (a scale() transform samples a base-res texture = the
                     blur). Coords are unchanged: a world point (x,y) lands at vx+x*zoom. */}
-                <div style={{ zoom: viewport.zoom }}>
+                <div style={{ zoom: viewport.zoom }} className={passThrough ? styles.passThrough : undefined}>
                     {children}
                 </div>
             </div>

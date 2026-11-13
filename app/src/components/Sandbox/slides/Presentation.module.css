@@ -1,0 +1,138 @@
+/* Presentation mode. Sits above everything in the (now window-filling) canvas
+   shell. No backdrop-filter and no transform-based centring (the blur rule
+   for the user's 0.83-scaled monitor). */
+.root {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* A frame-sized hole: the huge shadow blacks out everything around it. */
+.hole {
+    position: absolute;
+    box-shadow: 0 0 0 9999px #000;
+    pointer-events: none;
+}
+
+.black, .veil {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    pointer-events: none;
+}
+
+.veil {
+    transition: opacity 280ms ease;
+}
+
+.dissolve {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+}
+
+.click {
+    position: absolute;
+    inset: 0;
+}
+
+.end {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #d8d8e0;
+    font-size: 22px;
+    letter-spacing: 0.02em;
+}
+
+.end small {
+    font-size: 13px;
+    color: #8a8a96;
+}
+
+.hud {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    width: max-content;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 12px;
+    background: rgba(20, 20, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e6e6ee;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+}
+
+.hudOn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.count {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 0 8px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.title {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #a4a4b0;
+    font-size: 13px;
+}
+
+.sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}

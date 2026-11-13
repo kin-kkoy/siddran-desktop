@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { cssTextStyle, fitFontSize, contrastText, STICKY_DEFAULT } from '../text/textStyle'
 
 /**
  * Positioned DOM text editor that overlays a shape when the user double-clicks
@@ -23,6 +24,12 @@ function ShapeTextEditor({ item, canvas, onCommit, onClose, onTab }) {
     const zoom = canvas.viewport.zoom
     const sw = (item.w || 100) * zoom
     const sh = (item.h || 60) * zoom
+    // Same size and padding the committed Konva label uses (GraphicsLayer).
+    const isSticky = p.kind === 'sticky'
+    const padW = isSticky ? Math.max(12, Math.min(item.w, item.h) * 0.12) : 8
+    const worldSize = p.fontSize || (isSticky ? fitFontSize(draft, item.w - padW * 2, item.h - padW * 2, p, 28, 10) : 16)
+    const color = p.textColor || (isSticky ? contrastText(p.fill || STICKY_DEFAULT) : '#ffffff')
+    const vAlign = p.verticalAlign === 'top' ? 'flex-start' : p.verticalAlign === 'bottom' ? 'flex-end' : 'center'
 
     // Auto-focus and select on mount
     useEffect(() => {
@@ -37,7 +44,7 @@ function ShapeTextEditor({ item, canvas, onCommit, onClose, onTab }) {
         if (!ta) return
         ta.style.height = 'auto'
         ta.style.height = `${ta.scrollHeight}px`
-    }, [draft, zoom, p.fontSize])
+    }, [draft, zoom, worldSize])
 
     // Sync draft if text changes externally while we're open
     useEffect(() => { setDraft(p.text || '') }, [p.text])
@@ -86,7 +93,10 @@ function ShapeTextEditor({ item, canvas, onCommit, onClose, onTab }) {
                 transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
                 transformOrigin: '0 0',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: vAlign,
+                paddingTop: p.verticalAlign === 'top' ? padW * zoom : 0,
+                paddingBottom: p.verticalAlign === 'bottom' ? padW * zoom : 0,
+                boxSizing: 'border-box',
                 justifyContent: 'center',
                 overflow: 'hidden',
                 zIndex: 12,
@@ -117,13 +127,11 @@ function ShapeTextEditor({ item, canvas, onCommit, onClose, onTab }) {
                     border: 'none',
                     outline: 'none',
                     background: 'transparent',
-                    color: p.textColor || '#ffffff',
-                    fontSize: (p.fontSize || 16) * zoom,
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    fontWeight: p.bold ? 'bold' : 'normal',
-                    lineHeight: 1.25,
+                    ...cssTextStyle(p, worldSize * zoom),
+                    color,
+                    lineHeight: p.lineHeight || 1.2,
                     textAlign: p.textAlign || 'center',
-                    padding: `0 ${8 * zoom}px`,
+                    padding: `0 ${padW * zoom}px`,
                     overflow: 'hidden',
                     pointerEvents: 'auto',
                     boxSizing: 'border-box',

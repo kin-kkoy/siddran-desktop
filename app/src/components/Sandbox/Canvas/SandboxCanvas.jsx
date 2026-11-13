@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Stage } from 'react-konva'
 import GraphicsLayer from './GraphicsLayer'
 import ConnectorLayer from './ConnectorLayer'
+import GlowLayer from './GlowLayer'
+import { glowFor } from '../connectors/connected'
+import FrameLayer from './FrameLayer'
 import ActiveLayer from './ActiveLayer'
 import OverlayLayer from './OverlayLayer'
 import { strokeOutline } from './strokeOutline'
@@ -9,8 +12,14 @@ import { SHAPE_TOOLS } from '../../../hooks/useSandboxCanvas'
 import { isLineKind } from '../shapes/registry'
 import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon } from '../selection/hitTest'
 import { connectorPoints, connectorHitTest } from '../connectors/geometry'
+import { isFrame, frameHit, marqueeTakesFrame } from '../frames/frames'
+import { isFormat } from '../formats/formats'
+import { resolveHover } from '../selection/hover'
+import { DRAWS_INK, presetGroupFor, strokeStyleFor } from '../ink/presets'
 
 const GRID_MINOR = 24
+// A shape that can take connector arrows (not a frame, a line, or a locked item).
+const isConnectable = (it) => it?.type === 'shape' && !isFrame(it) && !isFormat(it) && !isLineKind(it.payload?.kind) && !it.payload?.locked
 const GRID_MAJOR = 120
 const GRAPHIC_TYPES = new Set(['stroke', 'shape', 'image'])
 
@@ -26,11 +35,6 @@ const GRAPHIC_TYPES = new Set(['stroke', 'shape', 'image'])
  * canvas pointer hit-test only covers Konva graphics. The transform overlay's
  * handles carry data-sb-handle and are likewise ignored here.
  */
-// The smoothing slider (0–1) maps onto perfect-freehand `streamline`, but its
-// top end must stay BELOW 1.0 — at streamline 1.0 the low-pass never converges,
-// so the stroke chases the cursor forever (laggy even when you hold still).
-const MAX_STREAMLINE = 0.8
-
 // Cap the canvas render resolution. On scaled/HiDPI displays (Windows 125–150%,
 // Retina 2×) the committed-graphics fill cost scales with pixelRatio² — capping
 // trades a little crispness for a big paint reduction on weak hardware. ≤ this
@@ -40,28 +44,58 @@ const MAX_PIXEL_RATIO = 1.5
 const CULL_THRESHOLD = 120   // only viewport-cull graphics past this count
 const CULL_MARGIN = 200      // world px kept beyond the viewport so nothing pops
 const CULL_BUCKET = 200      // snap the cull rect to this grid so panning a little doesn't re-render
+// Precision eraser radius in SCREEN px (spec §10.1: 8 px) — constant at any zoom.
+export const PRECISION_ERASER_PX = 8
+// While one of these is active, cards (text boxes, notes, tasks, PDFs) can't be
+// grabbed or selected: the press goes through to the board, so you can draw,
+// highlight, lasso, paint or erase right over them. Neither eraser deletes a card
+// or a widget (the user's call, 2026-11-13): they erase strokes and shapes only.
+// The paint bucket's cursor: a white bucket on a dark outline (visible on any
+// background), hotspot at the pouring lip, bottom-left.
+const BUCKET_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linejoin="round" stroke-linecap="round">'
+    + '<g stroke="#000" stroke-width="4"><path d="M12 3l8 8-7 7-8-8z"/><path d="M5 10c-2 3-3 7-1 10"/></g>'
+    + '<g stroke="#fff" stroke-width="1.8"><path d="M12 3l8 8-7 7-8-8z"/><path d="M5 10c-2 3-3 7-1 10"/></g></svg>'
+const BUCKET_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(BUCKET_SVG)}") 4 20, crosshair`
+const CARD_PASS_THROUGH = new Set(['pen', 'highlighter', 'smart', 'eraser', 'precisionEraser', 'lasso', 'fill'])
+// Shape, sticky and text tools pass through too, so you can draw them ON a
+// card or widget (what lands on a widget attaches to it and is drawn on the
+// top canvas). The frame tool doesn't: frames never go on widgets.
+const passesCards = (tool) => CARD_PASS_THROUGH.has(tool) || tool === 'text' || (SHAPE_TOOLS.includes(tool) && tool !== 'frame')
 
 function SandboxCanvas({
     canvas,
     items,                 // ALL items — for pointer/eraser/marquee hit-testing
     graphicItems,          // strokes + shapes + images, z-sorted (one Konva layer)
     connectorItems,        // connector items, z-sorted (own layer below shapes)
+    frameItems = [],       // frames, z-sorted (own layer below connectors)
+    editingFrameId,        // frame whose title is being edited → hide its painted title
     stageRef,              // forwarded to <Stage> so the page can export a PNG
     onStrokeCommit,
     onShapeCommit,
     onSelect,              // (id|null, additive)
     onMarqueeSelect,       // (ids[], additive)
     onErase,               // (id)
+    onPrecisionErase,      // (worldCenter, worldRadius) — cut ink under the precision eraser
+    onPrecisionEraseEnd,   // () — that gesture is over
+    onSmartStroke,         // (strokePartial) — a smart-drawing stroke, to recognise
+    onPaint,               // (itemId) — the paint bucket clicked this item
     onPlaceText,           // (worldPoint)
     onImageDrop,           // (file, worldPoint)
     onShapeDoubleClick,    // (itemId) — double-click a shape to edit text
     onEmptyDoubleClick,    // (world) — double-click empty canvas to make a box there
     editingShapeId,        // shape currently text-editing → hide its committed text
+    clips,                 // Map(itemId → world rect): cropped to a frame/widget (selection/attach.js)
+    topGraphicItems = [],  // graphics riding on a widget — drawn on the top canvas, above the widgets
+    topConnectorItems = [],// links between two of those
+    onWidgetIds,           // Set of their ids (selection/attach.js widgetBorne)
+    topStageRef,           // the top canvas's <Stage> (PNG export composites it)
+    frameCutLabels,        // Map(frameId → "2 cropped") for the frame titles
     beginTransaction,
     endTransaction,
     overlayChildren,
     selectionOverlay,
     contextToolbar,
+    plain = false,         // no dot grid (presenting slides)
 }) {
     const containerRef = useRef(null)
     const [size, setSize] = useState({ width: 0, height: 0 })
@@ -74,6 +108,7 @@ function SandboxCanvas({
     const marqueeRef = useRef(null)   // { startWorld, rect, additive, moved }
     const eraseRef = useRef(null)     // { pointerId }
     const lassoRef = useRef(null)     // { points:[[x,y],...], additive }
+    const eraserRingRef = useRef(null) // DOM ring that follows the precision eraser
     // Touch bookkeeping — palm rejection + two-finger pan/pinch.
     const pointersRef = useRef(new Map())  // touch pointerId → {x,y} screen
     const penDownRef = useRef(null)         // active stylus pointerId, or null
@@ -81,8 +116,8 @@ function SandboxCanvas({
 
     const latestRef = useRef(null)
     latestRef.current = {
-        canvas, items, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
-        onErase, onPlaceText, onImageDrop, onShapeDoubleClick, onEmptyDoubleClick, beginTransaction, endTransaction,
+        canvas, items, onWidgetIds, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
+        onErase, onPrecisionErase, onPrecisionEraseEnd, onSmartStroke, onPaint, onPlaceText, onImageDrop, onShapeDoubleClick, onEmptyDoubleClick, beginTransaction, endTransaction,
     }
 
     useLayoutEffect(() => {
@@ -107,8 +142,17 @@ function SandboxCanvas({
             // instead of zooming the canvas — anywhere inside it, header included.
             const card = e.target?.closest?.('[data-sb-scrollcard="true"]')
             if (card) {
-                const scroller = card.querySelector('[data-sb-scroll="true"]')
-                if (scroller) { e.preventDefault(); scroller.scrollTop += e.deltaY; return }
+                // The nearest scroller under the pointer that can move (a table inside a widget's body),
+                // else the card's first. Shift+wheel or a sideways swipe scrolls across.
+                const near = e.target.closest('[data-sb-scroll="true"]')
+                const canMove = (el) => el && card.contains(el) && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)
+                const scroller = canMove(near) ? near : card.querySelector('[data-sb-scroll="true"]')
+                if (scroller) {
+                    e.preventDefault()
+                    if (e.shiftKey && !e.deltaX) scroller.scrollLeft += e.deltaY
+                    else { scroller.scrollTop += e.deltaY; scroller.scrollLeft += e.deltaX }
+                    return
+                }
             }
             e.preventDefault()
             const rect = el.getBoundingClientRect()
@@ -153,7 +197,9 @@ function SandboxCanvas({
 
         const topHitAt = (world) => {
             const all = latestRef.current.items
-            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+            const zoom = latestRef.current.canvas.viewport.zoom || 1
+            // Format widgets are DOM windows that take their own presses (like cards).
+            const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type) && !isFrame(i) && !isFormat(i)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
             for (const it of sorted) if (itemHitTest(it, world.x, world.y, 2)) return it
             // Connectors sit below shapes — test them only when no shape was hit.
             const connectors = all.filter(i => i.type === 'connector')
@@ -166,12 +212,46 @@ function SandboxCanvas({
                     if (pts && connectorHitTest(pts, world.x, world.y, tol)) return c
                 }
             }
+            // Frames paint beneath everything, so they are hit last — and only by
+            // their title or border, leaving the interior free for a marquee.
+            const frames = all.filter(isFrame).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+            for (const f of frames) if (frameHit(f, world.x, world.y, zoom)) return f
             return null
         }
 
+        // Something drawn on a widget (top canvas) under `world`, or near enough
+        // that its connection dot has caught the pointer.
+        const overTop = (world) => {
+            const { onWidgetIds: ids, items: all, canvas: cv } = latestRef.current
+            if (!ids?.size) return false
+            if (cv.hoverId != null && cv.hoverSide && ids.has(cv.hoverId)) return true
+            return all.some(it => ids.has(it.id) && itemHitTest(it, world.x, world.y, 2))
+        }
+
+        // Strokes, shapes (stickies, frames, lines) and connectors — never images, cards or widgets.
         const eraseAt = (world) => {
             const hit = topHitAt(world)
-            if (hit) latestRef.current.onErase?.(hit.id)
+            if (hit && hit.type !== 'image') latestRef.current.onErase?.(hit.id)
+        }
+        // Precision eraser: cut along the path from the last position, in steps
+        // of half the radius, so a fast drag leaves no un-erased gaps.
+        const precisionEraseTo = (world) => {
+            const st = eraseRef.current
+            const r = PRECISION_ERASER_PX / (latestRef.current.canvas.viewport.zoom || 1)
+            const from = st.last || world
+            const steps = Math.max(1, Math.ceil(Math.hypot(world.x - from.x, world.y - from.y) / (r / 2)))
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps
+                latestRef.current.onPrecisionErase?.({ x: from.x + (world.x - from.x) * t, y: from.y + (world.y - from.y) * t }, r)
+            }
+            st.last = world
+        }
+        const moveEraserRing = (screen) => {
+            const ring = eraserRingRef.current
+            if (!ring) return
+            ring.style.left = `${Math.round(screen.x - PRECISION_ERASER_PX)}px`
+            ring.style.top = `${Math.round(screen.y - PRECISION_ERASER_PX)}px`
+            ring.style.display = 'block'
         }
 
         // Two-finger gesture math.
@@ -185,7 +265,10 @@ function SandboxCanvas({
         // when a second finger lands and we switch to a pan/pinch gesture.
         const abortActiveGestures = () => {
             const { canvas, endTransaction } = latestRef.current
-            if (eraseRef.current) { eraseRef.current = null; endTransaction?.() }
+            if (eraseRef.current) {
+                if (eraseRef.current.precise) latestRef.current.onPrecisionEraseEnd?.()
+                eraseRef.current = null; endTransaction?.()
+            }
             canvas.activeStrokeRef.current = null
             canvas.activeShapeRef.current = null
             drawingRef.current = null
@@ -201,20 +284,38 @@ function SandboxCanvas({
             const { canvas, onPlaceText } = latestRef.current
             // Middle mouse button → pan from anywhere, regardless of the active
             // tool (and over cards). preventDefault suppresses the OS autoscroll.
+            //
+            // Panning owns the press outright: stopPropagation keeps it from
+            // reaching a card underneath (cards' React handlers run after this
+            // native listener), which would otherwise start dragging the card
+            // at the same time — or, with Space, instead.
             if (e.button === 1) {
                 e.preventDefault()
+                e.stopPropagation()
                 lastPanRef.current = screenPointerWorld(e).screen
                 midPanRef.current = true
                 el.setPointerCapture?.(e.pointerId)
                 return
             }
             if (e.button !== 0 && e.button !== undefined) return
+            // Space-drag / the pan tool pan over cards too (handles excluded:
+            // those are the selection's own grips).
+            if ((canvas.tool === 'hand' || canvas.spacePanning) && e.pointerType !== 'touch' && !e.target?.closest?.('[data-sb-handle="true"]')) {
+                e.stopPropagation()
+                lastPanRef.current = screenPointerWorld(e).screen
+                el.setPointerCapture?.(e.pointerId)
+                return
+            }
             const target = e.target
-            if (target && target !== el && (
-                target.closest('[data-sb-card="true"]') || target.closest('[data-sb-handle="true"]')
-            )) return
-
             const { screen, world } = screenPointerWorld(e)
+            if (target && target !== el && target.closest('[data-sb-handle="true"]')) return
+            if (target && target !== el && target.closest('[data-sb-card="true"]')) {
+                // Over a card or widget: it takes the press — unless what's under
+                // the pointer is something drawn ON a widget (the top canvas).
+                if (!overTop(world)) return
+                e.stopPropagation()
+            }
+
             const tool = canvas.tool
 
             if (e.pointerType === 'pen') penDownRef.current = e.pointerId
@@ -248,24 +349,23 @@ function SandboxCanvas({
                 return
             }
 
-            if (tool === 'pen') {
+            if (DRAWS_INK.has(tool)) {
                 const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5
                 const minDist = 2 / canvas.viewport.zoom
-                // Tilt-aware width (stylus only): a flatter pen lays a broader
+                // Tilt-aware width (stylus pen only): a flatter pen lays a broader
                 // line. tiltX/tiltY are degrees from vertical (0–90).
                 const tiltMag = Math.min(90, Math.hypot(e.tiltX || 0, e.tiltY || 0))
                 const tiltMult = e.pointerType === 'pen' ? 1 + (tiltMag / 90) * 0.6 : 1
+                const group = canvas.ink[presetGroupFor(tool)]
+                const style = strokeStyleFor(tool, group.presets[group.active], { inputType: e.pointerType || 'mouse', tiltMult, minDist })
                 canvas.activeStrokeRef.current = {
                     pointerId: e.pointerId,
                     points: [[world.x, world.y, pressure]],
                     minDistSq: minDist * minDist,
-                    color: canvas.strokeColor,
-                    options: {
-                        size: canvas.brush.size * tiltMult,
-                        streamline: (canvas.brush.smoothing ?? 0.6) * MAX_STREAMLINE,
-                        inputType: e.pointerType || 'mouse',
-                        minDist,
-                    },
+                    tool,
+                    color: style.color,
+                    highlighter: style.highlighter,
+                    options: style.options,
                 }
                 el.setPointerCapture?.(e.pointerId)
                 drawingRef.current = { pointerId: e.pointerId }
@@ -284,11 +384,12 @@ function SandboxCanvas({
                 return
             }
 
-            if (tool === 'eraser') {
+            if (tool === 'eraser' || tool === 'precisionEraser') {
                 latestRef.current.beginTransaction?.()
-                eraseRef.current = { pointerId: e.pointerId }
+                const precise = tool === 'precisionEraser'
+                eraseRef.current = { pointerId: e.pointerId, precise, last: null }
                 el.setPointerCapture?.(e.pointerId)
-                eraseAt(world)
+                if (precise) precisionEraseTo(world); else eraseAt(world)
                 return
             }
 
@@ -297,10 +398,31 @@ function SandboxCanvas({
                 return
             }
 
-            // pointer tool — select a graphic, or start a marquee.
+            if (tool === 'fill') {
+                const hit = topHitAt(world)
+                if (hit) latestRef.current.onPaint?.(hit.id)
+                return
+            }
+
+            // pointer tool — near a shape's dot (magnetised): start an arrow from it.
+            const api = canvas.overlayApiRef?.current
+            if (canvas.hoverId != null && canvas.hoverSide && api?.beginConnectorFrom) {
+                if (api.beginConnectorFrom(e, canvas.hoverId, canvas.hoverSide)) return
+            }
+
+            // …else select what's under the pointer and let the same press drag it
+            // (no click-then-drag). Connectors stay click-to-select.
             const hit = topHitAt(world)
             if (hit) {
+                const wasSelected = canvas.selectedIds.has(hit.id)
                 latestRef.current.onSelect?.(hit.id, e.shiftKey)
+                if (!e.shiftKey && hit.type !== 'connector' && !hit.payload?.locked && api?.beginMove) {
+                    const all = latestRef.current.items
+                    const gid = hit.payload?.groupId
+                    const ids = wasSelected ? [...canvas.selectedIds]
+                        : gid ? all.filter(i => i.payload?.groupId === gid).map(i => i.id) : [hit.id]
+                    api.beginMove(e, ids)
+                }
             } else {
                 if (!e.shiftKey) latestRef.current.onSelect?.(null, false)
                 marqueeRef.current = { startWorld: world, rect: null, additive: e.shiftKey }
@@ -329,6 +451,8 @@ function SandboxCanvas({
                 return
             }
 
+            if (canvas.tool === 'precisionEraser' && e.pointerType !== 'touch') moveEraserRing(screenPointerWorld(e).screen)
+
             // ---- hover detection for connection dots (idle pointer tool) ----
             // Only when nothing is being dragged/drawn and no connector drag is
             // live, so the 4 side dots appear under the cursor without churn.
@@ -336,10 +460,25 @@ function SandboxCanvas({
                 && !marqueeRef.current && !drawingRef.current && !shapingRef.current
                 && !eraseRef.current && !lassoRef.current && !lastPanRef.current
                 && !canvas.spacePanning && !canvas.activeConnectorRef?.current) {
+                // Over a dot, a handle or the context bar: keep whatever is hovered.
+                // The dots sit OUTSIDE the shape, so re-testing here would clear the
+                // hover and unmount the very dot the pointer is reaching for.
+                const t = e.target
+                const onOverlay = !!(t && t !== el && t.closest?.('[data-sb-handle="true"]') && !t.closest?.('[data-sb-move="true"]'))
                 const { world } = screenPointerWorld(e)
-                const h = topHitAt(world)
-                const hid = (h && h.type === 'shape') ? h.id : null
-                if (hid !== canvas.hoverId) canvas.setHoverId(hid)
+                const h = onOverlay ? null : topHitAt(world)
+                const all = latestRef.current.items
+                const current = canvas.hoverId != null ? all.find(i => i.id === canvas.hoverId) : null
+                // Shapes that take arrows, topmost first — the magnet zone picks among them.
+                const candidates = all.filter(isConnectable).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+                const r = resolveHover({
+                    hitId: (h && isConnectable(h)) ? h.id : null,
+                    // A non-connectable item on top (a card, a stroke) blocks the magnet below it.
+                    candidates: h && !isConnectable(h) ? [] : candidates,
+                    current, world, zoom: canvas.viewport.zoom, onOverlay,
+                })
+                if (r.id !== canvas.hoverId) canvas.setHoverId(r.id)
+                if (!r.keepSide && r.side !== canvas.hoverSide) canvas.setHoverSide(r.side)
             }
 
             // ---- two-finger pan/pinch ----
@@ -399,12 +538,22 @@ function SandboxCanvas({
                 const { world } = screenPointerWorld(e)
                 let x1 = world.x, y1 = world.y
                 if (e.shiftKey) {
-                    // constrain to square / 45° for shapes & lines
                     const s = canvas.activeShapeRef.current
                     const dx = x1 - s.x0, dy = y1 - s.y0
-                    const m = Math.max(Math.abs(dx), Math.abs(dy))
-                    x1 = s.x0 + Math.sign(dx || 1) * m
-                    y1 = s.y0 + Math.sign(dy || 1) * m
+                    if (isLineKind(s.kind) || s.kind === 'taperedArrow') {
+                        // Lines/arrows: snap the DIRECTION to the nearest 45° and keep
+                        // the length — so straight across, straight down, or a clean
+                        // diagonal. (A square constraint only ever gave diagonals.)
+                        const len = Math.hypot(dx, dy)
+                        const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4)
+                        x1 = s.x0 + Math.round(Math.cos(a) * len * 1000) / 1000
+                        y1 = s.y0 + Math.round(Math.sin(a) * len * 1000) / 1000
+                    } else {
+                        // Shapes: a square / circle / regular polygon.
+                        const m = Math.max(Math.abs(dx), Math.abs(dy))
+                        x1 = s.x0 + Math.sign(dx || 1) * m
+                        y1 = s.y0 + Math.sign(dy || 1) * m
+                    }
                 }
                 canvas.activeShapeRef.current.x1 = x1
                 canvas.activeShapeRef.current.y1 = y1
@@ -413,8 +562,8 @@ function SandboxCanvas({
 
             // eraser drag
             if (eraseRef.current?.pointerId === e.pointerId) {
-                const { world } = screenPointerWorld(e)
-                eraseAt(world)
+                const { world, screen } = screenPointerWorld(e)
+                if (eraseRef.current.precise) { moveEraserRing(screen); precisionEraseTo(world) } else eraseAt(world)
                 return
             }
 
@@ -444,7 +593,7 @@ function SandboxCanvas({
         }
 
         const onPointerUp = (e) => {
-            const { canvas, onStrokeCommit, onShapeCommit, onMarqueeSelect } = latestRef.current
+            const { canvas, onStrokeCommit, onShapeCommit, onMarqueeSelect, onSmartStroke } = latestRef.current
 
             if (e.pointerType === 'touch') {
                 pointersRef.current.delete(e.pointerId)
@@ -481,13 +630,17 @@ function SandboxCanvas({
                 if (!isFinite(maxY)) maxY = minY
                 const localOutline = flatOutline.map((v, i) => v - (i % 2 === 0 ? minX : minY))
                 const rawPoints = active.points.map(p => [p[0], p[1], p[2]])
-                onStrokeCommit?.({
+                const partial = {
                     type: 'stroke', x: minX, y: minY, w: maxX - minX, h: maxY - minY, rotation: 0,
                     payload: {
                         flatOutline: localOutline, points: rawPoints, color: active.color,
                         options: active.options, baseW: maxX - minX, baseH: maxY - minY,
+                        // Optional and absent on pen ink: older builds just draw it as a stroke.
+                        ...(active.highlighter ? { highlighter: true } : null),
                     },
-                })
+                }
+                if (active.tool === 'smart' && onSmartStroke) onSmartStroke(partial)
+                else onStrokeCommit?.(partial)
                 canvas.activeStrokeRef.current = null
                 drawingRef.current = null
                 el.releasePointerCapture?.(e.pointerId)
@@ -505,7 +658,12 @@ function SandboxCanvas({
                     const w = Math.abs(s.x1 - s.x0), h = Math.abs(s.y1 - s.y0)
                     const isLine = isLineKind(s.kind)
                     const big = isLine ? (w > 4 || h > 4) : (w > 3 && h > 3)
-                    if (big) {
+                    // A plain click with the sticky / frame tool places a default-sized one.
+                    if (!big && (s.kind === 'sticky' || s.kind === 'frame')) {
+                        const [dw, dh] = s.kind === 'sticky' ? [192, 192] : [640, 400]
+                        const at = s.kind === 'sticky' ? { x: s.x0 - dw / 2, y: s.y0 - dh / 2 } : { x: s.x0, y: s.y0 }
+                        onShapeCommit?.({ type: 'shape', x: Math.round(at.x), y: Math.round(at.y), w: dw, h: dh, rotation: 0, payload: { kind: s.kind } })
+                    } else if (big) {
                         let payload
                         if (isLine) {
                             let pts
@@ -537,6 +695,7 @@ function SandboxCanvas({
 
             // eraser end
             if (eraseRef.current?.pointerId === e.pointerId) {
+                if (eraseRef.current.precise) latestRef.current.onPrecisionEraseEnd?.()
                 eraseRef.current = null
                 el.releasePointerCapture?.(e.pointerId)
                 latestRef.current.endTransaction?.()
@@ -551,7 +710,8 @@ function SandboxCanvas({
                 canvas.setMarquee(null)
                 if (m.moved && m.rect) {
                     // Connectors have no box — selected by direct click, not marquee.
-                    const ids = latestRef.current.items.filter(it => it.type !== 'connector' && marqueeIntersects(it, m.rect)).map(it => it.id)
+                    const ids = latestRef.current.items.filter(it => it.type !== 'connector'
+                        && (isFrame(it) ? marqueeTakesFrame(it, m.rect) : marqueeIntersects(it, m.rect))).map(it => it.id)
                     onMarqueeSelect?.(ids, m.additive)
                 }
                 return
@@ -568,6 +728,7 @@ function SandboxCanvas({
                     for (const p of points) { flat.push(p[0], p[1]) }
                     const ids = latestRef.current.items.filter(it => {
                         if (it.type === 'connector') return false   // no box — click-select only
+                        if (isFrame(it)) return false                // lasso takes contents, not the frame
                         const b = itemAABB(it)
                         return pointInPolygon(flat, b.x + b.w / 2, b.y + b.h / 2)
                     }).map(it => it.id)
@@ -584,17 +745,17 @@ function SandboxCanvas({
             // Double-click enters text-editing on a shape from any tool that
             // isn't an active drawing/gesture (pen/eraser/hand/lasso) — so the
             // user doesn't have to switch back to the pointer tool first.
-            if (cv.tool === 'pen' || cv.tool === 'eraser' || cv.tool === 'hand' || cv.tool === 'lasso') return
+            if (DRAWS_INK.has(cv.tool) || cv.tool === 'fill' || cv.tool === 'eraser' || cv.tool === 'precisionEraser' || cv.tool === 'hand' || cv.tool === 'lasso') return
             const target = e.target
             // The selection overlay's move region (data-sb-move) sits over the
             // shape body and is wrapped in a data-sb-handle root — let a
             // double-click there through so it still opens text editing.
             const onMoveRegion = target?.closest?.('[data-sb-move="true"]')
-            if (!onMoveRegion && target && target !== el && (
-                target.closest('[data-sb-card="true"]') || target.closest('[data-sb-handle="true"]')
-            )) return
             const rect = el.getBoundingClientRect()
             const world = cv.worldFromScreen({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+            if (!onMoveRegion && target && target !== el && (
+                (target.closest('[data-sb-card="true"]') && !overTop(world)) || target.closest('[data-sb-handle="true"]')
+            )) return
             const hit = topHitAt(world)
             if (hit && hit.type === 'shape') cb(hit.id)
             // Nothing there (cards and handles returned above): make a box on the spot.
@@ -604,8 +765,9 @@ function SandboxCanvas({
 
         // Clear the connection-dot hover when the pointer leaves the canvas.
         const onPointerLeave = () => {
+            if (eraserRingRef.current) eraserRingRef.current.style.display = 'none'
             const cv = latestRef.current.canvas
-            if (cv.hoverId != null && !cv.activeConnectorRef?.current) cv.setHoverId(null)
+            if (cv.hoverId != null && !cv.activeConnectorRef?.current) { cv.setHoverId(null); cv.setHoverSide(null) }
         }
 
         // Suppress the OS middle-click autoscroll (fires on mousedown, which
@@ -632,9 +794,14 @@ function SandboxCanvas({
     }, [])
 
     const tool = canvas.tool
-    const cursor = canvas.spacePanning || tool === 'hand'
+    const cursor = (tool === 'pointer' && canvas.hoverSide) ? 'crosshair'
+        : canvas.spacePanning || tool === 'hand'
         ? (lastPanRef.current ? 'grabbing' : 'grab')
-        : tool === 'pen' || tool === 'lasso' || SHAPE_TOOLS.includes(tool)
+        : tool === 'precisionEraser'
+        ? 'none'
+        : tool === 'fill'
+        ? BUCKET_CURSOR
+        : DRAWS_INK.has(tool) || tool === 'lasso' || SHAPE_TOOLS.includes(tool)
             ? 'crosshair'
             : tool === 'eraser'
                 ? 'cell'
@@ -682,6 +849,12 @@ function SandboxCanvas({
     // resolved geometry so only links whose endpoints moved actually re-render.
     const byId = useMemo(() => new Map(items.map(i => [i.id, i])), [items])
 
+    // Connection outlines (GlowLayer): what a clicked item touches through its
+    // links. Hidden while anything is being dragged.
+    const glow = useMemo(() => (canvas.dragging ? null : glowFor(items, canvas.selectedIds)), [items, canvas.selectedIds, canvas.dragging])
+    // What rides on a widget draws on the top canvas, so its glow does too.
+    const topIds = useMemo(() => new Set([...topGraphicItems, ...topConnectorItems].map(i => i.id)), [topGraphicItems, topConnectorItems])
+
     return (
         <div
             ref={containerRef}
@@ -695,7 +868,7 @@ function SandboxCanvas({
                 WebkitUserSelect: 'none', // WebKitGTK ignores the unprefixed one
                 overflow: 'hidden',
                 backgroundColor: 'var(--bg-surface)',
-                ...gridStyle,
+                ...(plain ? null : gridStyle),
             }}
         >
             <Stage
@@ -708,8 +881,35 @@ function SandboxCanvas({
                 scaleY={canvas.viewport.zoom}
                 pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
             >
+                <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} clips={clips} cutLabels={frameCutLabels} />
+                <GlowLayer glow={glow} byId={byId} cutIds={canvas.selectedIds} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
-                <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} />
+                <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} clips={clips} />
+            </Stage>
+
+            <OverlayLayer viewport={canvas.viewport} width={size.width} height={size.height} passThrough={passesCards(tool)}>
+                {overlayChildren}
+            </OverlayLayer>
+
+            {/* The top canvas: above the cards and widgets. It draws what rides on
+                a widget (or the widget's DOM would hide it) and the live previews
+                of ink, shapes and links — so drawing over a widget shows. Same pan
+                and zoom as the board; it takes no pointer events. */}
+            <Stage
+                ref={topStageRef}
+                width={size.width}
+                height={size.height}
+                x={canvas.viewport.x}
+                y={canvas.viewport.y}
+                scaleX={canvas.viewport.zoom}
+                scaleY={canvas.viewport.zoom}
+                pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
+                listening={false}
+                style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+            >
+                {glow && topIds.size > 0 && <GlowLayer glow={glow} byId={byId} only={topIds} cutIds={canvas.selectedIds} />}
+                {topConnectorItems.length > 0 && <ConnectorLayer connectorItems={topConnectorItems} byId={byId} selectedIds={canvas.selectedIds} />}
+                {topGraphicItems.length > 0 && <GraphicsLayer graphicItems={topGraphicItems} editingShapeId={editingShapeId} clips={clips} />}
                 <ActiveLayer
                     activeStrokeRef={canvas.activeStrokeRef}
                     activeShapeRef={canvas.activeShapeRef}
@@ -717,11 +917,18 @@ function SandboxCanvas({
                 />
             </Stage>
 
-            <OverlayLayer viewport={canvas.viewport} width={size.width} height={size.height}>
-                {overlayChildren}
-            </OverlayLayer>
-
             {selectionOverlay}
+
+            {/* The precision eraser's footprint. Moved imperatively on pointermove
+                (left/top in whole pixels, no transform), so no re-render per move. */}
+            {tool === 'precisionEraser' && (
+                <div ref={eraserRingRef} aria-hidden="true" style={{
+                    position: 'absolute', display: 'none', pointerEvents: 'none', zIndex: 5,
+                    width: PRECISION_ERASER_PX * 2, height: PRECISION_ERASER_PX * 2, boxSizing: 'border-box',
+                    borderRadius: '50%', border: '1.5px solid var(--accent-warning)',
+                    backgroundColor: 'rgba(240, 184, 64, 0.12)',
+                }} />
+            )}
 
             {contextToolbar}
         </div>

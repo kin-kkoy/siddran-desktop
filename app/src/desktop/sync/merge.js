@@ -13,6 +13,7 @@
 // Both devices must independently reach the SAME merged result, or they'll ping-pong
 // forever. That's why every tie-break here is deterministic and symmetric rather
 // than "prefer local".
+import { merge3 } from './text3'
 
 // Stable stringify: key order must not affect equality or the tie-break.
 function stable(v) {
@@ -137,4 +138,69 @@ export function mergeVault(base = EMPTY, local = EMPTY, remote = EMPTY) {
     },
     conflicts,
   }
+}
+
+// ── board items ─────────────────────────────────────────────────────
+// A board's items merge row by row (mergeRows). A Format widget (a shape with
+// payload.kind 'format') holds a whole dataset in its payload, so whole-item
+// last-write-wins would drop one side's records when both edited the same
+// widget. For those, the item is merged field by field and its `records` and
+// `fields` record by record — two people adding or editing different records
+// both keep their work. Only a key (or record) changed on both sides is a
+// conflict, settled by the same symmetric rules as everything else here.
+const isFormatItem = (it) => it?.type === 'shape' && it?.payload?.kind === 'format'
+const LISTS = new Set(['records', 'fields'])
+// A Doc's text (payload.body, view 'doc') merges line by line, like a note.
+const TEXTS = new Set(['body'])
+
+// One value, three ways. Returns [value, conflicted].
+function pick3(b, l, r) {
+  if (same(l, r)) return [l, false]
+  if (same(l, b)) return [r, false]
+  if (same(r, b)) return [l, false]
+  return [stable(l) > stable(r) ? l : r, true]   // both changed: deterministic either way round
+}
+
+function mergeKeys(b = {}, l = {}, r = {}, lists = new Set(), texts = new Set()) {
+  const out = {}
+  let conflicted = false
+  for (const k of new Set([...Object.keys(l), ...Object.keys(r)])) {
+    let v, c
+    if (lists.has(k) && (Array.isArray(l[k]) || Array.isArray(r[k]))) {
+      const m = mergeRows(b?.[k], l[k], r[k])
+      v = m.rows; c = m.conflicts.length > 0
+    } else if (texts.has(k) && typeof l[k] === 'string' && typeof r[k] === 'string') {
+      const base = typeof b?.[k] === 'string' ? b[k] : ''
+      const m = merge3(base, l[k], r[k])
+      // merge3 lets `ours` win a clash; both devices must land on the same text, so pick symmetrically.
+      if (m.conflict) { const n = merge3(base, r[k], l[k]); v = m.text > n.text ? m.text : n.text; c = true }
+      else { v = m.text; c = false }
+    } else {
+      // A key gone on one side and untouched on the other is a removal.
+      const inL = k in l, inR = k in r, inB = b && k in b
+      if (!inL && inB && same(r[k], b[k])) continue
+      if (!inR && inB && same(l[k], b[k])) continue
+      ;[v, c] = pick3(b?.[k], l[k], r[k])
+      if (v === undefined) continue
+    }
+    out[k] = v
+    if (c) conflicted = true
+  }
+  return [out, conflicted]
+}
+
+/** Merge a board's items (see above). Same `{rows, conflicts}` shape as mergeRows. */
+export function mergeSandboxItems(base = [], local = [], remote = []) {
+  const B = new Map((base || []).map((it) => [String(it.id), it]))
+  const clean = new Set()   // formats both sides edited that merged without a clash
+  const both = (l, r) => {
+    if (!isFormatItem(l) || !isFormatItem(r)) return newer(l, r)
+    const b = B.get(String(l.id))
+    const [top, c1] = mergeKeys(b, { ...l, payload: undefined }, { ...r, payload: undefined })
+    const [payload, c2] = mergeKeys(b?.payload, l.payload, r.payload, LISTS, TEXTS)
+    if (!c1 && !c2) clean.add(String(l.id))
+    return { ...top, payload }
+  }
+  const { rows, conflicts } = mergeRows(base, local, remote, { both })
+  return { rows, conflicts: conflicts.filter((c) => !clean.has(c.key)) }
 }

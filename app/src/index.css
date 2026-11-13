@@ -10,6 +10,7 @@
   --border-default: #252538;
   --border-strong: #333350;
   --text-primary: #e2ddf5;
+  --outline-contrast: #ffffff;   /* floating bars' outline — black on light themes (SettingsContext) */
   --text-secondary: #b8b3d0;
   --text-muted: #635f80;
   --text-dim: #635f80;

@@ -4,6 +4,9 @@ import { drawStrokePath } from './strokeOutline'
 import { useKonvaImage } from '../../../hooks/useKonvaImage'
 import { resolveImageUrl } from '../../../utils/imageUpload'
 import { renderShape, isLineKind } from '../shapes/registry'
+import { dashFor } from '../connectors/lineStyle'
+import { taperedArrowPolygon } from '../connectors/heads'
+import { konvaTextProps, fitFontSize, contrastText, STICKY_DEFAULT } from '../text/textStyle'
 
 /**
  * ONE Konva layer for ALL committed graphics (strokes + shapes + images),
@@ -59,6 +62,18 @@ const CommittedStroke = memo(function CommittedStroke({ item }) {
     )
 })
 
+// Lighten (amt > 0) or darken (amt < 0) a #rrggbb[aa] colour, keeping alpha.
+function shade(hex, amt) {
+    const m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(hex || '')
+    if (!m) return hex
+    const n = parseInt(m[1], 16)
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+        const t = amt > 0 ? v + (255 - v) * amt : v * (1 + amt)
+        return Math.max(0, Math.min(255, Math.round(t))).toString(16).padStart(2, '0')
+    })
+    return `#${ch.join('')}${m[2] || ''}`
+}
+
 const centerProps = (item) => {
     const w = item.w ?? 0
     const h = item.h ?? 0
@@ -74,32 +89,84 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
     // Text label — shared by all filled (non-line) shapes. Hidden while this
     // shape is being edited so the live DOM editor doesn't double up with the
     // committed Konva text (which looked like a shadow/glitch).
+    const isSticky = kind === 'sticky'
+    const pad = isSticky ? Math.max(12, Math.min(aw, ah) * 0.12) : 8
+    const fontSize = p.fontSize || (isSticky ? fitFontSize(p.text, aw - pad * 2, ah - pad * 2, p, 28, 10) : 16)
     const textNode = (p.text && !hideText && !isLineKind(kind)) ? (
         <Text
             x={0} y={0} width={aw} height={ah}
             text={p.text}
-            align={p.textAlign || 'center'}
-            verticalAlign="middle"
-            fontSize={p.fontSize || 16}
-            fontFamily="Inter, system-ui, sans-serif"
-            fontStyle={p.bold ? 'bold' : 'normal'}
-            fill={p.textColor || '#ffffff'}
-            padding={8}
+            {...konvaTextProps(p)}
+            fontSize={fontSize}
+            fill={p.textColor || (isSticky ? contrastText(p.fill || STICKY_DEFAULT) : '#ffffff')}
+            padding={pad}
+            wrap="word"
+            ellipsis={isSticky}
             listening={false} perfectDrawEnabled={false}
         />
     ) : null
 
-    // ── fast-path: ellipse ───────────────────────────────────────────────
+    // ── sticky note: looks like paper, not a box — a gentle top-to-bottom
+    // shade, the faint adhesive strip along the top, a lifted shadow, and the
+    // bottom-right corner folded over. No border (spec §7.3).
+    if (isSticky) {
+        const base = p.fill && p.fill !== 'transparent' ? p.fill : STICKY_DEFAULT
+        const fold = Math.min(aw, ah) * 0.12
+        return (
+            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
+                <Shape
+                    sceneFunc={(ctx, shape) => {
+                        ctx.beginPath()
+                        ctx.moveTo(0, 0); ctx.lineTo(aw, 0); ctx.lineTo(aw, ah - fold)
+                        ctx.lineTo(aw - fold, ah); ctx.lineTo(0, ah); ctx.closePath()
+                        ctx.fillStrokeShape(shape)
+                    }}
+                    fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                    fillLinearGradientEndPoint={{ x: 0, y: ah }}
+                    fillLinearGradientColorStops={[0, shade(base, 0.10), 1, shade(base, -0.04)]}
+                    shadowColor="#000" shadowOpacity={0.32} shadowBlur={12} shadowOffsetX={1} shadowOffsetY={5}
+                    listening={false} perfectDrawEnabled={false}
+                />
+                {/* adhesive strip */}
+                <Rect x={0} y={0} width={aw} height={Math.max(6, ah * 0.1)} fill="#000" opacity={0.05} listening={false} perfectDrawEnabled={false} />
+                {/* the folded-over corner */}
+                <Line points={[aw - fold, ah, aw, ah - fold, aw - fold, ah - fold]} closed
+                    fill={shade(base, -0.18)} shadowColor="#000" shadowOpacity={0.25} shadowBlur={3} shadowOffsetX={-1} shadowOffsetY={-1}
+                    listening={false} perfectDrawEnabled={false} />
+                {textNode}
+            </Group>
+        )
+    }
+
+    // ── fast-path: ellipse (native Konva <Ellipse>; the registry has no path
+    // for it). Lost once in the sticky rework (816e3ae), which made every
+    // ellipse on the board invisible. ──
     if (kind === 'ellipse') {
         return (
             <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
                 <Ellipse
                     x={aw / 2} y={ah / 2} radiusX={aw / 2} radiusY={ah / 2}
                     fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                    stroke={p.stroke} strokeWidth={p.strokeWidth}
+                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
                     listening={false} perfectDrawEnabled={false}
                 />
                 {textNode}
+            </Group>
+        )
+    }
+
+    // ── tapered arrow: a filled polygon between the two stored endpoints ──
+    if (kind === 'taperedArrow') {
+        const baseW = p.baseW || w || 1, baseH = p.baseH || h || 1
+        const pts = p.points || [0, 0, baseW, baseH]
+        const sx = w / baseW, sy = h / baseH
+        // Scale the endpoints, not the polygon, so the arrow keeps its thickness.
+        const poly = taperedArrowPolygon({ x: pts[0] * sx, y: pts[1] * sy }, { x: pts[2] * sx, y: pts[3] * sy }, p.strokeWidth || 2)
+        if (!poly) return null
+        return (
+            <Group x={x} y={y} offsetX={aw / 2} offsetY={ah / 2} rotation={rotation}>
+                <Line points={poly} closed fill={p.stroke} stroke={p.stroke} strokeWidth={1.5}
+                    lineJoin="round" listening={false} perfectDrawEnabled={false} />
             </Group>
         )
     }
@@ -118,7 +185,11 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                 scaleY={baseH ? h / baseH : 1}
                 rotation={rotation}
                 points={p.points}
-                stroke={p.stroke} strokeWidth={p.strokeWidth}
+                // A line bent from its middle handle: a smooth curve through the
+                // middle point (selection/lineHandles.js). Older builds draw it
+                // as a two-segment line, which is still the right shape roughly.
+                tension={p.curved && p.points?.length >= 6 ? 0.5 : 0}
+                stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)}
                 fill={isArrow ? p.stroke : undefined}
                 pointerLength={isArrow ? 10 : undefined}
                 pointerWidth={isArrow ? 10 : undefined}
@@ -136,7 +207,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                     x={0} y={0} width={aw} height={ah}
                     cornerRadius={p.radius || (kind === 'roundedRect' ? 12 : 0)}
                     fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                    stroke={p.stroke} strokeWidth={p.strokeWidth}
+                    stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round"
                     listening={false} perfectDrawEnabled={false}
                 />
                 {textNode}
@@ -155,7 +226,7 @@ const CommittedShape = memo(function CommittedShape({ item, hideText = false }) 
                     ctx.fillStrokeShape(shape)
                 }}
                 fill={p.fill && p.fill !== 'transparent' ? p.fill : undefined}
-                stroke={p.stroke} strokeWidth={p.strokeWidth}
+                stroke={p.stroke} strokeWidth={p.strokeWidth} dash={dashFor(p)} lineCap="round" lineJoin="round"
                 listening={false} perfectDrawEnabled={false}
             />
             {textNode}
@@ -181,16 +252,24 @@ const CommittedImage = memo(function CommittedImage({ item }) {
     )
 })
 
-const GraphicsLayer = memo(function GraphicsLayer({ graphicItems, editingShapeId = null }) {
+// Cropped to a frame (selection/attach.js): wrapped in a clipped group, in
+// world coordinates, so it works for rotated things too.
+const clipped = (node, item, clips) => {
+    const r = clips?.get(item.id)
+    if (!r) return node
+    return <Group key={item.id} clipX={r.x} clipY={r.y} clipWidth={r.w} clipHeight={r.h} listening={false}>{node}</Group>
+}
+
+const GraphicsLayer = memo(function GraphicsLayer({ graphicItems, editingShapeId = null, clips }) {
     return (
         // listening=false: every child already opts out, and selection uses the
         // manual world-space hit-test — so Konva skips building/redrawing the hit
         // canvas, ~halving paint cost when panning a dense board.
         <Layer listening={false}>
             {graphicItems.map(item => {
-                if (item.type === 'image') return <CommittedImage key={item.id} item={item} />
-                if (item.type === 'shape') return <CommittedShape key={item.id} item={item} hideText={item.id === editingShapeId} />
-                return <CommittedStroke key={item.id} item={item} />
+                if (item.type === 'image') return clipped(<CommittedImage key={item.id} item={item} />, item, clips)
+                if (item.type === 'shape') return clipped(<CommittedShape key={item.id} item={item} hideText={item.id === editingShapeId} />, item, clips)
+                return clipped(<CommittedStroke key={item.id} item={item} />, item, clips)
             })}
         </Layer>
     )

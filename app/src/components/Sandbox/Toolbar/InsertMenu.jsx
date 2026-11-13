@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuStickyNote, LuListTodo, LuImage, LuFileText } from 'react-icons/lu'
+import { LuStickyNote, LuListTodo, LuImage, LuFileText, LuTable2, LuSquareKanban, LuGrid2X2, LuChartGantt, LuFilePen, LuPresentation } from 'react-icons/lu'
 import styles from './ShapePicker.module.css'
 
 /**
@@ -8,17 +8,22 @@ import styles from './ShapePicker.module.css'
  * "Insert +" menu. Portal + fixed positioning + click-outside + Escape, mirroring
  * ShapePicker (whose CSS it reuses).
  */
-function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf }) {
+function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickImage, onPickPdf, onPickFormat, onPickSlides }) {
     const panelRef = useRef(null)
     const [pos, setPos] = useState(null)
 
     useLayoutEffect(() => {
         if (!open || !anchorRef.current) return
         const r = anchorRef.current.getBoundingClientRect()
-        const GAP = 12
-        const PANEL_W = 172
-        setPos({ top: r.top - 6, left: Math.max(8, r.left - GAP - PANEL_W) })
+        setPos({ top: r.top - 6, right: r.left - 12, measured: false })
     }, [open, anchorRef])
+    // Once drawn: sit just left of the button at the list's own width, and move up if it would run off the bottom.
+    useLayoutEffect(() => {
+        const el = panelRef.current
+        if (!el || !pos || pos.measured) return
+        const top = Math.max(8, Math.min(pos.top, window.innerHeight - el.offsetHeight - 8))
+        setPos({ ...pos, top, left: Math.max(8, pos.right - el.offsetWidth), measured: true })
+    }, [pos])
 
     useEffect(() => {
         if (!open) return
@@ -45,13 +50,27 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
         { label: 'Task', Icon: LuListTodo, onClick: onPickTask },
         { label: 'Image', Icon: LuImage, onClick: onPickImage },
         { label: 'PDF', Icon: LuFileText, onClick: onPickPdf },
+        { divider: true },
+        // Format widgets: records you keep in the board, or your tasks — each a view of the same records.
+        ...(onPickFormat ? [
+            { label: 'Table', Icon: LuTable2, onClick: () => onPickFormat('table') },
+            { label: 'Kanban', Icon: LuSquareKanban, onClick: () => onPickFormat('kanban') },
+            { label: 'Timeline', Icon: LuChartGantt, onClick: () => onPickFormat('timeline') },
+            { label: 'Matrix', Icon: LuGrid2X2, onClick: () => onPickFormat('matrix') },
+            // A page of text (formats/doc): kept in the board, or a note.
+            { label: 'Doc', Icon: LuFilePen, onClick: () => onPickFormat('doc') },
+        ] : []),
+        // A slide sized for your display; more come from the Slides panel or the slide's bar (slides/).
+        ...(onPickSlides ? [{ label: 'Slides', Icon: LuPresentation, onClick: onPickSlides }] : []),
     ]
 
     return createPortal(
-        <div ref={panelRef} className={styles.panel} style={{ top: pos.top, left: pos.left }}>
-            {ITEMS.map(it => (
-                <button key={it.label} className={styles.menuItem} onClick={() => pick(it.onClick)}>
-                    <it.Icon size={15} />
+        <div ref={panelRef} className={`${styles.panel} ${styles.insertPanel}`}
+            style={{ top: pos.top, left: pos.left ?? -9999, visibility: pos.measured ? 'visible' : 'hidden' }}>
+            {/* Bigger rows than the shapes list: it opens now and then, and should read at a glance (the user's call). */}
+            {ITEMS.map((it, i) => it.divider ? <div key={`d${i}`} className={styles.insertDivider} /> : (
+                <button key={it.label} className={styles.insertItem} onClick={() => pick(it.onClick)}>
+                    <it.Icon size={24} />
                     <span>{it.label}</span>
                 </button>
             ))}

@@ -12,9 +12,11 @@
 //       A[Start] --> B{Logged in?}
 //       B -->|yes| C(Dashboard)
 //       B -- no --> D[/Login form/]
+import { isLineKind } from '../shapes/registry'
 
 const GAP_LAYER = 72
 const GAP_SIBLING = 48
+const LANE = 48           // across-room a lane takes (desktop only, see opts.drop)
 
 export const DEFAULT_STYLE = { stroke: '#e2ddf5', text: '#e2ddf5', fill: 'transparent', font: 16 }
 
@@ -200,8 +202,18 @@ export function nodeSize(label, kind, font = DEFAULT_STYLE.font) {
  * Layered layout of `nodes` (each { key, w, h }) and `edges` ({ from, to }).
  * Returns key → { x, y } top-left, with the whole drawing's top-left at
  * `origin`, plus each edge's sides. Used for text-to-diagram and for Tidy.
+ *
+ * `opts.drop` (desktop only — the node editor's "lower"): key → extra levels.
+ * A node with no children may sit that much further down, never deeper than
+ * the deepest level of its graph, so it never lands beside or below a child.
+ * diagram.rs has no such option and needs none: without it the layout is the
+ * same as ever. Also returned, for the editor: each node's level, which
+ * nodes have no children, and the depth before any drop.
+ *
+ * `opts.tidy` (desktop only — the node editor): place across the flow as a
+ * family tree instead (see tidyAcross). Levels are unchanged.
  */
-export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 }) {
+export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 }, opts = {}) {
   const n = nodes.length
   const index = new Map(nodes.map((nd, i) => [nd.key, i]))
   const E = edges.map((e) => [index.get(e.from), index.get(e.to)]).filter(([a, b]) => a != null && b != null)
@@ -229,19 +241,55 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 })
     for (const [a, b] of fwd) if (layer[b] < layer[a] + 1) { layer[b] = layer[a] + 1; changed = true }
     if (!changed) break
   }
+  const natDepth = Math.max(0, ...layer) + 1
+  const natural = layer.slice()
+  const hasKids = new Array(n).fill(false)
+  for (const [a] of fwd) hasKids[a] = true
+  let dropped = false
+  if (opts.drop) {
+    for (let v = 0; v < n; v++) {
+      const d = opts.drop.get(nodes[v].key) || 0
+      if (d > 0 && !hasKids[v] && layer[v] < natDepth - 1) { layer[v] = Math.min(natDepth - 1, layer[v] + d); dropped = true }
+    }
+  }
+  // A lowered node's link skips levels. So that it has a clear way down, each
+  // level it passes gets an invisible lane node (the classic layered-layout
+  // "dummy"), which takes up room like a narrow box; the link then runs down
+  // that lane. Only when something was lowered, so ordinary layouts — and the
+  // CLI's — are untouched.
+  let L = nodes, F = fwd
+  const lanes = new Map()   // "a>b" → its lane nodes, top to bottom
+  if (dropped) {
+    L = nodes.slice(); F = []
+    for (const [a, b] of fwd) {
+      if (layer[b] - layer[a] <= 1) { F.push([a, b]); continue }
+      let prev = a
+      const chain = []
+      for (let l = layer[a] + 1; l < layer[b]; l++) {
+        const d = L.length
+        L.push(dir === 'down' ? { key: null, w: LANE, h: 0 } : { key: null, w: 0, h: LANE })
+        layer[d] = l
+        chain.push(d)
+        F.push([prev, d]); prev = d
+      }
+      F.push([prev, b])
+      lanes.set(`${a}>${b}`, chain)
+    }
+  }
+  const N = L.length
   const depth = Math.max(0, ...layer) + 1
   const rows = Array.from({ length: depth }, () => [])
-  for (let v = 0; v < n; v++) rows[layer[v]].push(v)
+  for (let v = 0; v < N; v++) rows[layer[v]].push(v)
 
   // 3. Order within a layer: barycentre of neighbours, a few sweeps each way.
-  const posOf = () => { const p = new Array(n).fill(0); rows.forEach((r) => r.forEach((v, i) => { p[v] = i })); return p }
+  const posOf = () => { const p = new Array(N).fill(0); rows.forEach((r) => r.forEach((v, i) => { p[v] = i })); return p }
   for (let sweep = 0; sweep < 6; sweep++) {
     const down = sweep % 2 === 0
     const range = down ? [...Array(depth).keys()].slice(1) : [...Array(Math.max(0, depth - 1)).keys()].reverse()
     for (const l of range) {
       const p = posOf()
       const keyed = rows[l].map((v) => {
-        const nb = fwd.filter(([a, b]) => (down ? b === v : a === v)).map(([a, b]) => p[down ? a : b])
+        const nb = F.filter(([a, b]) => (down ? b === v : a === v)).map(([a, b]) => p[down ? a : b])
         return [nb.length ? nb.reduce((s, x) => s + x, 0) / nb.length : p[v], v]
       })
       keyed.sort((x, y) => x[0] - y[0])
@@ -250,12 +298,12 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 })
   }
 
   // 4. Coordinates. "Along" is the flow axis, "across" the sibling axis.
-  const along = (v) => (dir === 'down' ? nodes[v].h : nodes[v].w)
-  const across = (v) => (dir === 'down' ? nodes[v].w : nodes[v].h)
-  const cx = new Array(n).fill(0)
+  const along = (v) => (dir === 'down' ? L[v].h : L[v].w)
+  const across = (v) => (dir === 'down' ? L[v].w : L[v].h)
+  const cx = new Array(N).fill(0)
   rows.forEach((r, l) => {
     const want = r.map((v) => {
-      const parents = fwd.filter(([, b]) => b === v).map(([a]) => cx[a])
+      const parents = F.filter(([, b]) => b === v).map(([a]) => cx[a])
       return l === 0 || !parents.length ? NaN : parents.reduce((s, x) => s + x, 0) / parents.length
     })
     const total = r.reduce((s, v) => s + across(v), 0) + GAP_SIBLING * Math.max(0, r.length - 1)
@@ -274,6 +322,7 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 })
     const shift = diffs.length ? diffs.reduce((s, d) => s + d, 0) / diffs.length : 0
     r.forEach((v, i) => { cx[v] = placed[i][0] + shift })
   })
+  if (opts.tidy) tidyAcross(N, F, layer, across, cx)
   const layerAt = []
   let acc = 0
   rows.forEach((r, l) => { layerAt[l] = acc; acc += Math.max(0, ...r.map(along)) + GAP_LAYER })
@@ -293,7 +342,62 @@ export function layoutGraph(nodes, edges, dir = 'down', origin = { x: 0, y: 0 })
     const ei = E.findIndex(([x, y]) => x === a && y === b)
     return edgeSides(dir, layer[a], layer[b], cx[a], cx[b], ei >= 0 && back[ei])
   })
-  return { pos, sides }
+  // For a link down a lane: how far past its parent's outgoing face it should
+  // turn into the lane — halfway into the gap after the parent's level.
+  const turns = edges.map((e) => {
+    const a = index.get(e.from), b = index.get(e.to)
+    if (a == null || b == null || !lanes.has(`${a}>${b}`)) return null
+    const thick = Math.max(0, ...rows[layer[a]].map(along))
+    return thick - (Math.trunc((thick - along(a)) / 2) + along(a)) + GAP_LAYER / 2
+  })
+  return {
+    pos, sides, turns,
+    layers: new Map(nodes.map((nd, v) => [nd.key, layer[v]])),
+    natural: new Map(nodes.map((nd, v) => [nd.key, natural[v]])),
+    leaves: new Set(nodes.filter((nd, v) => !hasKids[v]).map((nd) => nd.key)),
+    depth: natDepth,
+  }
+}
+
+/**
+ * The node editor's across-the-flow placement, as a family tree. Each node
+ * hangs from one parent: the one on the level right above it, else the first.
+ * Every branch gets its own band, as wide as everything beneath it. Children
+ * sit side by side in the order they were added, centred under their parent,
+ * and the parent is centred over them. Branches never interleave, so links
+ * don't cross, and a lowered node's lane stays inside its own branch.
+ * Overwrites `cx`.
+ */
+function tidyAcross(N, F, layer, across, cx) {
+  const primary = new Array(N).fill(-1)
+  for (const [a, b] of F) {
+    const p = primary[b]
+    if (p === -1 || (layer[a] === layer[b] - 1 && layer[p] !== layer[b] - 1)) primary[b] = a
+  }
+  const kids = Array.from({ length: N }, () => [])
+  for (const [a, b] of F) if (primary[b] === a && !kids[a].includes(b)) kids[a].push(b)
+  const width = new Array(N).fill(0)
+  const span = (cs) => cs.reduce((s, c) => s + width[c], 0) + GAP_SIBLING * Math.max(0, cs.length - 1)
+  const measure = (v) => {
+    for (const c of kids[v]) measure(c)
+    width[v] = Math.max(across(v), span(kids[v]))
+  }
+  const place = (v, left) => {
+    const cs = kids[v]
+    let x = left + (width[v] - span(cs)) / 2
+    for (const c of cs) { place(c, x); x += width[c] + GAP_SIBLING }
+    // Over the middle of its first and last child (kept inside its own band).
+    const half = across(v) / 2
+    const mid = cs.length ? (cx[cs[0]] + cx[cs[cs.length - 1]]) / 2 : left + width[v] / 2
+    cx[v] = Math.min(left + width[v] - half, Math.max(left + half, mid))
+  }
+  let x = 0
+  for (let v = 0; v < N; v++) {
+    if (primary[v] !== -1) continue
+    measure(v)
+    place(v, x)
+    x += width[v] + GAP_SIBLING
+  }
 }
 
 // Forward edges run with the flow; a loop back up leaves and re-enters on the
@@ -350,8 +454,14 @@ export function tidy(shapes, connectors, dir = 'down') {
 }
 
 /** Items → flowchart text (what "Copy as text" puts on the clipboard). */
+// Frames and line shapes are shapes but not boxes, so they are left out (as
+// Siddran-CLI's `describe` does with `is_diagram_shape`).
+// Frames and Format widgets are shapes in the file but never boxes in a flowchart
+// (diagram.rs `is_diagram_shape` — change both).
+export const isDiagramShape = (i) => i?.type === 'shape' && i.payload?.kind !== 'frame' && i.payload?.kind !== 'format' && !isLineKind(i.payload?.kind)
+
 export function itemsToFlow(items) {
-  const shapes = items.filter((i) => i.type === 'shape').sort((a, b) => Math.trunc(a.y / 40) - Math.trunc(b.y / 40) || a.x - b.x)
+  const shapes = items.filter(isDiagramShape).sort((a, b) => Math.trunc(a.y / 40) - Math.trunc(b.y / 40) || a.x - b.x)
   const key = new Map(shapes.map((s, i) => [s.id, `n${i + 1}`]))
   const br = { rhombus: ['{', '}'], ellipse: ['((', '))'], roundedRect: ['(', ')'], hexagon: ['{{', '}}'], cylinder: ['[(', ')]'], parallelogram: ['[/', '/]'] }
   const lines = ['flowchart TD']

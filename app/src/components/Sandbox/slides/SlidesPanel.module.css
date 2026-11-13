@@ -1,0 +1,297 @@
+/* The Slides panel: a column on the board's right edge. No backdrop-filter,
+   no transform centring (the blur rule). */
+.panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 30;
+    width: 264px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px var(--shadow-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    overflow: hidden;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px 10px 14px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.heading {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.n {
+    margin-left: 4px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.present {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.present:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.icon:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.icon:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.empty {
+    padding: 22px 16px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.empty small {
+    font-size: 11.5px;
+}
+
+.newFirst, .add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.newFirst:hover, .add:hover {
+    background: var(--bg-hover);
+}
+
+.addRow {
+    list-style: none;
+    margin-top: 8px;
+}
+
+.add {
+    width: 100%;
+}
+
+.tools {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.tool {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 9px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tool:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.tool:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.sizeWrap {
+    position: relative;
+}
+
+.sizeMenu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 5;
+    min-width: 232px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.sizeItem {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sizeItem:hover {
+    background: var(--bg-hover);
+}
+
+.res {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.list {
+    flex: 1;
+    margin: 0;
+    padding: 8px;
+    list-style: none;
+    overflow-y: auto;
+}
+
+.row {
+    position: relative;
+    padding: 6px 6px 8px;
+    border-radius: 9px;
+    cursor: grab;
+}
+
+.row:hover {
+    background: var(--bg-hover);
+}
+
+.row + .row {
+    margin-top: 4px;
+}
+
+.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.hidden .thumb {
+    opacity: 0.35;
+}
+
+.hidden .title,
+.hidden .num {
+    color: var(--text-muted);
+}
+
+.rowTop {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.grip {
+    flex: none;
+    color: var(--text-muted);
+}
+
+.num {
+    flex: none;
+    min-width: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+}
+
+.thumb {
+    width: 100%;
+    max-height: 220px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+.dropLine {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent-warning);
+    pointer-events: none;
+}

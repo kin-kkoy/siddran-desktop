@@ -10,7 +10,7 @@ export const siddranTheme = EditorView.theme({
   '&': {
     color: 'var(--text-primary)',
     backgroundColor: 'transparent',
-    fontSize: '16px',
+    fontSize: 'calc(16px * var(--z, 1))',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif",
   },
   // The editor grows with its content and the page scrolls (one page scrollbar,
@@ -23,13 +23,13 @@ export const siddranTheme = EditorView.theme({
     fontFamily: 'inherit',
     // Small bottom padding only — a large value shows as dead space below the
     // last line on long notes (the editor grows with content / page-scrolls).
-    padding: '4px 0 40px 0',
+    padding: 'calc(4px * var(--z, 1)) 0 calc(40px * var(--z, 1)) 0',
     lineHeight: '1.75',
     caretColor: 'var(--text-primary)',
   },
   '.cm-line': { padding: '0' },
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'visible' },
-  '.cm-cursor': { borderLeftColor: 'var(--text-primary)', borderLeftWidth: '2px' },
+  '.cm-cursor': { borderLeftColor: 'var(--text-primary)', borderLeftWidth: 'calc(2px * var(--z, 1))' },
   '.cm-placeholder': { color: 'var(--text-faint)' },
 
   // Selection (drawSelection)
@@ -45,8 +45,8 @@ export const siddranTheme = EditorView.theme({
     fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
     fontSize: '0.86em',
     background: 'var(--bg-hover)',
-    borderRadius: '4px',
-    padding: '1px 5px',
+    borderRadius: 'calc(4px * var(--z, 1))',
+    padding: 'calc(1px * var(--z, 1)) calc(5px * var(--z, 1))',
     color: 'var(--accent-warning)',
   },
 
@@ -70,7 +70,7 @@ export const siddranTheme = EditorView.theme({
   // ── Comment highlights (Google-Docs style) ──
   '.cm-comment': {
     backgroundColor: 'rgba(240, 184, 64, 0.16)',
-    borderBottom: '2px solid rgba(240, 184, 64, 0.55)',
+    borderBottom: 'calc(2px * var(--z, 1)) solid rgba(240, 184, 64, 0.55)',
     cursor: 'pointer',
   },
   '.cm-comment-active': {
@@ -80,17 +80,17 @@ export const siddranTheme = EditorView.theme({
   // ── In-note search hits ──
   '.cm-search-hit': {
     backgroundColor: 'rgba(240, 184, 64, 0.22)',
-    borderRadius: '2px',
+    borderRadius: 'calc(2px * var(--z, 1))',
   },
   '.cm-search-hit-active': {
     backgroundColor: 'rgba(240, 184, 64, 0.5)',
-    outline: '1px solid rgba(240, 184, 64, 0.9)',
+    outline: 'calc(1px * var(--z, 1)) solid rgba(240, 184, 64, 0.9)',
   },
 
   // ── Blockquote ──
   '.cm-line.cm-quote': {
-    borderLeft: '3px solid var(--border-strong)',
-    paddingLeft: '14px',
+    borderLeft: 'calc(3px * var(--z, 1)) solid var(--border-strong)',
+    paddingLeft: 'calc(14px * var(--z, 1))',
     color: 'var(--text-secondary)',
   },
 
@@ -99,26 +99,26 @@ export const siddranTheme = EditorView.theme({
     position: 'relative', // anchors the absolutely-positioned copy button
     background: 'var(--bg-surface-alt)',
     fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-    fontSize: '13.5px',
+    fontSize: 'calc(13.5px * var(--z, 1))',
     color: 'var(--text-secondary)',
-    paddingLeft: '15px !important',
-    paddingRight: '15px !important',
+    paddingLeft: 'calc(15px * var(--z, 1)) !important',
+    paddingRight: 'calc(15px * var(--z, 1)) !important',
   },
 
   // Code-block "Copy" button (cm/codeCopy.js): floated top-right, out of flow.
   '.cm-code-copy-btn': {
     position: 'absolute',
-    top: '4px',
-    right: '8px',
+    top: 'calc(4px * var(--z, 1))',
+    right: 'calc(8px * var(--z, 1))',
     zIndex: '3',
     fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-    fontSize: '11px',
+    fontSize: 'calc(11px * var(--z, 1))',
     lineHeight: '1',
-    padding: '3px 8px',
+    padding: 'calc(3px * var(--z, 1)) calc(8px * var(--z, 1))',
     color: 'var(--text-secondary)',
     background: 'var(--bg-elevated)',
-    border: '1px solid var(--border-strong)',
-    borderRadius: '4px',
+    border: 'calc(1px * var(--z, 1)) solid var(--border-strong)',
+    borderRadius: 'calc(4px * var(--z, 1))',
     cursor: 'pointer',
     opacity: '0.5',
     transition: 'opacity 120ms ease, color 120ms ease',
@@ -130,23 +130,23 @@ export const siddranTheme = EditorView.theme({
   // axis). Drag logic lives in cm/widgets.js. Box + handles reveal only once the
   // image is selected (.cm-img-selected) or mid-drag (.cm-img-dragging).
   '.cm-img-wrap': { position: 'relative', display: 'inline-block', maxWidth: '100%', margin: '0.2em 0' },
-  '.cm-img': { maxWidth: '100%', borderRadius: '6px', display: 'block', cursor: 'pointer' },
+  '.cm-img': { maxWidth: '100%', borderRadius: 'calc(6px * var(--z, 1))', display: 'block', cursor: 'pointer' },
   '.cm-img-box': {
     position: 'absolute',
-    inset: '-2px',
-    border: '1.5px solid var(--accent-blue)',
-    borderRadius: '5px',
+    inset: 'calc(-2px * var(--z, 1))',
+    border: 'calc(1.5px * var(--z, 1)) solid var(--accent-blue)',
+    borderRadius: 'calc(5px * var(--z, 1))',
     pointerEvents: 'none',
     opacity: '0',
     transition: 'opacity 120ms ease',
   },
   '.cm-img-handle': {
     position: 'absolute',
-    width: '10px',
-    height: '10px',
+    width: 'calc(10px * var(--z, 1))',
+    height: 'calc(10px * var(--z, 1))',
     background: 'var(--bg-primary)',
-    border: '1.5px solid var(--accent-blue)',
-    borderRadius: '2px',
+    border: 'calc(1.5px * var(--z, 1)) solid var(--accent-blue)',
+    borderRadius: 'calc(2px * var(--z, 1))',
     opacity: '0',
     transition: 'opacity 120ms ease',
     zIndex: '2',
@@ -154,23 +154,23 @@ export const siddranTheme = EditorView.theme({
   '.cm-img-wrap.cm-img-selected .cm-img-box, .cm-img-wrap.cm-img-dragging .cm-img-box': { opacity: '1' },
   '.cm-img-wrap.cm-img-selected .cm-img-handle, .cm-img-wrap.cm-img-dragging .cm-img-handle': { opacity: '1' },
   // Corner + edge positions (center each handle on the image edge) and cursors.
-  '.cm-img-handle-nw': { top: '-5px', left: '-5px', cursor: 'nwse-resize' },
-  '.cm-img-handle-n': { top: '-5px', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
-  '.cm-img-handle-ne': { top: '-5px', right: '-5px', cursor: 'nesw-resize' },
-  '.cm-img-handle-e': { top: '50%', right: '-5px', transform: 'translateY(-50%)', cursor: 'ew-resize' },
-  '.cm-img-handle-se': { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' },
-  '.cm-img-handle-s': { bottom: '-5px', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
-  '.cm-img-handle-sw': { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' },
-  '.cm-img-handle-w': { top: '50%', left: '-5px', transform: 'translateY(-50%)', cursor: 'ew-resize' },
+  '.cm-img-handle-nw': { top: 'calc(-5px * var(--z, 1))', left: 'calc(-5px * var(--z, 1))', cursor: 'nwse-resize' },
+  '.cm-img-handle-n': { top: 'calc(-5px * var(--z, 1))', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
+  '.cm-img-handle-ne': { top: 'calc(-5px * var(--z, 1))', right: 'calc(-5px * var(--z, 1))', cursor: 'nesw-resize' },
+  '.cm-img-handle-e': { top: '50%', right: 'calc(-5px * var(--z, 1))', transform: 'translateY(-50%)', cursor: 'ew-resize' },
+  '.cm-img-handle-se': { bottom: 'calc(-5px * var(--z, 1))', right: 'calc(-5px * var(--z, 1))', cursor: 'nwse-resize' },
+  '.cm-img-handle-s': { bottom: 'calc(-5px * var(--z, 1))', left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize' },
+  '.cm-img-handle-sw': { bottom: 'calc(-5px * var(--z, 1))', left: 'calc(-5px * var(--z, 1))', cursor: 'nesw-resize' },
+  '.cm-img-handle-w': { top: '50%', left: 'calc(-5px * var(--z, 1))', transform: 'translateY(-50%)', cursor: 'ew-resize' },
   '.cm-line.cm-codeblock-top': {
-    borderTopLeftRadius: '8px',
-    borderTopRightRadius: '8px',
-    paddingTop: '9px !important',
+    borderTopLeftRadius: 'calc(8px * var(--z, 1))',
+    borderTopRightRadius: 'calc(8px * var(--z, 1))',
+    paddingTop: 'calc(9px * var(--z, 1)) !important',
   },
   '.cm-line.cm-codeblock-bot': {
-    borderBottomLeftRadius: '8px',
-    borderBottomRightRadius: '8px',
-    paddingBottom: '9px !important',
+    borderBottomLeftRadius: 'calc(8px * var(--z, 1))',
+    borderBottomRightRadius: 'calc(8px * var(--z, 1))',
+    paddingBottom: 'calc(9px * var(--z, 1)) !important',
   },
 
   // ── Bullets / rules / checkboxes (widgets) ──
@@ -183,7 +183,7 @@ export const siddranTheme = EditorView.theme({
   '.cm-line.cm-hr-line': {
     lineHeight: '0',
     padding: '0.4em 0',
-    background: 'linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border-strong) calc(50% - 0.5px), var(--border-strong) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
+    background: 'linear-gradient(to bottom, transparent calc(50% - calc(0.5px * var(--z, 1))), var(--border-strong) calc(50% - calc(0.5px * var(--z, 1))), var(--border-strong) calc(50% + calc(0.5px * var(--z, 1))), transparent calc(50% + calc(0.5px * var(--z, 1))))',
   },
   '.cm-task': { display: 'inline' }, // inline so it shifts with the line's text-indent
   // Completed task: grey the label text (the checkbox keeps its own fill, not the
@@ -196,12 +196,12 @@ export const siddranTheme = EditorView.theme({
     appearance: 'none',
     WebkitAppearance: 'none',
     boxSizing: 'border-box',
-    width: '15px',
-    height: '15px',
-    margin: '0 6px 0 0',
-    verticalAlign: '-2px',
-    border: '1.5px solid var(--text-muted)',
-    borderRadius: '4px',
+    width: 'calc(15px * var(--z, 1))',
+    height: 'calc(15px * var(--z, 1))',
+    margin: '0 calc(6px * var(--z, 1)) 0 0',
+    verticalAlign: 'calc(-2px * var(--z, 1))',
+    border: 'calc(1.5px * var(--z, 1)) solid var(--text-muted)',
+    borderRadius: 'calc(4px * var(--z, 1))',
     background: 'transparent',
     cursor: 'pointer',
     transition: 'background-color 120ms ease, border-color 120ms ease',
@@ -214,7 +214,7 @@ export const siddranTheme = EditorView.theme({
     backgroundSize: '100% 100%',
     backgroundRepeat: 'no-repeat',
   },
-  '.cm-task-check:focus-visible': { outline: '2px solid var(--accent-blue)', outlineOffset: '2px' },
+  '.cm-task-check:focus-visible': { outline: 'calc(2px * var(--z, 1)) solid var(--accent-blue)', outlineOffset: 'calc(2px * var(--z, 1))' },
   '.cm-line.cm-list-line': {
     // Hanging indent via padding-left + negative text-indent (NOT a negative margin
     // on the marker). text-indent shifts the WHOLE first visual row — leading
@@ -236,12 +236,12 @@ export const siddranTheme = EditorView.theme({
     color: 'var(--accent-blue)',
     cursor: 'pointer',
     textDecoration: 'none',
-    borderBottom: '1px solid transparent',
+    borderBottom: 'calc(1px * var(--z, 1)) solid transparent',
   },
   '.cm-internal-link:hover': { textDecoration: 'underline' },
   '.cm-internal-link.is-unresolved': {
     color: 'var(--text-muted)',
-    borderBottom: '1px dashed var(--text-faint)',
+    borderBottom: 'calc(1px * var(--z, 1)) dashed var(--text-faint)',
   },
   '.cm-wikilink-src': { color: 'var(--accent-blue)' },
 
@@ -255,14 +255,14 @@ export const siddranTheme = EditorView.theme({
   '.cm-bundle-link::before': { content: "'⊞ '", opacity: '0.85' },
 
   // ==highlight==
-  '.cm-highlight': { background: 'rgba(240, 184, 64, 0.22)', borderRadius: '3px', padding: '0 2px' },
+  '.cm-highlight': { background: 'rgba(240, 184, 64, 0.22)', borderRadius: 'calc(3px * var(--z, 1))', padding: '0 calc(2px * var(--z, 1))' },
 
   // #hashtags — clickable pill (searches notes).
   '.cm-hashtag': {
     color: '#c084fc',
     background: 'rgba(192, 132, 252, 0.15)',
-    borderRadius: '20px',
-    padding: '1px 8px',
+    borderRadius: 'calc(20px * var(--z, 1))',
+    padding: 'calc(1px * var(--z, 1)) calc(8px * var(--z, 1))',
     fontSize: '0.85em',
     fontWeight: '500',
     cursor: 'pointer',
@@ -273,7 +273,7 @@ export const siddranTheme = EditorView.theme({
   '.cm-spoiler': {
     color: 'transparent',
     background: 'var(--text-faint)',
-    borderRadius: '3px',
+    borderRadius: 'calc(3px * var(--z, 1))',
     cursor: 'pointer',
     transition: 'color 0.1s ease, background 0.1s ease',
   },
@@ -281,8 +281,8 @@ export const siddranTheme = EditorView.theme({
 
   // > [!type] callouts — coloured block by type (line decorations).
   '.cm-line.cm-callout': {
-    borderLeft: '3px solid var(--accent-blue)',
-    paddingLeft: '14px',
+    borderLeft: 'calc(3px * var(--z, 1)) solid var(--accent-blue)',
+    paddingLeft: 'calc(14px * var(--z, 1))',
     background: 'rgba(90, 156, 240, 0.06)',
   },
   '.cm-line.cm-callout-warning, .cm-line.cm-callout-question, .cm-line.cm-callout-caution': {
@@ -303,41 +303,41 @@ export const siddranTheme = EditorView.theme({
   // Negative left margin pulls the whole gutter into the surface's left padding so
   // the editor TEXT lines up with the reading view (no gutter), and the chevron
   // sits clear of the text in the margin instead of crowding it.
-  '.cm-gutters': { background: 'transparent', border: 'none', color: 'var(--text-faint)', marginLeft: '-22px' },
+  '.cm-gutters': { background: 'transparent', border: 'none', color: 'var(--text-faint)', marginLeft: 'calc(-22px * var(--z, 1))' },
   '.cm-foldGutter .cm-gutterElement': {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
     padding: '0',
-    minWidth: '18px',
+    minWidth: 'calc(18px * var(--z, 1))',
   },
   '.cm-fold-chevron': {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '18px',
-    height: '18px',
-    marginTop: '5px',
-    borderRadius: '4px',
+    width: 'calc(18px * var(--z, 1))',
+    height: 'calc(18px * var(--z, 1))',
+    marginTop: 'calc(5px * var(--z, 1))',
+    borderRadius: 'calc(4px * var(--z, 1))',
     color: 'var(--text-muted)',
     opacity: '0.7',
     cursor: 'pointer',
     transition: 'background 0.12s ease, color 0.12s ease, opacity 0.12s ease',
   },
   '.cm-fold-chevron svg': {
-    width: '13px',
-    height: '13px',
+    width: 'calc(13px * var(--z, 1))',
+    height: 'calc(13px * var(--z, 1))',
     display: 'block',
     transform: 'rotate(90deg)', // open: points down
     transformOrigin: '50% 50%',
     transition: 'transform 0.12s ease',
   },
   '.cm-fold-chevron.is-folded svg': { transform: 'rotate(0deg)' }, // folded: points right
-  '.cm-fold-chevron.cm-fold-h1': { marginTop: '18px' },
-  '.cm-fold-chevron.cm-fold-h2': { marginTop: '13px' },
-  '.cm-fold-chevron.cm-fold-h3': { marginTop: '9px' },
-  '.cm-fold-chevron.cm-fold-h4': { marginTop: '7px' },
-  '.cm-fold-chevron.cm-fold-h6': { marginTop: '4px' },
+  '.cm-fold-chevron.cm-fold-h1': { marginTop: 'calc(18px * var(--z, 1))' },
+  '.cm-fold-chevron.cm-fold-h2': { marginTop: 'calc(13px * var(--z, 1))' },
+  '.cm-fold-chevron.cm-fold-h3': { marginTop: 'calc(9px * var(--z, 1))' },
+  '.cm-fold-chevron.cm-fold-h4': { marginTop: 'calc(7px * var(--z, 1))' },
+  '.cm-fold-chevron.cm-fold-h6': { marginTop: 'calc(4px * var(--z, 1))' },
   '.cm-fold-chevron:hover': {
     color: 'var(--text-primary)',
     background: 'var(--bg-hover)',
@@ -347,9 +347,9 @@ export const siddranTheme = EditorView.theme({
     background: 'var(--bg-hover)',
     color: 'var(--text-muted)',
     border: 'none',
-    borderRadius: '3px',
-    margin: '0 4px',
-    padding: '0 6px',
+    borderRadius: 'calc(3px * var(--z, 1))',
+    margin: '0 calc(4px * var(--z, 1))',
+    padding: '0 calc(6px * var(--z, 1))',
   },
   // Inline list fold chevron (livePreview InlineFoldWidget): absolutely positioned
   // within the list line's reserved 1.25em lead, sitting just left of the bullet at
@@ -372,7 +372,7 @@ export const siddranTheme = EditorView.theme({
     cursor: 'pointer',
     color: 'var(--text-muted)',
     opacity: '0.7',
-    borderRadius: '4px',
+    borderRadius: 'calc(4px * var(--z, 1))',
     zIndex: '1',
     transition: 'opacity 0.12s ease, color 0.12s ease, background 0.12s ease',
   },
@@ -389,25 +389,25 @@ export const siddranTheme = EditorView.theme({
 
   // Autocomplete option detail (the task/bundle/sandbox/note tag).
   '.cm-tooltip-autocomplete .cm-completionDetail': {
-    marginLeft: '8px',
+    marginLeft: 'calc(8px * var(--z, 1))',
     fontStyle: 'normal',
-    fontSize: '11px',
+    fontSize: 'calc(11px * var(--z, 1))',
     color: 'var(--text-faint)',
   },
 
   // Autocomplete dropdown (wikilink titles), themed for dark.
   '.cm-tooltip.cm-tooltip-autocomplete': {
     background: 'var(--bg-elevated)',
-    border: '1px solid var(--border-strong)',
-    borderRadius: '8px',
-    boxShadow: '0 6px 18px var(--shadow-color)',
-    padding: '4px',
+    border: 'calc(1px * var(--z, 1)) solid var(--border-strong)',
+    borderRadius: 'calc(8px * var(--z, 1))',
+    boxShadow: '0 calc(6px * var(--z, 1)) calc(18px * var(--z, 1)) var(--shadow-color)',
+    padding: 'calc(4px * var(--z, 1))',
   },
   '.cm-tooltip-autocomplete ul li': {
     fontFamily: 'inherit',
-    fontSize: '13.5px',
-    padding: '5px 10px',
-    borderRadius: '5px',
+    fontSize: 'calc(13.5px * var(--z, 1))',
+    padding: 'calc(5px * var(--z, 1)) calc(10px * var(--z, 1))',
+    borderRadius: 'calc(5px * var(--z, 1))',
     color: 'var(--text-primary)',
   },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--accent-blue)', color: '#fff' },
@@ -421,26 +421,26 @@ export const siddranTheme = EditorView.theme({
   '.cm-diagram-block': {
     position: 'relative',
     margin: '0.6em 0',
-    padding: '10px',
-    borderRadius: '8px',
-    border: '1px solid var(--border-subtle, var(--border-strong))',
+    padding: 'calc(10px * var(--z, 1))',
+    borderRadius: 'calc(8px * var(--z, 1))',
+    border: 'calc(1px * var(--z, 1)) solid var(--border-subtle, var(--border-strong))',
     background: 'var(--bg-surface)',
     cursor: 'pointer',
   },
   '.cm-diagram-block:hover': { borderColor: 'var(--accent-blue)' },
   '.cm-diagram-empty': {
-    padding: '18px',
+    padding: 'calc(18px * var(--z, 1))',
     textAlign: 'center',
     color: 'var(--text-dim)',
-    fontSize: '13px',
+    fontSize: 'calc(13px * var(--z, 1))',
   },
   /* Only on hover: a permanent label on every diagram would be noise in a note
      that has several. */
   '.cm-diagram-hint': {
     position: 'absolute',
-    top: '6px',
-    right: '8px',
-    fontSize: '11px',
+    top: 'calc(6px * var(--z, 1))',
+    right: 'calc(8px * var(--z, 1))',
+    fontSize: 'calc(11px * var(--z, 1))',
     color: 'var(--text-dim)',
     opacity: 0,
     transition: 'opacity 0.15s',
@@ -461,8 +461,8 @@ export const siddranTheme = EditorView.theme({
   },
   '.cm-live-table table': { borderCollapse: 'collapse', width: 'auto' },
   '.cm-live-table th, .cm-live-table td': {
-    border: '1px solid var(--border-default)',
-    padding: '6px 12px',
+    border: 'calc(1px * var(--z, 1)) solid var(--border-default)',
+    padding: 'calc(6px * var(--z, 1)) calc(12px * var(--z, 1))',
     color: 'var(--text-primary)',
     cursor: 'text', // click a cell to edit it
     height: '1.9em', // min height so empty cells stay easy to click/type into
@@ -475,21 +475,21 @@ export const siddranTheme = EditorView.theme({
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: '0.88em',
     background: 'var(--bg-elevated)',
-    borderRadius: '4px',
-    padding: '0 4px',
+    borderRadius: 'calc(4px * var(--z, 1))',
+    padding: '0 calc(4px * var(--z, 1))',
   },
-  '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: '2px' },
+  '.cm-live-table mark': { background: 'var(--accent-warning-alpha, rgba(255,214,102,0.18))', color: 'inherit', borderRadius: 'calc(2px * var(--z, 1))' },
   '.cm-live-table del': { color: 'var(--text-muted)' },
   '.cm-live-table .cm-live-link': { color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'text' },
   // Images inside cells stay thumbnail-sized so one picture can't blow up the row.
-  '.cm-cell-img': { maxWidth: '140px', maxHeight: '90px', borderRadius: '4px', verticalAlign: 'middle', display: 'inline-block' },
+  '.cm-cell-img': { maxWidth: 'calc(140px * var(--z, 1))', maxHeight: 'calc(90px * var(--z, 1))', borderRadius: 'calc(4px * var(--z, 1))', verticalAlign: 'middle', display: 'inline-block' },
   '.cm-live-table .cm-cell-editing': { background: 'var(--bg-elevated)', padding: '0' },
   // The cell editor: an <input> that fills the cell and inherits its look, so editing
   // stays visually in-place (only this cell shows its raw text).
   '.cm-cell-input': {
     display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none',
     background: 'transparent', color: 'var(--text-primary)', font: 'inherit',
-    padding: '6px 12px', margin: '0', resize: 'none', overflow: 'hidden',
+    padding: 'calc(6px * var(--z, 1)) calc(12px * var(--z, 1))', margin: '0', resize: 'none', overflow: 'hidden',
     lineHeight: 'inherit', verticalAlign: 'top',
   },
   // Editable-table wrapper + hover +/- controls (cm/tables.js). The controls sit
@@ -501,21 +501,21 @@ export const siddranTheme = EditorView.theme({
   '.cm-table-wrap': { position: 'relative', width: 'fit-content', maxWidth: '100%' },
   '.cm-table-rowctl': {
     position: 'absolute', left: '0', right: '0', bottom: '0', transform: 'translateY(50%)',
-    display: 'flex', justifyContent: 'center', gap: '4px',
+    display: 'flex', justifyContent: 'center', gap: 'calc(4px * var(--z, 1))',
     opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
   },
   '.cm-table-colctl': {
     position: 'absolute', top: '0', bottom: '0', right: '0', transform: 'translateX(50%)',
-    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px',
+    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'calc(4px * var(--z, 1))',
     opacity: '0', transition: 'opacity 0.15s', pointerEvents: 'none',
   },
   '.cm-table-wrap:hover .cm-table-rowctl, .cm-table-wrap:hover .cm-table-colctl': {
     opacity: '1', pointerEvents: 'auto',
   },
   '.cm-table-btn': {
-    width: '20px', height: '16px', padding: '0', borderRadius: '4px',
-    border: '1px solid var(--border-strong)', background: 'var(--bg-surface)',
-    color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
+    width: 'calc(20px * var(--z, 1))', height: 'calc(16px * var(--z, 1))', padding: '0', borderRadius: 'calc(4px * var(--z, 1))',
+    border: 'calc(1px * var(--z, 1)) solid var(--border-strong)', background: 'var(--bg-surface)',
+    color: 'var(--text-muted)', fontSize: 'calc(13px * var(--z, 1))', lineHeight: '1', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   '.cm-table-btn:hover': { background: 'var(--bg-hover)', color: 'var(--text-primary)', borderColor: 'var(--accent-blue)' },

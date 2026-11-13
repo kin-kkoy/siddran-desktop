@@ -1,0 +1,6 @@
+/* Drawing / lasso / paint tools: every card lets the press through to the
+   board beneath (cards normally opt back in with pointer-events: auto). */
+.passThrough,
+.passThrough * {
+    pointer-events: none !important;
+}
