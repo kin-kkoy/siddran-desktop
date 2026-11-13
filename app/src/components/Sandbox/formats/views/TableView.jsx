@@ -1,14 +1,20 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LuFilter, LuArrowUpDown, LuRows3, LuColumns3, LuPlus, LuChevronRight, LuChevronDown, LuEllipsisVertical } from 'react-icons/lu'
+import { LuFilter, LuArrowUpDown, LuRows3, LuColumns3, LuPlus, LuChevronRight, LuChevronDown, LuEllipsisVertical, LuUpload } from 'react-icons/lu'
 import styles from '../Table.module.css'
 import Popover from '../Popover'
 import { tableConfig, tableRows, calculate, activeFilterCount, calcsFor } from '../query'
 import { coerceValue, TEXTLIKE, hasOptions } from '../fields'
+import { toast } from '../../../../utils/toast'
 import { selRange, applyStyle, cellStyle, rangeToTSV, moveColumn, orderRecords } from '../layout'
 import { FilterMenu, SortMenu, GroupMenu, FieldsMenu, FieldMenu, AddFieldMenu, CalcMenu, OptionChip } from './TableMenus'
 import Row from './table/Row'
 import StyleBar from './table/StyleBar'
 import { useVirtualRows } from './table/useVirtualRows'
+import DetailPanel from './table/DetailPanel'
+import ImportDialog from './table/ImportDialog'
+import { AttachmentPreview } from './table/Attachments'
+import { useOpenAttachment } from './table/attachKinds'
+import { parseDelimited, applyImport } from '../importer'
 import { requestOpenExternal } from '../../../../desktop/openExternal'
 
 /**
@@ -63,6 +69,11 @@ function TableView({ source, item, onConfig }) {
     const setRowDrag = (v) => { rowDragRef.current = v; setRowDragState(v) }
     const setColDrag = (v) => { colDragRef.current = v; setColDragState(v) }
     const [adding, setAdding] = useState('')
+    const [detail, setDetail] = useState(null)    // record id shown in the detail panel
+    const [preview, setPreview] = useState(null)  // an attachment shown over the window
+    const [importing, setImporting] = useState(null)  // { rows, from } waiting in the preview dialog
+    const fileRef = useRef(null)
+    const openAttachment = useOpenAttachment(setPreview)
     const rootRef = useRef(null), gridRef = useRef(null), bodyRef = useRef(null), headRef = useRef(null)
     const dragSel = useRef(false)
 
@@ -81,7 +92,7 @@ function TableView({ source, item, onConfig }) {
     const fields = t.fields
     const all = source.fields
     const w = (f) => (resize?.fid === f.id ? resize.w : widthOf(f, config))
-    const cols = ['2.2em', ...fields.map(f => em(w(f))), '2.4em'].join(' ')
+    const cols = ['3em', ...fields.map(f => em(w(f))), '2.4em'].join(' ')
     const primary = all.find(f => f.id === 'title') || all.find(f => TEXTLIKE.has(f.type))
     const anyCalc = fields.some(f => config.calcs?.[f.id])
     const wrap = config.wrap !== false   // wrapping is the default; the Fields menu can turn it off
@@ -99,10 +110,10 @@ function TableView({ source, item, onConfig }) {
             if (t.groupField) out.push({ key: `g:${g.key}`, kind: 'group', g, open })
             if (!open) continue
             for (const rec of g.records) out.push({ key: `${g.key}|${rec.id}`, kind: 'row', gk: g.key, rec, ri: ri++ })
-            if (t.groupField && anyCalc && g.records.length) out.push({ key: `c:${g.key}`, kind: 'gcalc', g })
+            if (t.groupField && anyCalc && config.showTotals !== false && g.records.length) out.push({ key: `c:${g.key}`, kind: 'gcalc', g })
         }
         return out
-    }, [t.groups, t.groupField, collapsed, anyCalc])
+    }, [t.groups, t.groupField, collapsed, anyCalc, config.showTotals])
     const virt = useVirtualRows(items, gridRef, bodyRef)
     const range = selRange(sel, flatRows.length, fields.length)
 
@@ -319,11 +330,13 @@ function TableView({ source, item, onConfig }) {
             requestAnimationFrame(focusGrid)
         },
         gripDown, openLink: (href) => requestOpenExternal(href),
-        remove: (rid) => { setSel(null); source.remove(rid) },
+        remove: (rid) => { setSel(null); if (detail === rid) setDetail(null); source.remove(rid) },
+        openDetail: (rid) => setDetail(rid),
+        openAttachment,
     }
     const api = useMemo(() => {
         const out = {}
-        for (const k of ['cellDown', 'cellEnter', 'startEdit', 'toggle', 'cellDone', 'gripDown', 'openLink', 'remove']) out[k] = (...a) => act.current[k](...a)
+        for (const k of ['cellDown', 'cellEnter', 'startEdit', 'toggle', 'cellDone', 'gripDown', 'openLink', 'remove', 'openDetail', 'openAttachment']) out[k] = (...a) => act.current[k](...a)
         return out
     }, [])
 
@@ -365,7 +378,53 @@ function TableView({ source, item, onConfig }) {
         if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(ri, ci); return }
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearRange(); return }
         if (e.key === ' ' && fields[ci]?.type === 'check') { e.preventDefault(); startEdit(ri, ci); return }
+        if (e.key === ' ') { e.preventDefault(); const row = flatRows[ri]; if (row) setDetail(row.rec.id); return }
         // Typing on a selected cell does nothing: editing starts with a double-click (the user's call).
+    }
+
+    // ---- paste and import ----
+    const canImport = !!source.apply
+    const onPaste = (e) => {
+        const text = e.clipboardData?.getData('text/plain')
+        if (!text) return
+        e.preventDefault(); e.stopPropagation()
+        const rows = parseDelimited(text)
+        if (!rows.length) return
+        // One value: into every selected cell, like a spreadsheet (one undo step).
+        if (rows.length === 1 && rows[0].length === 1 && range) {
+            const list = []
+            for (let r = range.r0; r <= range.r1; r++) {
+                const patch = {}
+                for (let c = range.c0; c <= range.c1; c++) {
+                    const f = fields[c]
+                    if (!source.editable.has(f.id) || f.type === 'files') continue
+                    const v = coerceValue(f, f.type === 'multi' ? rows[0][0].split(/[,;]/).map(x => x.trim()) : rows[0][0])
+                    patch[f.id] = v
+                }
+                if (Object.keys(patch).length) list.push({ id: flatRows[r].rec.id, patch })
+            }
+            if (source.updateMany) source.updateMany(list); else list.forEach(x => source.update(x.id, x.patch))
+            return
+        }
+        if (!canImport) { toast.warning('Pasting rows works on a table with its own records'); return }
+        setImporting({ rows, from: 'Pasted' })
+    }
+    const onFile = async (e) => {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file) return
+        const rows = parseDelimited(await file.text())
+        if (!rows.length) { toast.warning('That file has no rows'); return }
+        setImporting({ rows, from: file.name })
+    }
+    const doImport = (plan, mode) => {
+        const fill = mode === 'fill' && range ? { rows: flatRows.slice(range.r0).map(x => x.rec.id) } : null
+        let result
+        source.apply(p => { result = applyImport(p, plan, { mode: fill ? 'fill' : 'append', fill }); return result.payload })
+        setImporting(null)
+        requestAnimationFrame(() => {
+            if (result) toast.success(`${result.added ? `${result.added} added` : ''}${result.added && result.updated ? ', ' : ''}${result.updated ? `${result.updated} updated` : ''}${result.newFields ? ` · ${result.newFields} new field${result.newFields === 1 ? '' : 's'}` : ''}`)
+        })
     }
 
     // A press outside the widget (and outside its menus) ends the selection.
@@ -402,7 +461,7 @@ function TableView({ source, item, onConfig }) {
                 return (
                     <button key={f.id} className={`${styles.calcCell} ${c ? styles.calcOn : ''}`}
                         onClick={(e) => openMenu('calc', e, { fid: f.id })} title="Calculate this column">
-                        {c ? <><span className={styles.calcLabel}>{label}</span> {calculate(records, f, c)}</> : <span className={styles.calcHint}>Calculate</span>}
+                        {c ? <><span className={styles.calcLabel}>{label}</span> {calculate(records, f, c)}</> : <span className={styles.calcHint}>Σ Calculate</span>}
                     </button>
                 )
             })}
@@ -439,6 +498,9 @@ function TableView({ source, item, onConfig }) {
     }
 
     const shown = virt.on ? items.slice(virt.first, virt.last + 1) : items
+    // The detail panel's record: as computed (formulas), found even when the filter hides it.
+    const detailRec = detail ? t.all.find(r => r.id === detail) : null
+    const detailIdx = detail ? flatRows.findIndex(x => x.rec.id === detail) : -1
 
     return (
         <div ref={rootRef} className={styles.table} style={{ '--cols': cols }}>
@@ -455,6 +517,12 @@ function TableView({ source, item, onConfig }) {
                 <button className={`${styles.tool} ${nHidden ? styles.toolOn : ''}`} onClick={(e) => openMenu('fields', e)} aria-label="Fields">
                     <LuColumns3 size="1em" /> Fields{nHidden ? ` · ${nHidden} hidden` : ''}
                 </button>
+                {canImport && (
+                    <button className={styles.tool} onClick={() => fileRef.current?.click()} aria-label="Import" title="Import a CSV file (or paste rows from a spreadsheet: select the table, Ctrl+V)">
+                        <LuUpload size="1em" /> Import
+                    </button>
+                )}
+                <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden onChange={onFile} />
                 {t.rows.length !== t.total && <span className={styles.count}>{t.rows.length} of {t.total}</span>}
                 <span className={styles.grow} />
                 <StyleBar cur={curStyle} enabled={!!range} apply={applySel} label="Format the selected cells" />
@@ -462,7 +530,7 @@ function TableView({ source, item, onConfig }) {
 
             {/* data-sb-scroll: the board's wheel scrolls this (both ways) instead of zooming. */}
             <div ref={gridRef} className={styles.scroll} data-sb-scroll="true" role="grid" aria-rowcount={t.rows.length}
-                aria-multiselectable="true" tabIndex={0} onKeyDown={onKeyDown}>
+                aria-multiselectable="true" tabIndex={0} onKeyDown={onKeyDown} onPaste={onPaste}>
                 <div className={styles.grid}>
                     <div ref={headRef} className={`${styles.trow} ${styles.headRow}`} role="row">
                         <button className={styles.corner} title="Select everything (Ctrl+A)" aria-label="Select all"
@@ -520,10 +588,22 @@ function TableView({ source, item, onConfig }) {
                             ) : <button className={styles.addBtn} onClick={addRecord}>New record</button>}
                         </div>
                     )}
-                    {t.rows.length > 0 && calcRow(t.rows, 'calc-all')}
+                    {t.rows.length > 0 && config.showTotals !== false && calcRow(t.rows, 'calc-all')}
                 </div>
             </div>
 
+            {detailRec && (
+                <DetailPanel rec={detailRec} fields={t.ordered} primary={primary} source={source}
+                    index={detailIdx} count={flatRows.length} hidden={!flatRows.some(x => x.rec.id === detail)}
+                    onStep={(d) => { const n = flatRows[detailIdx + d]; if (n) setDetail(n.rec.id) }}
+                    onOpen={openAttachment} onClose={() => { setDetail(null); requestAnimationFrame(focusGrid) }} />
+            )}
+            {preview && <AttachmentPreview att={preview} onClose={() => setPreview(null)} />}
+            {importing && (
+                <ImportDialog rows={importing.rows} from={importing.from} fields={t.ordered} editable={source.editable}
+                    canFill={!!range} startCol={range ? range.c0 : 0} canAddFields={!!source.canAddField}
+                    onImport={doImport} onClose={() => { setImporting(null); requestAnimationFrame(focusGrid) }} />
+            )}
             {menu && (
                 <Popover anchor={menu.anchor} onClose={closeMenu}
                     width={menu.kind === 'filter' ? 440 : menu.kind === 'sort' ? 360 : 250}
@@ -536,7 +616,10 @@ function TableView({ source, item, onConfig }) {
                         <FieldMenu field={menuField} fields={t.ordered} source={source} records={source.records} config={config} onConfig={cfg}
                             onMove={moveField} onClose={closeMenu} />
                     )}
-                    {menu.kind === 'addField' && <AddFieldMenu source={source} onAdded={closeMenu} />}
+                    {menu.kind === 'addField' && <AddFieldMenu source={source} onAdded={(id, type) => {
+                        // A new formula column opens its settings, to write the formula.
+                        if (type === 'formula') setMenu(m => ({ kind: 'field', anchor: m.anchor, fid: id })); else closeMenu()
+                    }} />}
                     {menu.kind === 'calc' && menuField && <CalcMenu field={menuField} config={config} onConfig={cfg} onClose={closeMenu} />}
                 </Popover>
             )}

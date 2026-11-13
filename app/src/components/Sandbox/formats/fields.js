@@ -1,4 +1,5 @@
 import { pruneStyles } from './layout'
+import { computeFormulas, renameRefs } from './formula'
 
 /**
  * Field types and field edits for a Format's own records (spec §13.4.2).
@@ -13,6 +14,8 @@ import { pruneStyles } from './layout'
  *   multi                    option labels (string[])
  *   date                     'YYYY-MM-DD' (a calendar day)
  *   check                    boolean
+ *   files                    [{ path, name }] (Bag-relative) and/or [{ note, name }]
+ *   formula                  nothing stored: computed from `field.expr` (formula.js)
  *
  * An empty value is simply absent from `record.values`. Options stay plain
  * labels (as section 5 stored them); a chip's colour comes from its label, so
@@ -33,6 +36,8 @@ export const FIELD_TYPES = [
     { id: 'check', label: 'Checkbox' },
     { id: 'url', label: 'URL' },
     { id: 'email', label: 'Email' },
+    { id: 'files', label: 'Attachment' },
+    { id: 'formula', label: 'Formula' },
 ]
 export const fieldTypeLabel = (t) => FIELD_TYPES.find(f => f.id === t)?.label || 'Text'
 export const TEXTLIKE = new Set(['text', 'long', 'url', 'email'])
@@ -70,6 +75,8 @@ export function cellText(field, v) {
         case 'date': return formatDay(v)
         case 'check': return v ? 'Yes' : ''
         case 'multi': return Array.isArray(v) ? v.join(', ') : String(v)
+        case 'formula': return typeof v === 'number' ? formatNumber(v, field.decimals) : ''
+        case 'files': return Array.isArray(v) ? v.map(a => a?.name || '').filter(Boolean).join(', ') : ''
         default: return Array.isArray(v) ? v.join(', ') : String(v)
     }
 }
@@ -83,12 +90,28 @@ export function optionHue(label) {
 
 // ---- reading what someone typed ----
 
+/**
+ * A number from what someone typed or pasted: "1200", "1,200", "1 200",
+ * "-3.5", "1,5" (a decimal comma: 1–2 digits after it), fractions "3/4" and
+ * mixed "1 1/2". Commas followed by groups of exactly three digits are
+ * thousands separators. undefined if it isn't a number.
+ */
 export function parseNumber(s) {
     if (typeof s === 'number') return Number.isNaN(s) ? undefined : s
-    const t = String(s ?? '').trim().replace(/[\s,]/g, '')
+    let t = String(s ?? '').trim()
     if (!t) return undefined
+    const frac = /^(-)?(?:(\d+)\s+)?(\d+)\s*\/\s*(\d+)$/.exec(t)
+    if (frac) {
+        const [, neg, whole, a, b] = frac
+        if (Number(b) === 0) return undefined
+        const v = (whole ? Number(whole) : 0) + Number(a) / Number(b)
+        return neg ? -v : v
+    }
+    if (/^-?\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.')        // 1,5 → 1.5
+    else t = t.replace(/[\s,](?=\d{3}(\D|$))/g, '').replace(/\s/g, '')   // 1,200 / 1 200 → 1200
+    if (t.includes(',')) return undefined
     const n = Number(t)
-    return Number.isFinite(n) ? n : undefined
+    return Number.isFinite(n) && t !== '' ? n : undefined
 }
 
 const pad = (n) => String(n).padStart(2, '0')
@@ -107,6 +130,7 @@ export function convertValue(v, from, to) {
     if (isEmptyValue(v)) return undefined
     // Plain digits, not the locale's display form ("1200", never "1,200" or "1.200").
     const text = from === 'number' && typeof v === 'number' ? String(v) : cellText({ type: from }, v)
+    if (to === 'formula' || to === 'files') return undefined   // nothing to carry over: computed, or files to pick
     switch (to) {
         case 'number': return from === 'check' ? (v ? 1 : undefined) : parseNumber(Array.isArray(v) ? v[0] : v)
         case 'check': return from === 'number' ? v !== 0 : !/^(no|false|0|off)$/i.test(text.trim())
@@ -124,6 +148,8 @@ export function convertValue(v, from, to) {
 /** A value as a field of `field.type` stores it (what a cell editor commits). */
 export function coerceValue(field, v) {
     switch (field?.type) {
+        case 'formula': return undefined
+        case 'files': { const a = (Array.isArray(v) ? v : []).filter(x => x && (x.path || x.note)); return a.length ? a : undefined }
         case 'number': return parseNumber(v)
         case 'check': return v ? true : undefined
         case 'date': return parseDay(v)
@@ -157,6 +183,7 @@ export function addField(payload, def = {}, { id = newFieldId() } = {}) {
     if (taken.has(name)) { let n = 2; while (taken.has(`${name} ${n}`)) n++; name = `${name} ${n}` }
     const field = { id, name, type }
     if (hasOptions(field)) field.options = [...(def.options || [])]
+    if (type === 'formula') field.expr = def.expr || ''
     return { payload: { ...payload, fields: [...fields, field] }, field }
 }
 
@@ -171,7 +198,16 @@ export function updateField(payload, id, patch, { at = nowISO() } = {}) {
     let next = { ...old, ...patch }
     let records = payload.records || []
     if (patch.type && patch.type !== old.type) {
-        records = mapValues(records, id, (v) => convertValue(v, old.type, patch.type), at)
+        // A formula's values are computed: turning it into another type keeps what it showed.
+        const from = old.type === 'formula' ? computeFormulas(fields, records).records : records
+        records = mapValues(records, id, () => undefined, at)
+        records = records.map((r, i) => {
+            const nv = convertValue(from[i]?.values?.[id], old.type === 'formula' ? 'number' : old.type, patch.type)
+            if (nv === undefined) return r
+            return { ...r, values: { ...r.values, [id]: nv }, updated_at: at }
+        })
+        if (next.type === 'formula' && next.expr == null) next.expr = ''
+        if (next.type !== 'formula') delete next.expr
         if (hasOptions(next)) {
             const opts = [...(old.options || [])]
             for (const r of records) {
@@ -183,7 +219,10 @@ export function updateField(payload, id, patch, { at = nowISO() } = {}) {
         if (next.type !== 'number') delete next.decimals
     }
     if (typeof next.name === 'string') next.name = next.name.trim() || old.name
-    const out = { ...payload, fields: fields.map(f => f.id === id ? next : f), records }
+    let nextFields = fields.map(f => f.id === id ? next : f)
+    // Renamed: formulas that use it follow (references are by name, R13.21).
+    if (next.name !== old.name) nextFields = nextFields.map(f => (f.type === 'formula' && f.expr ? { ...f, expr: renameRefs(f.expr, old.name, next.name) } : f))
+    const out = { ...payload, fields: nextFields, records }
     // A view setting that no longer fits the new type goes (a filter's operator, a calculation).
     return patch.type && patch.type !== old.type ? pruneConfig(out, id, { type: true }) : out
 }

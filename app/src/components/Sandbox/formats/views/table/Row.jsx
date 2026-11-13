@@ -1,11 +1,13 @@
 import { memo, useRef } from 'react'
-import { LuCheck, LuTrash2, LuGripVertical, LuExternalLink } from 'react-icons/lu'
+import { LuCheck, LuTrash2, LuGripVertical, LuExternalLink, LuMaximize2 } from 'react-icons/lu'
 import styles from '../../Table.module.css'
 import Popover from '../../Popover'
 import { cellText, isEmptyValue, TEXTLIKE, hasOptions } from '../../fields'
 import { cellStyle } from '../../layout'
 import { FONT_FAMILIES } from '../../../text/textStyle'
 import { OptionPicker, OptionChip } from '../TableMenus'
+import { AttachChip, AttachEditor } from './Attachments'
+import { attKey } from './attachKinds'
 
 /**
  * One table row, memoized: editing a cell re-renders only its own row
@@ -38,9 +40,11 @@ function cellCss(st) {
     }
 }
 
-export function CellValue({ field, value }) {
+export function CellValue({ field, value, error, onOpen }) {
+    if (error) return <span className={styles.fxError} title={error.message}>{error.code}</span>
     if (isEmptyValue(value)) return null
     switch (field.type) {
+        case 'files': return <span className={styles.chips}>{(Array.isArray(value) ? value : []).map(a => <AttachChip key={attKey(a)} att={a} onOpen={onOpen} />)}</span>
         case 'select': return <OptionChip label={String(value)} small />
         case 'multi': return <span className={styles.chips}>{(Array.isArray(value) ? value : [value]).map(o => <OptionChip key={o} label={o} small />)}</span>
         case 'url': case 'email': return <span className={styles.link}>{String(value)}</span>
@@ -53,7 +57,7 @@ export function CellValue({ field, value }) {
  * says where the selection goes next ('down', 'next', 'prev'). `seed` is a
  * key typed on a selected cell: it replaces the value, as in a spreadsheet.
  */
-export function CellEditor({ field, value, seed, anchor, canCreate, onDone }) {
+export function CellEditor({ field, value, seed, anchor, canCreate, onOpen, onDone }) {
     const finished = useRef(false)
     const area = useRef(null)
     const finish = (result, nav) => {
@@ -73,6 +77,14 @@ export function CellEditor({ field, value, seed, anchor, canCreate, onDone }) {
             <Popover anchor={anchor} width={240} label={`${field.name} options`} onClose={() => finish(null)}>
                 <OptionPicker field={field} value={value} query={seed || ''} canCreate={canCreate}
                     onChange={(v) => onDone({ value: v, keepOpen: true })} onClose={(nav) => finish(null, nav)} />
+            </Popover>
+        )
+    }
+    if (field.type === 'files') {
+        // Each add or remove commits at once; closing just ends the edit.
+        return (
+            <Popover anchor={anchor} width={300} label={`${field.name} attachments`} onClose={() => finish(null)}>
+                <AttachEditor value={value} onOpen={onOpen} onChange={(v) => onDone({ value: v, keepOpen: true })} />
             </Popover>
         )
     }
@@ -120,6 +132,10 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                     title="Select the row · drag to move it" aria-label="Select row">
                     <LuGripVertical size="1em" />
                 </button>
+                <button className={styles.expand} onMouseDown={noFocus} onPointerDown={(e) => e.stopPropagation()} onClick={() => api.openDetail(rec.id)}
+                    title="Open the record (Space)" aria-label="Open record">
+                    <LuMaximize2 size="0.85em" />
+                </button>
             </div>
             {fields.map((f, ci) => {
                 const val = v[f.id]
@@ -127,8 +143,8 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                 const inSel = ci >= selC0 && ci <= selC1
                 const css = cellCss(cellStyle(st, rec.id, f.id))
                 const wrapCls = [styles.cellWrap, inSel && styles.cellSel, ci === focusC && styles.cellFocus, editFid === f.id && styles.cellEditing].filter(Boolean).join(' ')
-                const align = f.type === 'number' ? styles.right : f.type === 'check' ? styles.center : ''
-                if (editFid === f.id && !hasOptions(f) && f.type !== 'long' && f.type !== 'check') {
+                const align = f.type === 'number' || f.type === 'formula' ? styles.right : f.type === 'check' ? styles.center : ''
+                if (editFid === f.id && !hasOptions(f) && f.type !== 'long' && f.type !== 'check' && f.type !== 'files') {
                     return (
                         <div key={f.id} role="gridcell" className={wrapCls} style={css}>
                             <CellEditor field={f} value={val} seed={editSeed} onDone={(r, nav) => api.cellDone(rec.id, gk, f, r, nav)} />
@@ -146,10 +162,10 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                             onDoubleClick={() => api.startEdit(ri, ci)}
                             onClick={f.type === 'check' && canEdit ? () => api.toggle(rec.id, f.id, !val) : undefined}
                             aria-disabled={!canEdit || undefined}
-                            title={TEXTLIKE.has(f.type) ? cellText(f, val) || undefined : undefined}>
+                            title={f.type === 'formula' ? `= ${f.expr || ''}` : TEXTLIKE.has(f.type) ? cellText(f, val) || undefined : undefined}>
                             {f.type === 'check'
                                 ? <span className={`${styles.box} ${val ? styles.boxOn : ''}`}>{val && <LuCheck size={11} strokeWidth={3} />}</span>
-                                : <CellValue field={f} value={val} />}
+                                : <CellValue field={f} value={val} error={rec.errors?.[f.id]} onOpen={api.openAttachment} />}
                         </button>
                         {href && (
                             <button className={styles.openLink} title={`Open ${href}`} aria-label="Open link" onMouseDown={noFocus}
@@ -158,7 +174,7 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                             </button>
                         )}
                         {editFid === f.id && (
-                            <CellEditor field={f} value={val} seed={editSeed} anchor={editRef} canCreate={canCreate}
+                            <CellEditor field={f} value={val} seed={editSeed} anchor={editRef} canCreate={canCreate} onOpen={api.openAttachment}
                                 onDone={(r, nav) => api.cellDone(rec.id, gk, f, r, nav)} />
                         )}
                     </div>
@@ -177,7 +193,7 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
 
 // Linked tasks rebuild their records on every change, so a row also counts as
 // unchanged when its values are the same.
-const sameRec = (a, b) => a === b || (a.id === b.id && JSON.stringify(a.values) === JSON.stringify(b.values))
+const sameRec = (a, b) => a === b || (a.id === b.id && JSON.stringify(a.values) === JSON.stringify(b.values) && JSON.stringify(a.errors) === JSON.stringify(b.errors))
 function equal(p, n) {
     for (const k in n) {
         if (k === 'rec') { if (!sameRec(p.rec, n.rec)) return false } else if (p[k] !== n[k]) return false

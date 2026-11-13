@@ -24,6 +24,7 @@
  */
 import { isEmptyValue, cellText, TEXTLIKE, formatNumber } from './fields'
 import { orderFields, orderRecords } from './layout'
+import { computeFormulas } from './formula'
 
 export const tableConfig = (payload) => payload?.table || {}
 
@@ -40,8 +41,9 @@ export const OPS = {
     multi: [['has', 'has'], ['has_not', 'doesn’t have'], ...EMPTY_OPS],
     date: [['is', 'is'], ['before', 'is before'], ['after', 'is after'], ['today', 'is today', false], ['overdue', 'is past', false], ['next7', 'is in the next 7 days', false], ...EMPTY_OPS],
     check: [['checked', 'is checked', false], ['unchecked', 'is not checked', false]],
+    files: [['not_empty', 'has attachments', false], ['empty', 'has none', false]],
 }
-const opKind = (type) => TEXTLIKE.has(type) || !OPS[type] ? 'text' : type
+const opKind = (type) => type === 'formula' ? 'number' : TEXTLIKE.has(type) || !OPS[type] ? 'text' : type
 /** [{ id, label, needsValue }] for a field type. */
 export const opsFor = (type) => OPS[opKind(type)].map(([id, label, needs = true]) => ({ id, label, needsValue: needs }))
 export const defaultOp = (type) => opsFor(type)[0].id
@@ -129,7 +131,8 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 /** Compare two non-empty values of `field`. Options sort in their own order. */
 export function compareValues(field, a, b) {
     switch (field.type) {
-        case 'number': return a - b
+        case 'number': case 'formula': return a - b
+        case 'files': return (a?.length || 0) - (b?.length || 0)
         case 'check': return (a ? 1 : 0) - (b ? 1 : 0)
         case 'date': return a < b ? -1 : a > b ? 1 : 0
         case 'select':
@@ -204,7 +207,7 @@ const NUM_CALCS = [['sum', 'Sum'], ['avg', 'Average'], ['min', 'Min'], ['max', '
 const COUNT_CALCS = [['filled', 'Filled'], ['empty', 'Empty'], ['count', 'Count all']]
 /** [{ id, label }] the footer offers for a field type (R13.28). */
 export function calcsFor(type) {
-    const list = type === 'number' ? [...NUM_CALCS, ...COUNT_CALCS]
+    const list = type === 'number' || type === 'formula' ? [...NUM_CALCS, ...COUNT_CALCS]
         : type === 'check' ? [['checked', 'Checked'], ['pct', '% checked'], ['count', 'Count all']]
             : type === 'date' ? [['earliest', 'Earliest'], ['latest', 'Latest'], ...COUNT_CALCS]
                 : COUNT_CALCS
@@ -251,7 +254,8 @@ export function tableRows(source, config = {}, { today = todayDay(), keep } = {}
     const hidden = new Set(config.hidden || [])
     const ordered = orderFields(fields, config.fieldOrder)
     const shown = ordered.filter(f => !hidden.has(f.id))
-    const records = orderRecords(source.records)
+    // Formula columns computed first, so they filter, sort, group and total like numbers.
+    const { records, errors } = computeFormulas(fields, orderRecords(source.records))
     // `keep`: records just added here stay visible even if the filter would hide them.
     let rows = filterRecords(records, fields, config, today)
     if (keep?.size) {
@@ -260,5 +264,5 @@ export function tableRows(source, config = {}, { today = todayDay(), keep } = {}
     }
     rows = sortRecords(rows, fields, config.sorts)
     const groupField = fields.find(f => f.id === config.groupBy)
-    return { fields: shown, ordered, rows, total: source.records.length, groupField, groups: groupRecords(rows, groupField) }
+    return { fields: shown, ordered, rows, all: records, errors, total: source.records.length, groupField, groups: groupRecords(rows, groupField) }
 }

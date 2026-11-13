@@ -987,4 +987,73 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     and `grid:` walks pass; with the eraser, the point over a widget's
     title bar is the board canvas and a press there left the widget.
     Lint 25, 676 tests, build pass.
+- 2026-11-13 · session 6 · **Table follow-up, checkpoint 2 of 2** (user
+  confirmed checkpoint 1):
+  - **Formula column** (`formats/formula.js`, tested; option A, a column, not
+    per-cell): `field.expr` like `{Price} * {Qty}`. + − × ÷ (also * / -),
+    fractions and decimals, ( ), ^ (right to left), ² ³, √ / sqrt( ),
+    cbrt( ), round(x, n), abs, floor, ceil, min, max, pi, 50 %. A small
+    parser — never eval. Fields by name in braces, case-insensitive;
+    renaming a field rewrites the formulas (R13.21). An empty input leaves
+    the result empty; errors are cell values (#DIV/0, #VALUE, #NAME,
+    #CYCLE, #ERROR, with the reason on hover) and never break the view.
+    Formulas can use formulas; cycles are caught. Computed in `tableRows`
+    before filtering, so they filter, sort, group and total like numbers.
+    Not stored and not editable (R13.31). The column menu has the editor:
+    a live check, field names and operators to insert, decimals. A new
+    Formula column opens straight into it. Formula → another type keeps the
+    values it showed; another type → Formula drops stored values.
+  - **Number cells read fractions and decimal commas** too (`parseNumber`):
+    3/4, 1 1/2, 1,5 (= 1.5); groups of exactly three digits after a comma
+    are thousands (1,200).
+  - **Totals row**: the "Σ Calculate" hint shows faintly all the time (it
+    was invisible until hovered); the Fields menu has "Show the totals row"
+    (`table.showTotals`).
+  - **Attachment field** (`files`): [{ path, name }] files copied into
+    `attachments/_boards/` (a short id before the name) by the native
+    multi-file picker (`media.js attachFilesViaPicker`), and/or
+    [{ note, name }] notes from the Bag (`contexts/BagNotesContext.js`, its
+    own context so editing a note doesn't re-render every widget).
+    Double-click a cell to add/remove; chips open what they point at — a
+    note in the notes page, an image or PDF in a preview over the window
+    (with Show in folder), anything else in the file manager. Removing an
+    attachment leaves the file in the Bag.
+  - **Detail panel** (`views/table/DetailPanel.jsx`): a row's ⤢ (beside the
+    grip) or Space on a selected cell opens a sheet at the window's right
+    with every field (hidden ones too), editable by type, formulas shown
+    with their expression, attachments managed in place. ↑/↓ step through
+    records in the table's order, Esc closes, "Hidden by the table's filter"
+    when it is, Delete record at the foot. Ctrl+Z reaches the board.
+  - **Paste and import** (`formats/importer.js`, tested): Ctrl+V on the
+    table. One value fills every selected cell (one step). Rows (tabs from a
+    spreadsheet, or CSV) open a preview: first row as headers (guessed),
+    each column → a field (matched by name, else by position), a new field
+    (type guessed: number, date, checkbox, URL, email, select, long, text),
+    or skip; with a cell selected, add as new records or fill from that
+    cell (rows past the end are added). "Import" in the toolbar reads a
+    CSV/TSV file the same way. Quotes, "" escapes, CRLF, BOM, ; separators;
+    at most 500 rows × 30 columns at once, with a notice. New options are
+    added. One undo step. Own records only (linked tasks: a notice).
+  - **CLI**: `sandbox_read` lists a formula field's `expr` (values aren't
+    stored); `files` values are listed as stored.
+  - Checked in a hidden window (`extras:` walk; `table:` and `grid:`
+    re-run green; Bag copy, localStorage backed up and restored):
+    - + → Formula opened its editor; "{Price} * {Cost}" showed “No field
+      named Cost” live; "{Price} * {Qty}" gave 20, 15 and nothing for a
+      row without Qty; renaming Price → Cost rewrote it; a formula cell
+      didn't open an editor; nothing stored;
+    - the hint reads "Σ Calculate" at opacity 0.5; Sum under Total → 35;
+    - ⤢ on Pens opened "Record: Pens"; Qty 4 there → Total 8 in the
+      panel; ↓ → Paper; Esc closed it;
+    - "7" pasted onto two selected Qty cells → both 7; pasted rows opened
+      the preview with Cost and Qty matched by name and Item, Colour as new
+      fields; Item mapped to Title; imported Glue (6) and Tape (1,5 × 4 = 6);
+    - a CSV file through Import read "Stapler, red" whole;
+    - an Attachment field took a note from the Bag (chip shown).
+    Two gaps found and fixed: "1/2" typed in a Number cell gave nothing,
+    and pasted "1,5" read as 15.
+    **Not driven** (needs the native file dialog or a real click): adding
+    files, opening the image/PDF preview, opening a note from a chip.
+    Desktop 693 tests, lint 25, build and `cargo check` pass; CLI 87 tests,
+    clippy unchanged.
 

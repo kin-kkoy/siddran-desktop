@@ -73,13 +73,14 @@ export function ownSource(payload, commit) {
     return {
         type: 'own', label: 'Own records',
         fields, records: payload.records || [],
-        editable: new Set(fields.map(f => f.id)),
+        editable: new Set(fields.filter(f => f.type !== 'formula').map(f => f.id)),   // a formula's cells are computed (R13.31)
         canAdd: true, canRemove: true,
         add: (values) => { const id = newRecordId(); commit(p => addRecord(p, values, { id }).payload); return id },
         // A new option typed into a cell joins its field in the same undo step.
         update: (id, patch) => commit(p => F.ensureOptions(updateRecord(p, id, patch), patch)),
         remove: (id) => commit(p => removeRecord(p, id)),
         updateMany: (list) => { if (list.length) commit(p => list.reduce((q, x) => F.ensureOptions(q, x.patch), updateRecords(p, list))) },
+        apply: (fn) => commit(fn),   // a whole-payload change in one step (an import)
         canReorder: true,
         moveRecord: (id, beforeId) => commit(p => moveRecord(p, id, beforeId)),
         fieldsEditable: true,

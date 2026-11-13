@@ -8,6 +8,7 @@
 //   top:<boardId>    — things drawn on a widget, on the top canvas (runTop)
 //   table:<boardId>  — the Table view: fields, cells, sort, filter, group (runTable)
 //   grid:<boardId>   — Table selection, cell fonts, row/column drag, long tables (runGrid)
+//   extras:<boardId> — formulas, totals, detail panel, paste, CSV import, attachments (runExtras)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -745,6 +746,137 @@ async function runGrid() {
     send('done', true)
 }
 
+// ── extras:<boardId> — checkpoint 2: formula column, totals hint, detail
+// panel, paste (one value; rows with the preview), CSV import, attaching a note.
+async function runExtras() {
+    const ce = console.error.bind(console)
+    console.error = (...a) => { send('console-error', a.map(String).join(' ').slice(0, 400)); ce(...a) }
+    window.addEventListener('error', (e) => send('window-error', String(e.message)))
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(1000)
+    const fid = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const P = () => live().find(i => i.id === fid)?.payload
+    const W = () => document.querySelector(`[data-sb-id="${fid}"]`)
+    const G = () => W().querySelector('[role="grid"]')
+    const kd = (el, k, o = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }))
+    const pop = () => [...document.querySelectorAll('[role="dialog"][data-sb-handle="true"]')].at(-1)
+    const popBtn = (txt) => [...(pop()?.querySelectorAll('button') || [])].find(b => b.textContent.trim().startsWith(txt))
+    const rows = () => [...W().querySelectorAll('[role="row"][data-ri]')]
+    const heads = () => [...W().querySelectorAll('[role="columnheader"]')].map(h => h.querySelector('button').textContent.trim().replace(/ [↑↓]$/, ''))
+    const col = (name) => heads().indexOf(name)
+    const cell = (ri, name) => rows()[ri]?.children[1 + col(name)]
+    const texts = (name) => rows().map(r => r.children[1 + col(name)]?.textContent.trim())
+    const center = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] }
+    const press = (el, o = {}) => { const [x, y] = center(el); el.dispatchEvent(ptr('pointerdown', x, y, o)); window.dispatchEvent(ptr('pointerup', x, y, o)) }
+    const dbl = (el) => el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    const setArea = (el, v) => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }
+    const blur = (el) => el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    const paste = (el, text) => { const ev = new Event('paste', { bubbles: true, cancelable: true }); Object.defineProperty(ev, 'clipboardData', { value: { getData: () => text } }); el.dispatchEvent(ev) }
+    const add = W().querySelector('input[aria-label="New record"]')
+    for (const t of ['Pens', 'Paper', 'Ink']) { setInput(add, t); kd(add, 'Enter'); await sleep(250) }
+    for (const name of ['Price', 'Qty']) {
+        W().querySelector('button[aria-label="Add a field"]').click(); await sleep(300)
+        setInput(pop().querySelector('input'), name); await sleep(50)
+        popBtn('Number').click(); await sleep(400)
+    }
+    const typeIn = async (ri, name, v) => { dbl(cell(ri, name).querySelector('button')); await sleep(150); const i = W().querySelector(`input[aria-label="${name}"]`); setInput(i, v); kd(i, 'Enter'); await sleep(250) }
+    await typeIn(0, 'Price', '2'); await typeIn(0, 'Qty', '10'); await typeIn(1, 'Price', '5'); await typeIn(1, 'Qty', '3'); await typeIn(2, 'Price', '1/2')
+
+    // A formula column: + → Formula opens its settings with the editor.
+    W().querySelector('button[aria-label="Add a field"]').click(); await sleep(300)
+    setInput(pop().querySelector('input'), 'Total'); await sleep(50)
+    popBtn('Formula').click(); await sleep(600)
+    const area = pop()?.querySelector('textarea[aria-label="Formula"]')
+    const editorOpened = !!area
+    setArea(area, '{Price} * {Cost}'); await sleep(200)
+    const liveError = pop().textContent.match(/No field named “Cost”/)?.[0] || null
+    setArea(area, '{Price} * {Qty}'); await sleep(100)
+    kd(area, 'Enter'); await sleep(400)
+    key('Escape'); await sleep(200)
+    const totals = texts('Total')
+    const fx = P().fields.find(f => f.name === 'Total')
+    // Rename Price → Cost: the formula follows.
+    W().querySelector('button[aria-label="Price settings"]').click(); await sleep(300)
+    const nameIn = pop().querySelector('input[aria-label="Field name"]'); setInput(nameIn, 'Cost'); blur(nameIn); await sleep(300)
+    key('Escape'); await sleep(200)
+    const exprAfter = P().fields.find(f => f.id === fx.id)?.expr
+    // A formula cell can't be edited; 1/0 shows #DIV/0.
+    dbl(cell(0, 'Total').querySelector('button')); await sleep(200)
+    const fxEditable = !!W().querySelector('input[aria-label="Total"]')
+    await step('formula', { editorOpened, liveError, expr: fx?.expr, totals, exprAfter, fxEditable, stored: P().records.map(r => r.values[fx.id] ?? null) })
+
+    // Totals row: the hint shows without hovering; Sum under Total.
+    const hint = [...W().querySelectorAll('[class*="calcHint"]')][0]
+    const hintText = hint?.textContent, hintOpacity = hint && getComputedStyle(hint).opacity
+    const calcRow = [...W().querySelectorAll('[class*="calcRow"]')].at(-1)
+    calcRow.children[1 + col('Total')].click(); await sleep(300)
+    popBtn('Sum').click(); await sleep(300)
+    const sum = [...W().querySelectorAll('[class*="calcRow"]')].at(-1).children[1 + col('Total')].textContent.trim()
+    await step('totals', { hintText, hintOpacity, sum })
+
+    // Detail panel: open row 1, change Qty there, step to the next record.
+    rows()[0].querySelector('button[aria-label="Open record"]').click(); await sleep(400)
+    const panel = () => document.querySelector('[role="dialog"][aria-label^="Record:"]')
+    const title0 = panel()?.getAttribute('aria-label')
+    const qty = panel().querySelector('input[aria-label="Qty"]'); setInput(qty, '4'); blur(qty); await sleep(300)
+    const totalInPanel = [...panel().querySelectorAll('[class*="detailRead"]')].map(x => x.textContent.trim())
+    kd(panel(), 'ArrowDown'); await sleep(300)
+    const title1 = panel()?.getAttribute('aria-label')
+    kd(panel(), 'Escape'); await sleep(300)
+    await step('detail', { title0, title1, qtyNow: P().records[0].values[P().fields.find(f => f.name === 'Qty').id], totalInPanel, closed: !panel() })
+
+    // Paste one value into a selected block (Qty of rows 2–3).
+    press(cell(1, 'Qty').querySelector('button')); await sleep(100)
+    press(cell(2, 'Qty').querySelector('button'), { shiftKey: true }); await sleep(100)
+    paste(G(), '7'); await sleep(400)
+    const qtyCol = texts('Qty')
+    // Paste rows from a spreadsheet → the preview → Import.
+    paste(G(), 'Item\tCost\tQty\tColour\nGlue\t3\t2\tRed\nTape\t1,5\t4\tBlue\n'); await sleep(500)
+    const dlg = () => document.querySelector('[role="dialog"][aria-label="Import rows"]')
+    const opened = !!dlg()
+    const sels = dlg().querySelectorAll('thead select[aria-label$="goes to"]')
+    const guessed = [...sels].map(s => s.value)
+    const Sel = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set
+    Sel.call(sels[0], 'title'); sels[0].dispatchEvent(new Event('change', { bubbles: true })); await sleep(200)
+    ;[...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Import').click(); await sleep(600)
+    await step('paste', { qtyCol, opened, guessed, titles: texts('Title'), heads: heads(), colour: P().fields.find(f => f.name === 'Colour')?.type, total: texts('Total') })
+
+    // CSV import through the toolbar's file input.
+    let csv = null
+    try {
+        const dt = new DataTransfer()
+        dt.items.add(new File(['Title,Cost\n"Stapler, red",12\nClips,0.5\n'], 'supplies.csv', { type: 'text/csv' }))
+        const fi = W().querySelector('input[type="file"]'); fi.files = dt.files; fi.dispatchEvent(new Event('change', { bubbles: true })); await sleep(800)
+        const from = dlg()?.textContent.includes('supplies.csv')
+        ;[...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Import').click(); await sleep(600)
+        csv = { from, titles: texts('Title') }
+    } catch (e) { csv = { error: String(e) } }
+    await step('csv', csv)
+
+    // An attachment field; attach a note from the Bag (files go through the native picker, not drivable here).
+    W().querySelector('button[aria-label="Add a field"]').click(); await sleep(300)
+    setInput(pop().querySelector('input'), 'Files'); await sleep(50)
+    popBtn('Attachment').click(); await sleep(400)
+    dbl(cell(0, 'Files').querySelector('button')); await sleep(300)
+    popBtn('Attach a note').click(); await sleep(300)
+    const noteBtn = [...pop().querySelectorAll('button')].find(b => b.className.includes('popItem'))
+    const noteName = noteBtn?.textContent.trim()
+    noteBtn?.click(); await sleep(400)
+    key('Escape'); await sleep(300)
+    const filesF = P().fields.find(f => f.name === 'Files')
+    await step('attach', { type: filesF?.type, value: P().records[0].values[filesF?.id], noteName, chip: cell(0, 'Files')?.textContent.trim() })
+    send('done', true)
+}
+
+if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('grid:') && boardId) runGrid().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('table:') && boardId) runTable().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('top:') && boardId) runTop().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

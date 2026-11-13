@@ -3,6 +3,7 @@ import { LuCheck, LuX, LuPlus, LuArrowUp, LuArrowDown, LuEye, LuEyeOff, LuArrowL
 import styles from '../Table.module.css'
 import { FIELD_TYPES, fieldTypeLabel, hasOptions, optionHue, filledCount } from '../fields'
 import { opsFor, defaultOp, calcsFor } from '../query'
+import { checkFormula } from '../formula'
 
 /**
  * The Table's menus. Each edits through `onConfig(fn)` (view settings in
@@ -140,7 +141,7 @@ export function GroupMenu({ fields, config, onConfig, onClose }) {
         <>
             <Head>Group by</Head>
             <button className={styles.popItem} onClick={() => pick(null)}><Tick on={!config.groupBy} /> None</button>
-            {fields.filter(f => f.type !== 'long').map(f => (
+            {fields.filter(f => f.type !== 'long' && f.type !== 'files').map(f => (
                 <button key={f.id} className={styles.popItem} onClick={() => pick(f.id)}>
                     <Tick on={config.groupBy === f.id} /> <span className={styles.popLabel}>{f.name}</span> <span className={styles.popMeta}>{fieldTypeLabel(f.type)}</span>
                 </button>
@@ -175,6 +176,9 @@ export function FieldsMenu({ fields, config, onConfig }) {
             <div className={styles.popRowCheck}>
                 <label><input type="checkbox" checked={config.wrap !== false} onChange={(e) => onConfig(c => ({ ...c, wrap: e.target.checked }))} /> Wrap long text</label>
             </div>
+            <div className={styles.popRowCheck}>
+                <label><input type="checkbox" checked={config.showTotals !== false} onChange={(e) => onConfig(c => ({ ...c, showTotals: e.target.checked }))} /> Show the totals row</label>
+            </div>
             {hidden.size > 0 && <div className={styles.popActions}><button className={styles.popBtnQuiet} onClick={() => onConfig(c => ({ ...c, hidden: [] }))}>Show all</button></div>}
         </>
     )
@@ -208,6 +212,38 @@ function OptionsEditor({ field, source }) {
     )
 }
 
+/** A formula column's expression: live check, field names to insert, saved on Enter / leaving. */
+function FormulaEditor({ field, fields, source }) {
+    const [draft, setDraft] = useState(field.expr || '')
+    const err = draft.trim() ? checkFormula(draft, fields, field.id) : ''
+    const save = () => { if (draft !== (field.expr || '') && !err) source.updateField(field.id, { expr: draft }) }
+    const insert = (txt) => setDraft(d => `${d}${d && !/[\s(]$/.test(d) ? ' ' : ''}${txt}`)
+    const usable = fields.filter(f => f.id !== field.id && ['number', 'formula', 'check', 'text', 'select'].includes(f.type))
+    return (
+        <>
+            <div className={styles.popHead}>Formula</div>
+            <div className={styles.popRow}>
+                <textarea className={styles.fxInput} value={draft} rows={2} autoFocus aria-label="Formula" spellCheck={false}
+                    placeholder="e.g. {Price} * {Qty}"
+                    onChange={(e) => setDraft(e.target.value)} onBlur={save}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() } }} />
+            </div>
+            {err ? <div className={styles.fxErr}>{err}</div> : draft.trim() && draft !== (field.expr || '') ? <div className={styles.popNote}>Enter saves it.</div> : null}
+            {usable.length > 0 && (
+                <div className={styles.fxFields}>
+                    {usable.map(f => <button key={f.id} className={styles.fxChip} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${f.name}}`)}>{f.name}</button>)}
+                </div>
+            )}
+            <div className={styles.fxOps}>
+                {['+', '−', '×', '÷', '(', ')', '^', '²', '³', '√', '%'].map(o => (
+                    <button key={o} className={styles.fxChip} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(o)}>{o}</button>
+                ))}
+            </div>
+            <div className={styles.popNote}>Also sqrt( ), cbrt( ), round(x, 2), abs, floor, ceil, min, max, pi. A field goes in braces.</div>
+        </>
+    )
+}
+
 export function FieldMenu({ field, fields, source, records, config, onConfig, onMove, onClose }) {
     const [confirm, setConfirm] = useState(false)
     const own = !!source.fieldsEditable
@@ -231,8 +267,8 @@ export function FieldMenu({ field, fields, source, records, config, onConfig, on
                     </select>
                 </div>
             )}
-            {own && filled > 0 && <div className={styles.popNote}>Changing the type converts {filled} value{filled === 1 ? '' : 's'}. Ctrl+Z undoes it.</div>}
-            {own && field.type === 'number' && (
+            {own && filled > 0 && field.type !== 'formula' && <div className={styles.popNote}>Changing the type converts {filled} value{filled === 1 ? '' : 's'}. Ctrl+Z undoes it.</div>}
+            {own && (field.type === 'number' || field.type === 'formula') && (
                 <div className={styles.popRow}>
                     <span className={styles.popWord}>Decimals</span>
                     <select className={styles.popSelect} value={Number.isInteger(field.decimals) ? field.decimals : ''} aria-label="Decimals"
@@ -243,10 +279,11 @@ export function FieldMenu({ field, fields, source, records, config, onConfig, on
                 </div>
             )}
             {own && hasOptions(field) && <OptionsEditor field={field} source={source} />}
+            {own && field.type === 'formula' && <FormulaEditor key={field.id} field={field} fields={fields} source={source} />}
             <div className={styles.popSep} />
             <button className={styles.popItem} onClick={() => sortBy('asc')}><span className={styles.popTick}><LuArrowUp size={13} /></span> Sort ascending</button>
             <button className={styles.popItem} onClick={() => sortBy('desc')}><span className={styles.popTick}><LuArrowDown size={13} /></span> Sort descending</button>
-            {field.type !== 'long' && (
+            {field.type !== 'long' && field.type !== 'files' && (
                 <button className={styles.popItem} onClick={() => { onConfig(c => ({ ...c, groupBy: c.groupBy === field.id ? undefined : field.id })); onClose() }}>
                     <span className={styles.popTick}><LuRows3 size={13} /></span> {config.groupBy === field.id ? 'Stop grouping' : 'Group by this field'}
                 </button>
@@ -284,7 +321,7 @@ export function FieldMenu({ field, fields, source, records, config, onConfig, on
 
 export function AddFieldMenu({ source, onAdded }) {
     const [name, setName] = useState('')
-    const add = (type) => { const id = source.addField({ name: name.trim(), type }); onAdded(id) }
+    const add = (type) => { const id = source.addField({ name: name.trim(), type }); onAdded(id, type) }
     return (
         <>
             <Head>New field</Head>

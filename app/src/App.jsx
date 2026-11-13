@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom'
 import Sidebar from "./components/Layout/Sidebar/Sidebar.jsx"
 import { SidebarContext } from "./contexts/SidebarContext.jsx"
 import { TasksApiProvider } from "./contexts/TasksApiContext.js"
+import { BagNotesProvider } from "./contexts/BagNotesContext.js"
 import { GlobalExpandButton } from "./components/Layout/Sidebar/ExpandSidebarButton.jsx"
 import StarCanvas from "./components/Layout/StarCanvas/StarCanvas.jsx"
 import RouteMemory from "./components/Session/RouteMemory.jsx"
@@ -975,6 +976,7 @@ function App() {
       )}
 
       <TasksApiProvider value={tasksApi}>
+      <BagNotesProvider value={notes}>
       <BrowserRouter>
         <NoteTabsProvider>
         <StagedNotesProvider ready={unlocked && notesPagination != null} importMarkdownFiles={importMarkdownFiles}>
@@ -1164,6 +1166,7 @@ function App() {
         </StagedNotesProvider>
         </NoteTabsProvider>
       </BrowserRouter>
+      </BagNotesProvider>
       </TasksApiProvider>
     </div>
     </SidePaneProvider>
