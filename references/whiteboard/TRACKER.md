@@ -1395,3 +1395,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
        remove it with ×.
     4. Paste a screenshot into a Doc: it should show inline and go to
        attachments/_boards/.
+- 2026-11-13 · session 8 · user checked round 2: everything works.
+  Exports landed in ~/Downloads (`meeting-notes.md`; the PDF is named in
+  the print dialog). One fix: every row of the "/" list showed as selected
+  (blue). The theme colours any `li[aria-selected]`, and the menu set
+  `aria-selected="false"` on the others; now only the chosen row has the
+  attribute, as in CodeMirror's own list (`doc2:` walk: 1 highlighted row in
+  each case). **Section 8 done; ready to merge with 9.**

@@ -1386,11 +1386,12 @@ async function runDoc2() {
         v.dispatch({ changes: { from: v.state.doc.length, insert: pick }, selection: { anchor: v.state.doc.length + pick.length }, userEvent: 'input.type' })
         await sleep(200); await flush()
         const first = document.querySelector('.cm-slash-menu li[aria-selected="true"]')?.textContent
+        const highlighted = document.querySelectorAll('.cm-slash-menu li[aria-selected]').length
         v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
         v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
         v.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
         await sleep(200)
-        return { onScreen: on, style, first, doc: v.state.doc.toString(), closed: !document.querySelector('.cm-slash-menu') }
+        return { onScreen: on, style, first, highlighted, doc: v.state.doc.toString(), closed: !document.querySelector('.cm-slash-menu') }
     }
     // Order matters for the check: after a word FIRST, then the line starts (the earlier run had them the other way).
     const afterWord = await slashAt('Intro ', 'quote'), empty = await slashAt('', 'check'), afterText = await slashAt('Intro\n', 'h2')

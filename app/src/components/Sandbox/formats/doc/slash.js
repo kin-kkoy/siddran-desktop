@@ -162,7 +162,9 @@ function menuView(view) {
         }
         ul.querySelectorAll('li').forEach((li, i) => {
             const on = i === s.selected
-            li.setAttribute('aria-selected', on ? 'true' : 'false')
+            // Present only on the chosen row: the theme colours any li[aria-selected] (as CodeMirror's own list does).
+            if (on) li.setAttribute('aria-selected', 'true')
+            else li.removeAttribute('aria-selected')
             if (on) li.scrollIntoView?.({ block: 'nearest' })
         })
     }
