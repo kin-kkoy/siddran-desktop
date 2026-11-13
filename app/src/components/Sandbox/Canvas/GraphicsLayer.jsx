@@ -252,16 +252,24 @@ const CommittedImage = memo(function CommittedImage({ item }) {
     )
 })
 
-const GraphicsLayer = memo(function GraphicsLayer({ graphicItems, editingShapeId = null }) {
+// Cropped to a frame (selection/attach.js): wrapped in a clipped group, in
+// world coordinates, so it works for rotated things too.
+const clipped = (node, item, clips) => {
+    const r = clips?.get(item.id)
+    if (!r) return node
+    return <Group key={item.id} clipX={r.x} clipY={r.y} clipWidth={r.w} clipHeight={r.h} listening={false}>{node}</Group>
+}
+
+const GraphicsLayer = memo(function GraphicsLayer({ graphicItems, editingShapeId = null, clips }) {
     return (
         // listening=false: every child already opts out, and selection uses the
         // manual world-space hit-test — so Konva skips building/redrawing the hit
         // canvas, ~halving paint cost when panning a dense board.
         <Layer listening={false}>
             {graphicItems.map(item => {
-                if (item.type === 'image') return <CommittedImage key={item.id} item={item} />
-                if (item.type === 'shape') return <CommittedShape key={item.id} item={item} hideText={item.id === editingShapeId} />
-                return <CommittedStroke key={item.id} item={item} />
+                if (item.type === 'image') return clipped(<CommittedImage key={item.id} item={item} />, item, clips)
+                if (item.type === 'shape') return clipped(<CommittedShape key={item.id} item={item} hideText={item.id === editingShapeId} />, item, clips)
+                return clipped(<CommittedStroke key={item.id} item={item} />, item, clips)
             })}
         </Layer>
     )

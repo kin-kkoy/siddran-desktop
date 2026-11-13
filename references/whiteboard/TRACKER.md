@@ -65,9 +65,9 @@ done, so the next session knows where things stand.
 6. **A widget doesn't carry what's underneath it** (2026-11-13). Board shapes
    paint beneath widgets, so any under one stay put when it moves.
 
-7. **Sticky attachment: kept for widgets, with a per-widget crop ⇄ hang
-   toggle** (2026-11-13; it started as a trial). Frames still use positional
-   membership. Whether frames get attachment and the same toggle is still open.
+7. **Sticky attachment on frames AND widgets, with a crop ⇄ hang toggle
+   per container; hang is the default** (2026-11-13). It began as a trial on
+   widgets only; the user kept it and asked for frames too.
 
 **Check-ins:** the user reviews by hand after **section 2** and after
 **section 5**. Stop at those points and ask them to try it. Other sections can
@@ -687,3 +687,39 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   the same in both modes. It's on the floating bar rather than the widget's
   title bar: it's an occasional setting, and the title bar is the grab
   handle. If frames adopt sticky attachment, give them the same toggle.
+- 2026-11-13 · session 5 · **sticky attachment extended to frames; hang is
+  now the default** (decision 7). `formats/attach.js` became
+  `selection/attach.js` (tested):
+  - **Frames** take anything but connectors (another frame only if it fits
+    wholly inside). A widget on top wins over the frame beneath; among frames,
+    the smallest wins. Widgets still take only DOM things above them.
+  - **Old boards:** things in frames with no `attachedTo` still ride by
+    position. The first time a frame on the board is moved or resized, they
+    are all stamped as attached (`stampPatches`, inside that gesture's undo
+    step), so from then on a shrinking frame keeps them. Things drawn in a
+    frame later are stamped the same way at the next frame gesture, or
+    attached when dropped.
+  - **Crop ⇄ hang** for frames too: the same floating-bar crop button, now
+    OFF (= hang) by default for both. `payload.overflow: 'clip'` crops;
+    absent or 'hang' hangs. Widgets that never set it now hang.
+  - Cropping on the canvas: each cropped graphic is wrapped in a Konva
+    `Group` clipped in world coordinates (GraphicsLayer; FrameLayer for
+    nested frames). Cards still use the clipped wrapper. A cropping frame's
+    title reads "Frame 1 · 1 cropped · 1 out of view".
+  - **CLI** `frame_of`: an item attached to a frame belongs to it wherever it
+    hangs; otherwise the old positional rule applies (tested). `attachedTo`
+    and `overflow` survive edits.
+  - Checked in a HIDDEN window (`frames:` probe scenario, live store, no
+    screenshots) on the test board's "Frame 1" (a rect and ink, neither
+    attached):
+    - dragging the frame by its title moved both with it by (57, 40) and
+      stamped both;
+    - shrinking it to a quarter kept both attached, hanging, with no crop;
+    - the crop button was off; turning it on cropped both (2 clipped Konva
+      groups) and the title read "Frame 1 · 1 cropped · 1 out of view";
+    - 3× Ctrl+Z restored the frame, the overflow setting and the
+      attachments exactly.
+    Desktop 642 tests pass, lint 25, build and `cargo check` pass. CLI 87
+    tests pass, clippy unchanged. How it looks is unseen (the user is at the
+    computer).
+

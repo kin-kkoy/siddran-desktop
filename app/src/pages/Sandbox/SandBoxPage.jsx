@@ -31,7 +31,7 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
-import { attachPatches, clipRect, clipState } from '../../components/Sandbox/formats/attach'
+import { attachPatches, stampPatches, boardClips, cutLabel } from '../../components/Sandbox/selection/attach'
 import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
@@ -165,7 +165,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const bump = useCallback(() => { if (sandboxId) touch(sandboxId) }, [sandboxId, touch])
     const nextZ = useCallback(() => items.reduce((m, it) => Math.max(m, it.z_index ?? 0), 0) + 1, [items])
     // Add a card (or widget): if it lands on a widget it attaches straight away
-    // (formats/attach.js, a trial for widgets) — one undo step for both.
+    // (or the frame it's inside — selection/attach.js) — one undo step for both.
     const addCard = useCallback((partial) => {
         beginTransaction()
         const created = act.addItem(partial)
@@ -608,6 +608,14 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const toggleMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : m)), [])
     const openDiagram = useCallback((source) => { setOpenMenu(null); setDiagram({ source }) }, [])
     const itemsById = useMemo(() => new Map(items.map(i => [i.id, i])), [items])
+    // What's cropped to a frame or widget (selection/attach.js): rects per item,
+    // counts per container. Memoised so the Konva layers keep their memo.
+    const board = useMemo(() => boardClips(items, itemsById), [items, itemsById])
+    const frameCutLabels = useMemo(() => {
+        const m = new Map()
+        for (const [id, c] of board.cut) if (isFrame(itemsById.get(id))) m.set(id, cutLabel(c))
+        return m
+    }, [board, itemsById])
     const diagramColors = useMemo(() => ({
         stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke,
         fill: canvas.shapeStyle.fill || 'transparent',
@@ -690,12 +698,18 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         canvas.overlayApiRef?.current?.beginMove?.(e, ids)
     }, [canvas, items, onSelect])
     // A drop: anything that moved may now sit on a widget (attach) or have left
-    // one (detach) — formats/attach.js, a trial for widgets only. Called inside
+    // one (detach) — frames and widgets, selection/attach.js. Called inside
     // the move's transaction, so it is the same undo step. Reads the store as
     // it is now: the last move frame hasn't rendered yet.
     const onMoveEnd = useCallback((ids) => {
         const patches = attachPatches(ids, boardItemsNow(sandboxId))
         for (const p of patches) act.updateItem(p.id, { payload: p.payload })
+    }, [sandboxId, act])
+    // A frame starts moving or resizing: whatever sits in frames by position
+    // only (a board from before attachment, or drawn there since) is attached
+    // to its frame now, so it sticks from here on. Inside the gesture's transaction.
+    const onFrameGesture = useCallback(() => {
+        for (const p of stampPatches(boardItemsNow(sandboxId))) act.updateItem(p.id, { payload: p.payload })
     }, [sandboxId, act])
     const insertFormat = useCallback((view = 'table') => {
         const c = centerWorld()
@@ -871,20 +885,10 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         )
     }
 
-    // Things attached to a widget are clipped to it (formats/attach.js); a
-    // widget counts its riders that are cropped (partly showing) or out of view.
-    const clipOf = new Map()
-    const cutOn = new Map()   // widget id → { cropped, hidden }
-    for (const it of cardItems) {
-        const r = it.payload?.attachedTo ? clipRect(it, itemsById) : null
-        if (!r) continue
-        clipOf.set(it.id, r)
-        const st = clipState(it, r)
-        if (!st) continue
-        const c = cutOn.get(it.payload.attachedTo) || { cropped: 0, hidden: 0 }
-        c[st] += 1
-        cutOn.set(it.payload.attachedTo, c)
-    }
+    // Cards cropped to a frame or widget sit in a clipped wrapper (below); a
+    // widget shows how many of its riders are cropped or out of view.
+    const clipOf = board.clips
+    const cutOn = board.cut
     const cardEl = (item) => {
         if (isFormat(item)) {
             return <FormatWidget item={item} tool={canvas.tool}
@@ -1024,6 +1028,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onQuickAdd={(id, side) => flow.createNext(id, side)}
                             onQuickAddAt={flow.createConnectedAt}
                             onMoveEnd={onMoveEnd}
+                            onFrameGesture={onFrameGesture}
                         />
                     }
                     contextToolbar={
@@ -1055,6 +1060,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onShapeDoubleClick={onShapeDoubleClick}
                     onEmptyDoubleClick={flow.createAt}
                     editingShapeId={editingShapeId}
+                    clips={board.clips}
+                    frameCutLabels={frameCutLabels}
                 />
 
                 {editingShapeId && (() => {

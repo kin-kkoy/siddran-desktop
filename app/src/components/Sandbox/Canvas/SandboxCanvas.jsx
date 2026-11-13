@@ -77,6 +77,8 @@ function SandboxCanvas({
     onShapeDoubleClick,    // (itemId) — double-click a shape to edit text
     onEmptyDoubleClick,    // (world) — double-click empty canvas to make a box there
     editingShapeId,        // shape currently text-editing → hide its committed text
+    clips,                 // Map(itemId → world rect): cropped to a frame/widget (selection/attach.js)
+    frameCutLabels,        // Map(frameId → "2 cropped") for the frame titles
     beginTransaction,
     endTransaction,
     overlayChildren,
@@ -838,9 +840,9 @@ function SandboxCanvas({
                 scaleY={canvas.viewport.zoom}
                 pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
             >
-                <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} />
+                <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} clips={clips} cutLabels={frameCutLabels} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
-                <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} />
+                <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} clips={clips} />
                 <ActiveLayer
                     activeStrokeRef={canvas.activeStrokeRef}
                     activeShapeRef={canvas.activeShapeRef}

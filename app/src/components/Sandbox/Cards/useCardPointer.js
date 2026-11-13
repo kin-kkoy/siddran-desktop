@@ -58,7 +58,7 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         elRef.current?.releasePointerCapture?.(e.pointerId)
         if (d.moved) {
             onUpdate(item.id, { x: d.lastX, y: d.lastY })
-            onMoveEnd?.([item.id])   // dropped: attach to / detach from a widget (formats/attach.js), same undo step
+            onMoveEnd?.([item.id])   // dropped: attach to / detach from a frame or widget (selection/attach.js), same undo step
         }
         endTransaction?.()
     }

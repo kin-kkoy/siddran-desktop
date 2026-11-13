@@ -3,6 +3,7 @@
 //   drag:<boardId>   — drag smoothness (below)
 //   format:<boardId> — a scripted walk through a Format widget (runFormat)
 //   attach:<boardId> — sticky attachment, clipping and text size (runAttach)
+//   frames:<boardId> — sticky attachment on frames (runFrames)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -343,6 +344,59 @@ async function runAttach() {
     send('done', true)
 }
 
+// ── frames:<boardId> — sticky attachment on frames (legacy stamping, shrink,
+// crop toggle, drag off), read from the live store. No screenshots needed.
+async function runFrames() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const frameOf = () => live().find(i => i.payload?.kind === 'frame' && i.payload?.title === 'Frame 1')
+    const F = frameOf()
+    const kids0 = live().filter(i => i.type !== 'connector' && i.id !== F.id && (() => { const cx = i.x + i.w / 2, cy = i.y + i.h / 2; return cx >= F.x && cx <= F.x + F.w && cy >= F.y && cy <= F.y + F.h })())
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    await step('before', { frame: boxOf(F), kids: kids0.map(k => [k.type, k.payload?.attachedTo ?? null]) })
+
+    // Grab the frame by its title and drag it.
+    const t = toClient(F.x + 12 / stage.scaleX(), F.y - 10 / stage.scaleX())
+    const kc = stage.content.querySelector('canvas')
+    kc.dispatchEvent(ptr('pointerdown', t.x, t.y))
+    for (let i = 1; i <= 10; i++) { await frame(); window.dispatchEvent(ptr('pointermove', t.x + i * 6, t.y + i * 4)) }
+    window.dispatchEvent(ptr('pointerup', t.x + 60, t.y + 40)); await sleep(600)
+    const F1 = frameOf()
+    const kids1 = kids0.map(k => live().find(i => i.id === k.id))
+    await step('moved', { frameMoved: [Math.round(F1.x - F.x), Math.round(F1.y - F.y)], kidsMoved: kids1.map((k, i) => [Math.round(k.x - kids0[i].x), Math.round(k.y - kids0[i].y)]), stamped: kids1.map(k => k.payload?.attachedTo === F.id) })
+
+    // Shrink it from the bottom-right handle to a quarter.
+    const se = [...document.querySelectorAll('svg rect')].find(r => r.style.cursor === 'nwse-resize' && r.getBoundingClientRect().top > toClient(0, F1.y + F1.h / 2).y)
+    const r0 = se.getBoundingClientRect()
+    const dx = -F1.w * 0.75 * stage.scaleX(), dy = -F1.h * 0.75 * stage.scaleY()
+    se.dispatchEvent(ptr('pointerdown', r0.left + 4, r0.top + 4))
+    for (let i = 1; i <= 10; i++) { await frame(); window.dispatchEvent(ptr('pointermove', r0.left + 4 + dx * i / 10, r0.top + 4 + dy * i / 10)) }
+    window.dispatchEvent(ptr('pointerup', r0.left + 4 + dx, r0.top + 4 + dy)); await sleep(600)
+    const clipGroups = () => stage.find(n => typeof n.clipWidth === 'function' && n.clipWidth() > 0).length
+    await step('shrunk', { frame: boxOf(frameOf()), stillAttached: kids0.map(k => live().find(i => i.id === k.id)?.payload?.attachedTo === F.id), clipGroups: clipGroups() })
+
+    // Crop on, from the floating bar.
+    const crop = document.querySelector('button[aria-label="Crop at the edge"]')
+    const pressedBefore = crop?.getAttribute('aria-pressed')
+    crop?.click(); await sleep(700)
+    const title = stage.find('Text').map(n => n.text()).find(x => x.startsWith('Frame 1'))
+    await step('crop-on', { pressedBefore, overflow: frameOf().payload?.overflow, clipGroups: clipGroups(), title })
+
+    // Undo back to the start: crop, shrink, move.
+    for (let i = 0; i < 3; i++) { key('z', { ctrlKey: true }); await sleep(400) }
+    const F2 = frameOf()
+    await step('undone', { frame: boxOf(F2), overflow: F2.payload?.overflow ?? null, kids: kids0.map(k => live().find(i => i.id === k.id)?.payload?.attachedTo ?? null) })
+    send('done', true)
+}
+
+if (spec.startsWith('frames:') && boardId) runFrames().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', {
     message: `${e?.message} @ ${e?.stack}`,
     widgets: document.querySelectorAll('[data-sb-scrollcard="true"][data-sb-card="true"]').length,

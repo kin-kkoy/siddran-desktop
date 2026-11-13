@@ -7,6 +7,7 @@ import { sourceLabel } from './dataSource'
 import { viewComponent } from './views'
 import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
+import { cutLabel } from '../selection/attach'
 
 /**
  * A Format widget's chrome and body — used on the board (a window you move by
@@ -111,7 +112,7 @@ function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, o
             {cut && (
                 // Cropped: partly showing past the edge. Out of view: none of it shows.
                 <span className={styles.hiddenBadge} title="Attached to this widget but past its edge — make the widget bigger, or drag them off">
-                    {[cut.cropped && `${cut.cropped} cropped`, cut.hidden && `${cut.hidden} out of view`].filter(Boolean).join(' · ')}
+                    {cutLabel(cut)}
                 </span>
             )}
         </div>

@@ -7,9 +7,9 @@ import {
 import { computeSnap, unionAABB } from './snapping'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
-import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
+import { isFrame, frameTitleRect } from '../frames/frames'
 import { isFormat } from '../formats/formats'
-import { attachedItems } from '../formats/attach'
+import { attachedItems, legacyRiders, isContainer } from './attach'
 import { isLineKind } from '../shapes/registry'
 import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 
@@ -57,7 +57,7 @@ const HANDLES = {
 
 const clampScale = (s) => (Math.abs(s) < 0.05 ? (s < 0 ? -0.05 : 0.05) : s)
 
-function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt, onMoveEnd }) {
+function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt, onMoveEnd, onFrameGesture }) {
     const rootRef = useRef(null)
     const dragRef = useRef(null)
     const connectorRef = useRef(null)   // active connector drag, separate from transform
@@ -175,6 +175,9 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             d.pending = false
             beginTransaction()
             setGesturing(true)
+            // A frame starts moving or resizing: make what sits in frames by
+            // position only stick to them (selection/attach.js), same undo step.
+            if ((d.mode === 'move' || d.mode === 'resize') && d.snap.some(s => isFrame((items || []).find(i => i.id === s.id)))) onFrameGesture?.()
         }
         const p = worldFromClient(e)
 
@@ -267,15 +270,23 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         const moving = list.filter(it => it.type !== 'connector' && !it.payload?.locked)
         if (!moving.length) return false
         const selIds = new Set(moving.map(it => it.id))
-        // A frame carries what sits on it — decided now, at grab time, from
-        // where things are (not stored), so there is no membership to keep in
-        // sync. A Format widget carries what is ATTACHED to it (stored on drop,
-        // formats/attach.js — a trial, widgets only), wherever it now hangs;
-        // board shapes under a widget never ride.
+        // Frames and widgets carry what is ATTACHED to them (selection/attach.js),
+        // wherever it hangs, all the way down. A frame also carries what sits
+        // in it by position only (boards from before attachment) — those get
+        // stamped as attached as the gesture starts (onFrameGesture).
+        const all = items || []
         const riders = []
-        const ride = (c) => { if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) } }
-        for (const f of moving.filter(isFrame)) for (const c of frameChildren(f, items || [])) ride(c)
-        for (const f of [...moving, ...riders].filter(isFormat)) for (const c of attachedItems(f, items || [])) ride(c)
+        const queue = moving.filter(isContainer)
+        const ride = (c) => {
+            if (selIds.has(c.id) || c.payload?.locked) return
+            selIds.add(c.id); riders.push(c)
+            if (isContainer(c)) queue.push(c)
+        }
+        while (queue.length) {
+            const c = queue.shift()
+            for (const r of attachedItems(c, all)) ride(r)
+            if (isFrame(c)) for (const r of legacyRiders(c, all)) ride(r)
+        }
         startGesture(e, {
             mode: 'move',
             baseAABB: unionAABB(moving),

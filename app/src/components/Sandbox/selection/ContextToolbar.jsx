@@ -320,6 +320,19 @@ function ContextToolbar({
         endTransaction()
     }
     const toggle = (key) => patchText({ [key]: !ref[key] })
+    // Frames and widgets: what's attached and sticks out past the edge hangs
+    // out whole (the default) or is cropped at the edge (lit). selection/attach.js.
+    const cropButton = (list) => {
+        const crop = list[0].payload?.overflow === 'clip'
+        return (
+            <button className={crop ? styles.btnActive : styles.btn} aria-pressed={crop} aria-label="Crop at the edge"
+                onClick={() => patchItems(list, { overflow: crop ? 'hang' : 'clip' })}
+                title={crop ? 'Things on it are cropped at the edge — click to let them hang out'
+                    : 'Things on it hang out past the edge — click to crop them at the edge'}>
+                <LuCrop size={18} />
+            </button>
+        )
+    }
 
     return (
         <div
@@ -451,6 +464,7 @@ function ContextToolbar({
                     <>
                         <SwatchMenu id="frame" open={openMenu} setOpen={setOpenMenu} value={frames[0].payload?.fill} colors={FRAME_FILLS}
                             title="Frame colour" icon={<LuPaintBucket size={18} />} onPick={(c) => patchItems(frames, { fill: c })} />
+                        {cropButton(frames)}
                         {frames.length === 1 && onExportFrame && (
                             <>
                                 <button className={styles.btn} onClick={() => onEditText?.(frames[0].id)} title="Rename frame (double-click the title)" aria-label="Rename frame">Aa</button>
@@ -474,18 +488,7 @@ function ContextToolbar({
                             <button className={styles.stepBtn} onClick={() => patchItems(formats, { fontSize: stepFontSize(size, 1) })}
                                 title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">+</button>
                             <div className={styles.sep} />
-                            {/* What's attached and sticks out past the edge: cropped (lit) or hanging out whole. */}
-                            {(() => {
-                                const hang = formats[0].payload?.overflow === 'hang'
-                                return (
-                                    <button className={hang ? styles.btn : styles.btnActive} aria-pressed={!hang} aria-label="Crop at the edge"
-                                        onClick={() => patchItems(formats, { overflow: hang ? 'clip' : 'hang' })}
-                                        title={hang ? 'Things on it hang out past the edge — click to crop them at the edge'
-                                            : 'Things on it are cropped at the edge — click to let them hang out'}>
-                                        <LuCrop size={18} />
-                                    </button>
-                                )
-                            })()}
+                            {cropButton(formats)}
                             <div className={styles.sep} />
                         </>
                     )
