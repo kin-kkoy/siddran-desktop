@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Stage } from 'react-konva'
 import GraphicsLayer from './GraphicsLayer'
 import ConnectorLayer from './ConnectorLayer'
+import GlowLayer from './GlowLayer'
+import { glowFor } from '../connectors/connected'
 import FrameLayer from './FrameLayer'
 import ActiveLayer from './ActiveLayer'
 import OverlayLayer from './OverlayLayer'
@@ -847,6 +849,12 @@ function SandboxCanvas({
     // resolved geometry so only links whose endpoints moved actually re-render.
     const byId = useMemo(() => new Map(items.map(i => [i.id, i])), [items])
 
+    // Connection outlines (GlowLayer): what the selection touches through its
+    // links. Hidden while anything is being dragged.
+    const glow = useMemo(() => (canvas.dragging ? null : glowFor(items, canvas.selectedIds)), [items, canvas.selectedIds, canvas.dragging])
+    // What rides on a widget draws on the top canvas, so its glow does too.
+    const topIds = useMemo(() => new Set([...topGraphicItems, ...topConnectorItems].map(i => i.id)), [topGraphicItems, topConnectorItems])
+
     return (
         <div
             ref={containerRef}
@@ -874,6 +882,7 @@ function SandboxCanvas({
                 pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
             >
                 <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} clips={clips} cutLabels={frameCutLabels} />
+                <GlowLayer glow={glow} byId={byId} zoom={canvas.viewport.zoom} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
                 <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} clips={clips} />
             </Stage>
@@ -898,6 +907,7 @@ function SandboxCanvas({
                 listening={false}
                 style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
             >
+                {glow && topIds.size > 0 && <GlowLayer glow={glow} byId={byId} zoom={canvas.viewport.zoom} only={topIds} />}
                 {topConnectorItems.length > 0 && <ConnectorLayer connectorItems={topConnectorItems} byId={byId} selectedIds={canvas.selectedIds} />}
                 {topGraphicItems.length > 0 && <GraphicsLayer graphicItems={topGraphicItems} editingShapeId={editingShapeId} clips={clips} />}
                 <ActiveLayer

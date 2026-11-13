@@ -160,6 +160,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         // A press that never moved opened nothing (see applyMove) — nothing to close.
         if (!wasPending) {
             setGesturing(false)
+            canvas.setDragging?.(false)
             // Dropped: what moved may now sit on (or off) a widget — inside the same undo step.
             if (d.mode === 'move') onMoveEnd?.(d.snap.map(s => s.id))
             endTransaction()
@@ -193,6 +194,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             d.pending = false
             beginTransaction()
             setGesturing(true)
+            canvas.setDragging?.(true)
             // A frame starts moving or resizing: make what sits in frames by
             // position only stick to them (selection/attach.js), same undo step.
             if ((d.mode === 'move' || d.mode === 'resize') && d.snap.some(s => isFrame((items || []).find(i => i.id === s.id)))) onFrameGesture?.()
@@ -354,6 +356,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         window.removeEventListener('pointerup', onConnectorUp)
         connectorRef.current = null
         setDropTarget(null)
+        canvas.setDragging?.(false)
         if (canvas.activeConnectorRef) canvas.activeConnectorRef.current = null  // stop the preview loop
         const dist = Math.hypot(d.movingPoint.x - d.fixedPoint.x, d.movingPoint.y - d.fixedPoint.y)
         const clicked = !d.targetId && dist <= 6 / viewport.zoom
@@ -412,6 +415,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
 
     const beginConnectorDrag = (init) => {
         connectorRef.current = init
+        canvas.setDragging?.(true)
         if (canvas.activeConnectorRef) {
             const fromPoint = init.headIsMoving ? init.fixedPoint : init.movingPoint
             const toPoint = init.headIsMoving ? init.movingPoint : init.fixedPoint

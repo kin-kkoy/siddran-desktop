@@ -213,7 +213,7 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
 
 ## Deferred (do near the end, around section 11)
 
-- [ ] **Connection outlines on the board** (agreed 2026-11-13; the node editor
+- [x] **Connection outlines on the board** (agreed 2026-11-13; the node editor
       already dims). Select a box (or several) and its links, plus the boxes
       at their other ends, get a thick, semi-transparent cyan/teal glow:
       just outside each box's edge, and as a halo under each link. Select a
@@ -1728,4 +1728,15 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   it), then remove this tracker. The merged worktrees wb8/wb9 and branches
   `whiteboard-doc` / `whiteboard-slides` were removed (both repos). Handed
   to the session WhiteboardFeatureImplementation-Final.
-
+- 2026-11-13 · session Final · **connection outlines** built (deferred item).
+  `Canvas/GlowLayer.jsx` is one Konva layer under the links: rings just
+  outside each box (its oriented bounds), halos under links from
+  `connectorPoints`. Sizes are in screen px ÷ zoom. Cyan #22d3ee on dark,
+  teal #0d7f86 on light (read from --outline-contrast). "What's connected" is
+  `connectors/connected.js` (`connectedTo`, shared with NodeEditor's focus;
+  `glowFor` drops the selection itself). It is hidden while dragging: new
+  `canvas.dragging`, set by SelectionOverlay for move/resize/rotate and link-end
+  drags. Glow for things that ride on a widget is also drawn on the top canvas.
+  The ring is a rounded rectangle for every shape (circles too). 775 tests,
+  lint 25, build pass. Not walked in a hidden window: the user's own
+  tauri:dev was running.

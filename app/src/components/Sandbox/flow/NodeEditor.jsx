@@ -8,6 +8,7 @@ import { ShapeThumb } from '../Toolbar/ShapePicker'
 import { routeConnector, labelBox, LABEL_FONT } from '../connectors/geometry'
 import { headGeometry, headInset, pathEnds, trimPath, taperedArrowPolygon } from '../connectors/heads'
 import { svgDashFor } from '../connectors/lineStyle'
+import { connectedTo } from '../connectors/connected'
 import LinkControls from './LinkControls'
 import { fontCss } from '../text/textStyle'
 
@@ -244,15 +245,9 @@ function NodeEditor({ graph, onChange, selected, onSelect, byId, colors, focusRe
   // Root node) is selected but doesn't dim anything — you didn't pick it out.
   const focus = useMemo(() => {
     if (!selected?.clicked) return null
-    if (selNode) {
-      const links = new Set(), nodes = new Set([selNode.key])
-      graph.edges.forEach((e, i) => {
-        if (e.from === selNode.key || e.to === selNode.key) { links.add(i); nodes.add(e.from); nodes.add(e.to) }
-      })
-      return { nodes, links }
-    }
-    if (selEdge) return { nodes: new Set([selEdge.from, selEdge.to]), links: new Set([selected.i]) }
-    return null
+    if (!selNode && !selEdge) return null
+    const links = graph.edges.map((e, i) => ({ id: i, from: e.from, to: e.to }))
+    return selNode ? connectedTo(links, [selNode.key]) : connectedTo(links, [], [selected.i])
   }, [selNode, selEdge, selected, graph.edges])
   const dim = (on) => ({ opacity: focus && !on ? DIMMED : 1, transition: 'opacity 140ms ease' })
 

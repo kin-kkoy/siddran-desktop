@@ -39,6 +39,9 @@ export function useSandboxCanvas(initialTool = 'pointer') {
     const [spacePanning, setSpacePanning] = useState(false)
     // Snap-to-grid / snap-to-items toggle (magnet button); on by default.
     const [snapEnabled, setSnapEnabled] = useState(true)
+    // True while a selection is moved/resized/rotated or a link's end is dragged
+    // (SelectionOverlay sets it): the connection outlines hide meanwhile.
+    const [dragging, setDragging] = useState(false)
 
     // Selection (a Set of item ids) — shared by the transform overlay across both
     // render worlds (Konva graphics + DOM cards). New Set on each change for
@@ -210,6 +213,7 @@ export function useSandboxCanvas(initialTool = 'pointer') {
         paintColor, setPaintColor,
         shapeStyle, setShapeStyle,
         snapEnabled, setSnapEnabled,
+        dragging, setDragging,
         spacePanning,
         activeStrokeRef,
         activeShapeRef,
