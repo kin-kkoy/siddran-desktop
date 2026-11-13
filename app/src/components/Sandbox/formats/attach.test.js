@@ -57,5 +57,10 @@ describe('sticky attachment to a widget', () => {
     const d = card('D', 70, 70, 10, 10, 3, { attachedTo: 'I' })
     expect(clipRect(d, new Map([small, inner, d].map(i => [i.id, i])))).toEqual({ x: 60, y: 60, w: 60, h: 60 })
     expect(clipRect(card('Z', 0, 0, 1, 1, 1, { attachedTo: 'gone' }), byId)).toBeNull()
+    // A widget set to hang crops nothing; one inside a clipping widget still gets the outer crop.
+    const hanging = { ...small, payload: { kind: 'format', overflow: 'hang' } }
+    expect(clipRect(c, new Map([hanging, c].map(i => [i.id, i])))).toBeNull()
+    const innerHang = { ...inner, payload: { ...inner.payload, overflow: 'hang' } }
+    expect(clipRect(d, new Map([small, innerHang, d].map(i => [i.id, i])))).toEqual({ x: 0, y: 0, w: 120, h: 120 })
   })
 })

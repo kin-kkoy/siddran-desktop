@@ -76,9 +76,17 @@ export function attachPatches(ids, items) {
 }
 
 /**
+ * Each widget chooses what happens past its edge (`payload.overflow`, the
+ * floating bar's toggle): 'clip' (the default — absent means clip) crops what
+ * is attached to it; 'hang' lets it spill out whole.
+ */
+export const lets = (widget) => widget?.payload?.overflow === 'hang'
+
+/**
  * The rectangle an attached item is clipped to: its widget's, intersected
- * with the widget's own clip if that widget is itself attached. null = not
- * clipped (not attached, or its widget is gone).
+ * with the widget's own clip if that widget is itself attached (widgets set to
+ * hang add nothing). null = not clipped (not attached, its widget is gone, or
+ * every widget up the chain hangs).
  */
 export function clipRect(item, byId) {
     let rect = null
@@ -88,8 +96,11 @@ export function clipRect(item, byId) {
         seen.add(id)
         const w = byId.get(id)
         if (!isFormat(w)) break
-        const r = { x: w.x, y: w.y, w: w.w, h: w.h }
-        rect = rect ? intersect(rect, r) : r
+        // A widget set to "hang" lets its riders spill past its edges.
+        if (!lets(w)) {
+            const r = { x: w.x, y: w.y, w: w.w, h: w.h }
+            rect = rect ? intersect(rect, r) : r
+        }
         id = w.payload?.attachedTo
     }
     return rect

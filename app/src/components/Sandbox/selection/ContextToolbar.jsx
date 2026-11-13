@@ -9,7 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuPencil, LuMaximize2,
+    LuPencil, LuMaximize2, LuCrop,
 } from 'react-icons/lu'
 import { DiagramIcon, NextStepIcon } from '../flow/icons'
 import styles from './ContextToolbar.module.css'
@@ -473,6 +473,19 @@ function ContextToolbar({
                             <span className={styles.stepValue} title="Text size">{size}</span>
                             <button className={styles.stepBtn} onClick={() => patchItems(formats, { fontSize: stepFontSize(size, 1) })}
                                 title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">+</button>
+                            <div className={styles.sep} />
+                            {/* What's attached and sticks out past the edge: cropped (lit) or hanging out whole. */}
+                            {(() => {
+                                const hang = formats[0].payload?.overflow === 'hang'
+                                return (
+                                    <button className={hang ? styles.btn : styles.btnActive} aria-pressed={!hang} aria-label="Crop at the edge"
+                                        onClick={() => patchItems(formats, { overflow: hang ? 'clip' : 'hang' })}
+                                        title={hang ? 'Things on it hang out past the edge — click to crop them at the edge'
+                                            : 'Things on it are cropped at the edge — click to let them hang out'}>
+                                        <LuCrop size={18} />
+                                    </button>
+                                )
+                            })()}
                             <div className={styles.sep} />
                         </>
                     )

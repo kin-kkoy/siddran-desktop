@@ -65,7 +65,7 @@ done, so the next session knows where things stand.
 6. **A widget doesn't carry what's underneath it** (2026-11-13). Board shapes
    paint beneath widgets, so any under one stay put when it moves.
 
-7. **Sticky attachment is a TRIAL, widgets only** (2026-11-13). Frames keep
+7. **Sticky attachment: kept for widgets, with a per-widget crop ⇄ hang toggle** (2026-11-13; it started as a trial). Frames keep
    their positional membership for now. If the user likes the trial, extend
    it to frames. If not, remove it (see the log for what to take out),
    because things "hanging" off a frame or widget is also nice.
@@ -679,3 +679,12 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   (part of it shows) and/or "N out of view" (none of it shows) instead of
   "+N hidden". Not seen on screen: the user is at the computer, so no
   headless screenshots. The user is weighing a per-widget clip ⇄ hang toggle.
+- 2026-11-13 · session 5 · **crop ⇄ hang toggle, per widget** (the user
+  uses both): `payload.overflow` = 'clip' (the default; absent means clip)
+  or 'hang'. The floating bar's crop button, lit while cropping, sets it for
+  every selected widget (one undo step). A widget set to hang adds no crop
+  and shows no badge. A rider of a hanging widget nested in a cropping one
+  still gets the outer crop (`attach.js` `clipRect`, tested). Attachment is
+  the same in both modes. It's on the floating bar rather than the widget's
+  title bar: it's an occasional setting, and the title bar is the grab
+  handle. If frames adopt sticky attachment, give them the same toggle.
