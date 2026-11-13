@@ -27,9 +27,14 @@ export function connectedTo(links, nodes, selLinks = []) {
 /** A board connector as a link: its id and the items its two ends sit on. */
 export const boardLink = (conn) => ({ id: conn.id, from: conn.payload?.from?.itemId ?? null, to: conn.payload?.to?.itemId ?? null })
 
-/** What glows for this selection: { nodes, links } minus the selection itself; null when nothing does. */
+/**
+ * What glows for this selection: { nodes, links } minus the selection itself;
+ * null when nothing does. Only ONE selected item glows its neighbours (a click
+ * on a box or a link): selecting a whole diagram or the board would light up
+ * everything and say nothing.
+ */
 export function glowFor(items, selectedIds) {
-    if (!selectedIds?.size) return null
+    if (selectedIds?.size !== 1) return null
     const conns = items.filter(it => it.type === 'connector')
     if (!conns.length) return null
     const selNodes = [], selLinks = []

@@ -65,7 +65,7 @@
     margin: 4px 0;
 }
 
-/* Fill bucket: the icon over a bar in the current fill colour. */
+/* Paint bucket and ink: the icon over a bar in the current colour. */
 .iconSwatch {
     display: inline-flex;
     flex-direction: column;
@@ -78,7 +78,15 @@
     border-radius: 2px;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
+/* No colour: an empty pill, outlined only. */
 .iconBarNone {
     composes: iconBar;
-    background-image: linear-gradient(160deg, transparent 42%, #e05c5c 42%, #e05c5c 58%, transparent 58%);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--text-muted);
+}
+/* A tool with no colour (erasers, lasso): the bar's room is kept, so the icon
+   doesn't jump when you switch between ink tools. */
+.iconBarBlank {
+    composes: iconBar;
+    visibility: hidden;
 }

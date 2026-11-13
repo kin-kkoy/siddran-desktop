@@ -171,13 +171,17 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
      */
     const applyDiagram = useCallback((graph, source = null) => {
         if (!graph?.nodes?.length) return false
+        const style = { stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke, fill: canvas.shapeStyle.fill, font: 16 }
         let origin = source?.origin
         if (!origin) {
-            const b = unionAABB(items.filter((i) => i.type !== 'connector'))
+            // A new diagram lands centred on the view, like a new widget: plan it
+            // once at 0,0 to learn its size, then shift the origin to centre it.
             const c = viewportCenter()
-            origin = b && b.w > 0 ? { x: Math.round(b.x + b.w + 160), y: Math.round(b.y) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
+            let n = 0
+            const trial = planDiagram(graph, { items, origin: { x: 0, y: 0 }, style, newId: () => `trial${n++}` })
+            const b = unionAABB([...trial.add.filter((i) => i.type !== 'connector'), ...trial.update.map((u) => u.patch).filter((p) => p.w != null)])
+            origin = b ? { x: Math.round(c.x - b.x - b.w / 2), y: Math.round(c.y - b.y - b.h / 2) } : { x: Math.round(c.x - 200), y: Math.round(c.y - 200) }
         }
-        const style = { stroke: canvas.shapeStyle.stroke, text: canvas.shapeStyle.stroke, fill: canvas.shapeStyle.fill, font: 16 }
         const plan = planDiagram(graph, { items, scope: source?.scope, origin, style, newId: newSandboxItemId })
         let z = nextZ()
         beginTransaction()

@@ -1740,3 +1740,24 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   The ring is a rounded rectangle for every shape (circles too). 775 tests,
   lint 25, build pass. Not walked in a hidden window: the user's own
   tauri:dev was running.
+- 2026-11-13 · session Final · user feedback on the outlines, plus extras.
+  - **Glow width now follows the item, not the screen.** The ring is 3× the
+    box's border and the halo reaches 3.5× the link's width past it (minimum 2),
+    in board units, so it zooms with the shapes.
+  - **Only a single selected item glows its neighbours.** Inserting a diagram
+    (all of it selected), select-all or a marquee light nothing.
+  - **A new diagram lands centred on the view**, like a widget (planned once at
+    0,0 to measure, then shifted). Before, it went to the right of everything.
+  - **Shape floating bar: two rows** (text above, shape and the rest below),
+    justified: both rows the same width and flush at each edge, with the spare
+    room at the dividers (`.twoRows`). Text, arrows, frames and widgets keep
+    one row.
+  - **Dock pills:** "no colour" on the paint bucket is an empty outlined pill
+    (was a red slash). The ink button shows the active preset's colour; for an
+    eraser or lasso the pill's room is kept so nothing jumps.
+  - Checked in a hidden window (new `glow:` walk): diagram centred 0/0 px off,
+    no glow while all is selected, a click glows rings 6 / halos 16, a 6px
+    border gives an 18 ring, unchanged in board units after zooming out, both
+    bar rows 778px wide and flush, nothing glows after select-all. `cards`
+    walk passes. 776 tests, lint 25, build pass.
+

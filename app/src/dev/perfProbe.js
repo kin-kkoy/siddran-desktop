@@ -12,6 +12,7 @@
 //   doc:<boardId>    — a Doc: template, typing + autosave, undo, slash menu, find, note link, full screen (runDoc)
 //   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
 //   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
+//   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -1702,3 +1703,71 @@ if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', 
 if (spec.startsWith('slides:') && boardId) runSlides().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('drag:') && boardId) run().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('format:') && boardId) runFormat().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── glow:<boardId> — connection outlines (Canvas/GlowLayer.jsx), the shape
+// bar's two justified rows, and a new diagram landing centred on the view.
+async function runGlow() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const before = new Set(live().map(i => i.id))
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    // A new diagram from text, inserted.
+    document.querySelector('button[title^="Diagram"]')?.click(); await sleep(800)
+    ;[...document.querySelectorAll('button[role="tab"]')].find(b => b.textContent === 'Text')?.click(); await sleep(400)
+    const area = document.querySelector('textarea')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, 'A[One] --> B[Two]\nB --> C[Three]')
+    area.dispatchEvent(new Event('input', { bubbles: true })); await sleep(600)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent === 'Insert')?.click(); await sleep(1200)
+    const added = live().filter(i => !before.has(i.id))
+    const boxes = added.filter(i => i.type !== 'connector')
+    const minX = Math.min(...boxes.map(b => b.x)), maxX = Math.max(...boxes.map(b => b.x + b.w))
+    const minY = Math.min(...boxes.map(b => b.y)), maxY = Math.max(...boxes.map(b => b.y + b.h))
+    const z = stage.scaleX()
+    // The page centres on the window's middle (centerWorld).
+    const view = { x: (innerWidth / 2 - stage.x()) / z, y: (innerHeight / 2 - stage.y()) / z }
+    const glowRects = () => stage.find('Rect').filter(n => n.stroke() === '#22d3ee' || n.stroke() === '#0d7f86')
+    const glowLines = () => stage.find('Line').filter(n => n.stroke() === '#22d3ee' || n.stroke() === '#0d7f86')
+    await step('diagram', { added: added.map(i => i.type), centreOff: [Math.round((minX + maxX) / 2 - view.x), Math.round((minY + maxY) / 2 - view.y)], selectedAllGlow: [glowRects().length, glowLines().length] })
+
+    // Click the middle box: its two links and both neighbours glow.
+    const byText = (t) => boxes.find(b => b.payload?.text === t)
+    const B = byText('Two')
+    key('Escape'); await sleep(300)
+    const kc = stage.content.querySelector('canvas')
+    const pB = toClient(B.x + B.w / 2, B.y + B.h / 2)
+    kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(700)
+    const ringWidths = () => glowRects().map(n => +n.strokeWidth().toFixed(2))
+    const haloWidths = () => glowLines().map(n => +n.strokeWidth().toFixed(2))
+    const bar = document.querySelector('[class*="twoRows"]')
+    const rows = bar ? [...bar.children].filter(c => c.children.length) : []
+    const rowGeom = rows.map(r => {
+        const rr = r.getBoundingClientRect(), kids = [...r.children].filter(k => k.getBoundingClientRect().width > 0)
+        const a = kids[0].getBoundingClientRect(), b = kids[kids.length - 1].getBoundingClientRect()
+        return { w: Math.round(rr.width), leftGap: Math.round(a.left - rr.left), rightGap: Math.round(rr.right - b.right), items: kids.length }
+    })
+    const br = bar?.getBoundingClientRect()
+    await step('clickB', { selected: [...live()].length, rings: ringWidths(), halos: haloWidths(), twoRows: !!bar, rowGeom, barOnScreen: !!br && br.left >= 0 && br.right <= innerWidth && br.top >= 0 })
+
+    // A thicker border on a neighbour → a thicker ring (board units, × its line width).
+    const A = byText('One')
+    store.updateItem(boardId, A.id, { payload: { ...A.payload, strokeWidth: 6 } }); await sleep(700)
+    const r6 = ringWidths()
+    // Zoom out: the ring's width in board units stays the same, so it shrinks on screen with the shapes.
+    const host = stage.container().parentElement
+    for (let i = 0; i < 4; i++) { host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: rect.left + 40, clientY: rect.top + 40, bubbles: true, cancelable: true })); await sleep(80) }
+    await sleep(600)
+    await step('thick+zoom', { rings: r6, ringsAfterZoom: ringWidths(), zoom: [+z.toFixed(3), +stage.scaleX().toFixed(3)] })
+
+    // A plain text card: one row.
+    key('a', { ctrlKey: true }); await sleep(600)
+    await step('selectAll', { rings: glowRects().length, halos: glowLines().length })
+    send('done', true)
+}
+if (spec.startsWith('glow:') && boardId) runGlow().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

@@ -58,6 +58,9 @@ describe('glowFor', () => {
         expect([...g.nodes].sort()).toEqual([1, 2])
         expect(g.links.size).toBe(0)
     })
+    it('several selected → null (a whole diagram, select-all)', () => {
+        expect(glowFor(items, new Set([1, 2]))).toBeNull()
+    })
     it('nothing connected → null', () => {
         expect(glowFor(items, new Set([4]))).toBeNull()
         expect(glowFor(items, new Set())).toBeNull()

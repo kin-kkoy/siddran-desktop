@@ -12,7 +12,7 @@ import InsertMenu from './InsertMenu'
 import ColorMenu from './ColorMenu'
 import { INK_TOOL_META } from '../ink/inkToolMeta'
 import { SHAPE_TOOLS } from '../shapes/registry'
-import { isInkTool, SHAPE_COLORS } from '../ink/presets'
+import { isInkTool, SHAPE_COLORS, DRAWS_INK, presetGroupFor } from '../ink/presets'
 
 // A post-it: square, folded bottom-right corner, adhesive strip on top — so it
 // doesn't read as a document/file the way a page-with-fold icon does.
@@ -41,7 +41,7 @@ function ToolBtn({ active, title, onClick, disabled, children }) {
 }
 
 function SandboxToolbar({
-    tool, onToolChange, lastInkTool = 'pen',
+    tool, onToolChange, lastInkTool = 'pen', ink: inkPresets = null,
     shapeStyle, onShapeStyleChange,
     paintColor, onPaintColorChange, paintMenuOpen, onBucketClick, onClosePaintMenu,
     shapePickerOpen, onToggleShapePicker, onCloseShapePicker,
@@ -61,6 +61,11 @@ function SandboxToolbar({
     const inking = isInkTool(tool)
     const ink = INK_TOOL_META[inking ? tool : lastInkTool] || INK_TOOL_META.pen
     const InkIcon = ink.Icon
+    // The colour the shown ink tool draws with (its active preset); none for
+    // the erasers and lasso.
+    const shownInk = inking ? tool : lastInkTool
+    const inkGroup = DRAWS_INK.has(shownInk) ? inkPresets?.[presetGroupFor(shownInk)] : null
+    const inkColor = inkGroup?.presets?.[inkGroup.active]?.color || null
     const paintNone = !paintColor || paintColor === 'transparent'
     return (
         <div className={styles.toolbar}>
@@ -76,7 +81,10 @@ function SandboxToolbar({
             </ToolBtn>
             <ToolBtn active={inking} title={inking ? 'Drawing tools — click for Select' : 'Drawing tools: pen, highlighter, smart drawing, erasers, lasso (P)'}
                 onClick={() => onToolChange(inking ? 'pointer' : lastInkTool)}>
-                <InkIcon size={21} />
+                <span className={styles.iconSwatch}>
+                    <InkIcon size={19} />
+                    <span className={inkColor ? styles.iconBar : styles.iconBarBlank} style={inkColor ? { backgroundColor: inkColor } : undefined} />
+                </span>
             </ToolBtn>
 
             <div className={styles.divider} />

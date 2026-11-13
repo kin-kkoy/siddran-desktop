@@ -10,12 +10,16 @@ import { getItemBounds } from '../selection/itemBounds'
 //
 // ONE layer, drawn from item bounds and connector points, under the links and
 // shapes: the ring sits outside each box's edge, so the box itself (Konva or a
-// DOM card above) never covers it. Sizes are in screen px (÷ zoom), so the glow
-// keeps its width at any zoom.
+// DOM card above) never covers it. Sizes are in board units, in proportion to
+// the outlined item's own line width — so the glow zooms with the board, like
+// the shape it outlines.
 
-const GAP_PX = 4        // between a box's edge and its ring
-const RING_PX = 8       // the ring's width
-const HALO_PX = 7       // how far a link's halo reaches past the line, each side
+const GAP = 1.5         // between a box's edge and its ring, × the box's line width
+const RING = 3          // the ring's width, × the box's line width
+const HALO = 3.5        // how far a link's halo reaches past the line, each side, × its width
+// Items without a border of their own (cards, widgets, borderless shapes)
+// count as the default 2.
+const lineWidth = (it) => Math.max(Number(it.payload?.strokeWidth) || 0, 2)
 
 // Konva can't resolve CSS variables: a light theme is told by its black outline
 // colour (SettingsContext: --outline-contrast is #000 on light, #fff on dark).
@@ -27,19 +31,18 @@ function glowColour() {
     return { colour: '#22d3ee', opacity: 0.42 }
 }
 
-const GlowLayer = memo(function GlowLayer({ glow, byId, zoom, only }) {
+const GlowLayer = memo(function GlowLayer({ glow, byId, only }) {
     if (!glow) return null
     const { colour, opacity } = glowColour()
-    const z = zoom || 1
     const keep = (id) => !only || only.has(id)
-    const out = GAP_PX / z + RING_PX / z / 2
     return (
         <Layer listening={false}>
             {[...glow.links].filter(keep).map(id => {
                 const conn = byId.get(id)
                 const pts = conn && connectorPoints(conn, byId)
                 if (!pts) return null
-                const w = (conn.payload?.strokeWidth || 2) + (2 * HALO_PX) / z
+                const lw = lineWidth(conn)
+                const w = lw + 2 * HALO * lw
                 return <Line key={`l${id}`} points={pts} stroke={colour} strokeWidth={w} opacity={opacity}
                     lineCap="round" lineJoin="round" listening={false} perfectDrawEnabled={false} />
             })}
@@ -47,10 +50,12 @@ const GlowLayer = memo(function GlowLayer({ glow, byId, zoom, only }) {
                 const it = byId.get(id)
                 if (!it || it.type === 'connector') return null
                 const b = getItemBounds(it)
+                const lw = lineWidth(it), ring = RING * lw
+                const out = GAP * lw + ring / 2
                 return (
                     <Group key={`n${id}`} x={b.x} y={b.y} rotation={b.rotation} listening={false}>
                         <Rect x={-out} y={-out} width={b.w + 2 * out} height={b.h + 2 * out}
-                            cornerRadius={6 / z + out} stroke={colour} strokeWidth={RING_PX / z} opacity={opacity}
+                            cornerRadius={3 * lw + out} stroke={colour} strokeWidth={ring} opacity={opacity}
                             listening={false} perfectDrawEnabled={false} />
                     </Group>
                 )

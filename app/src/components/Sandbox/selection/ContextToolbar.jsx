@@ -336,10 +336,14 @@ function ContextToolbar({
         )
     }
 
+    // A shape carries both the text and the shape controls — too many for one
+    // row, so it gets two: text above, shape and the rest below, each spread
+    // edge to edge (justified). Text, arrows, frames and widgets stay one row.
+    const twoRows = hasText && filledShapes.length > 0 && !locked
     return (
         <div
             ref={barRef}
-            className={styles.bar}
+            className={twoRows ? `${styles.bar} ${styles.twoRows}` : styles.bar}
             style={style}
             data-sb-handle="true"
             onPointerDown={(e) => e.stopPropagation()}

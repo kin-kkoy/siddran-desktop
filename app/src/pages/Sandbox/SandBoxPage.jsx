@@ -1095,6 +1095,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     tool={canvas.tool}
                     onToolChange={chooseTool}
                     lastInkTool={canvas.lastInkTool}
+                    ink={canvas.ink}
                     shapeStyle={canvas.shapeStyle}
                     onShapeStyleChange={canvas.setShapeStyle}
                     paintColor={canvas.paintColor}
