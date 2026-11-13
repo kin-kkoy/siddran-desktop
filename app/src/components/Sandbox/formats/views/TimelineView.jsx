@@ -181,7 +181,16 @@ function TimelineView({ source, item, onConfig }) {
         const sc = scrollRef.current
         return range.d0 + (sc.scrollLeft + centreAt() - railPx()) / emPx() / ppd
     }
-    useEffect(() => { if (scrollRef.current) scrollTo(today, centreAt()) }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+    // Centre on today once, as soon as the scroller has a width (a just-inserted widget may not have one yet).
+    useEffect(() => {
+        const sc = scrollRef.current
+        if (!sc) return
+        const go = () => { if (sc.clientWidth > 0) { scrollTo(today, centreAt()); return true } return false }
+        if (go()) return
+        const ro = new ResizeObserver(() => { if (go()) ro.disconnect() })
+        ro.observe(sc)
+        return () => ro.disconnect()
+    }, [])   // eslint-disable-line react-hooks/exhaustive-deps
     const setZoom = (id, anchor = null) => {
         if (id === zoom.id) return
         const sc = scrollRef.current
@@ -404,7 +413,7 @@ function TimelineView({ source, item, onConfig }) {
                 <div className={styles.canvas} style={{ width: `${RAIL + W}em` }}>
                     <div className={styles.head}>
                         <div className={styles.railHead} style={{ width: `${RAIL}em` }} title="Start → End (change them in View)">
-                            {setup.start.name}{setup.end ? ` → ${setup.end.name}` : ''}
+                            <span className={styles.railHeadText}>{setup.start.name}{setup.end ? ` → ${setup.end.name}` : ''}</span>
                         </div>
                         <div className={styles.axis} style={{ width: `${W}em` }}>
                             <div className={styles.tier}>
@@ -416,9 +425,9 @@ function TimelineView({ source, item, onConfig }) {
                             </div>
                             <div className={styles.tier}>
                                 {lower.map(k => (
-                                    <span key={k.start} className={styles.lower} style={{ left: `${x(k.n)}em`, width: `${k.len * ppd}em` }}>{k.len * ppd > 1.6 ? k.label : ''}</span>
+                                    <span key={k.start} className={styles.lower} style={{ left: `${x(k.n)}em`, width: `${k.len * ppd}em` }}><span className={styles.lowerLabel}>{k.len * ppd > 1.6 ? k.label : ''}</span></span>
                                 ))}
-                                {today >= range.d0 && today <= range.d1 && <span className={styles.todayTag} style={{ left: `${x(today) + ppd / 2}em` }}>Today</span>}
+                                {today >= range.d0 && today <= range.d1 && <span className={styles.todayTag} style={{ left: `${x(today) + ppd / 2}em` }}><span className={styles.todayText}>Today</span></span>}
                             </div>
                         </div>
                     </div>
@@ -472,9 +481,11 @@ function TimelineView({ source, item, onConfig }) {
                                     <div key={`g:${l.key}`} className={styles.groupRow} style={{ top: `${l.y}em`, height: `${GROUP_H}em` }}>
                                         <button className={styles.groupHead} style={{ width: `${RAIL}em` }}
                                             onClick={() => cfgSet(c => ({ ...c, collapsed: (c.collapsed || []).includes(l.key) ? c.collapsed.filter(k => k !== l.key) : [...(c.collapsed || []), l.key] }))}>
-                                            {l.folded ? <LuChevronRight size="1em" /> : <LuChevronDown size="1em" />}
-                                            <span className={l.key === NONE ? b.kheadNone : undefined}>{l.label}</span>
-                                            <span className={b.kcount}>{l.count}</span>
+                                            <span className={styles.groupText}>
+                                                {l.folded ? <LuChevronRight size="1em" /> : <LuChevronDown size="1em" />}
+                                                <span className={l.key === NONE ? b.kheadNone : undefined}>{l.label}</span>
+                                                <span className={b.kcount}>{l.count}</span>
+                                            </span>
                                         </button>
                                     </div>
                                 )
@@ -515,7 +526,7 @@ function TimelineView({ source, item, onConfig }) {
                                             </div>
                                         )}
                                         {!inside && (
-                                            <span className={styles.sideLabel} style={{ left: `${sp.milestone ? x(sp.s) + ppd / 2 + 0.8 : left + width + 0.4}em`, ...look.text }}>{title || 'Untitled'}</span>
+                                            <span className={styles.sideLabel} style={{ left: `${sp.milestone ? x(sp.s) + ppd / 2 + 0.8 : left + width + 0.4}em` }}><span className={styles.sideText} style={look.text}>{title || 'Untitled'}</span></span>
                                         )}
                                         <span className={styles.linkDot} style={{ left: `${sp.milestone ? x(sp.s) + ppd / 2 + 0.55 : left + width}em` }}
                                             onPointerDown={(e) => barDown(e, rec.id, 'link')} title="Drag onto another bar: it waits for this one" />
@@ -523,7 +534,7 @@ function TimelineView({ source, item, onConfig }) {
                                 </div>
                             )
                         })}
-                        {!lines.some(l => l.kind === 'row') && <div className={styles.emptyNote} style={{ left: `${RAIL + 1}em` }}>Nothing scheduled{tray.length ? ' — drag a record up from Unscheduled' : ''}.</div>}
+                        {!lines.some(l => l.kind === 'row') && <div className={styles.emptyNote} style={{ left: `${RAIL + 1}em` }}><span className={styles.emptyText}>Nothing scheduled{tray.length ? ' — drag a record up from Unscheduled' : ''}.</span></div>}
                     </div>
 
                     {source.type === 'own' && source.canAdd && (

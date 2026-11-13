@@ -10,7 +10,7 @@
     min-height: 0;
     overflow: auto;
     outline: none;
-    border: 1px solid var(--tbl-line);
+    border: calc(1px * var(--z, 1)) solid var(--tbl-line);
     border-radius: calc(7px * var(--z, 1));
 }
 .canvas { position: relative; min-width: 100%; }
@@ -22,7 +22,7 @@
     z-index: 6;
     display: flex;
     background-color: var(--bg-surface-alt);
-    border-bottom: 1px solid var(--tbl-line);
+    border-bottom: calc(1px * var(--z, 1)) solid var(--tbl-line);
 }
 .railHead {
     position: sticky;
@@ -34,13 +34,13 @@
     box-sizing: border-box;
     padding: 0 0.6em 0.4em;
     background-color: var(--bg-surface-alt);
-    border-right: 1px solid var(--tbl-line);
-    font: 600 0.72em var(--font-body);
+    border-right: calc(1px * var(--z, 1)) solid var(--tbl-line);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.railHeadText { font: 600 0.72em var(--font-body); overflow: hidden; text-overflow: ellipsis; }
 .axis { flex: none; position: relative; }
 .tier { position: relative; height: 1.55em; }
 .upper, .lower {
@@ -53,27 +53,32 @@
     overflow: hidden;
     white-space: nowrap;
 }
-.upper { border-left: 1px solid var(--border-strong); font: 600 0.74em var(--font-display); color: var(--text-primary); }
+/* Positioned boxes keep the body's text size (their em positions count in it); the smaller text sits inside. */
+.upper { border-left: calc(1px * var(--z, 1)) solid var(--border-strong); color: var(--text-primary); }
 /* The month / year name stays in view while its span scrolls past. */
-.stickyLabel { position: sticky; left: 14.9em; padding: 0 0.5em; }   /* the rail (11em at the body size) in this label's 0.74em */
-.lower { justify-content: center; border-left: 1px solid var(--tbl-line); font: 0.7em var(--font-mono); color: var(--text-secondary); }
+.stickyLabel { position: sticky; left: 14.9em; padding: 0 0.5em; font: 600 0.74em var(--font-display); }   /* the rail (11em at the body size) in this label's 0.74em */
+.lower { justify-content: center; border-left: calc(1px * var(--z, 1)) solid var(--tbl-line); color: var(--text-secondary); }
+.lowerLabel { font: 0.7em var(--font-mono); }
 .todayTag {
     position: absolute;
     bottom: 0.1em;
+    translate: -50% 0;
+    pointer-events: none;
+}
+.todayText {
+    display: block;
     padding: 0 0.35em;
     border-radius: 0.3em;
     background-color: var(--accent-danger);
     color: #fff;
     font: 600 0.62em var(--font-body);
-    translate: -50% 0;
-    pointer-events: none;
 }
 
 /* ── body ── */
 .body { position: relative; }
 .bg { position: absolute; top: 0; bottom: 0; }
 .weekend { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--text-primary) 4%, transparent); }
-.gridLine { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid color-mix(in srgb, var(--tbl-line) 55%, transparent); }
+.gridLine { position: absolute; top: 0; bottom: 0; width: 0; border-left: calc(1px * var(--z, 1)) solid color-mix(in srgb, var(--tbl-line) 55%, transparent); }
 .gridStrong { border-left-color: var(--tbl-line); }
 .today { position: absolute; top: 0; bottom: 0; width: 0; border-left: calc(2px * var(--z, 1)) solid var(--accent-danger); opacity: 0.75; }
 .dropDay { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--accent-warning) 22%, transparent); }
@@ -99,8 +104,8 @@
     align-items: center;
     padding: 0 0.6em;
     background-color: var(--bg-surface);
-    border-right: 1px solid var(--tbl-line);
-    border-bottom: 1px solid color-mix(in srgb, var(--tbl-line) 50%, transparent);
+    border-right: calc(1px * var(--z, 1)) solid var(--tbl-line);
+    border-bottom: calc(1px * var(--z, 1)) solid color-mix(in srgb, var(--tbl-line) 50%, transparent);
     pointer-events: auto;
     cursor: default;
 }
@@ -111,7 +116,7 @@
     flex: 1;
     min-width: 0;
     padding: 0.15em 0.3em;
-    border: 1px solid var(--accent-warning);
+    border: calc(1px * var(--z, 1)) solid var(--accent-warning);
     border-radius: 0.3em;
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -134,7 +139,7 @@
     padding: 0 0.5em;
     border-radius: 0.35em;
     background-color: color-mix(in srgb, var(--bar) 70%, var(--bg-surface));
-    border: 1px solid color-mix(in srgb, var(--bar) 85%, var(--text-primary));
+    border: calc(1px * var(--z, 1)) solid color-mix(in srgb, var(--bar) 85%, var(--text-primary));
     pointer-events: auto;
     cursor: grab;
     touch-action: none;
@@ -146,7 +151,7 @@
     text-overflow: ellipsis;
     font: 600 0.78em var(--font-body);
     color: #fff;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+    text-shadow: 0 calc(1px * var(--z, 1)) calc(1px * var(--z, 1)) rgba(0, 0, 0, 0.35);
     pointer-events: none;
 }
 .milestone {
@@ -162,7 +167,7 @@
     cursor: grab;
     touch-action: none;
 }
-.barSel { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: 1px; }
+.barSel { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: calc(1px * var(--z, 1)); }
 .milestone.barSel { background-color: var(--accent-warning); }
 .barLifted { cursor: grabbing; opacity: 0.85; }
 .barTarget { outline: calc(2px * var(--z, 1)) dashed var(--accent-warning); outline-offset: calc(2px * var(--z, 1)); }
@@ -173,7 +178,6 @@
     position: absolute;
     top: 50%;
     translate: 0 -50%;
-    font-size: 0.78em;
     color: var(--text-secondary);
     white-space: nowrap;
     pointer-events: none;
@@ -185,7 +189,7 @@
     height: 0.62em;
     margin: -0.31em 0 0 0.1em;
     border-radius: 50%;
-    border: 1.5px solid var(--text-secondary);
+    border: calc(1.5px * var(--z, 1)) solid var(--text-secondary);
     background-color: var(--bg-surface);
     pointer-events: auto;
     cursor: crosshair;
@@ -206,15 +210,17 @@
     gap: 0.4em;
     padding: 0 0.5em;
     border: none;
-    border-bottom: 1px solid var(--tbl-line);
+    border-bottom: calc(1px * var(--z, 1)) solid var(--tbl-line);
     background-color: var(--bg-surface-alt);
     color: var(--text-primary);
-    font: 600 0.84em var(--font-display);
+    font: inherit;
     pointer-events: auto;
     cursor: pointer;
 }
+.groupText { font: 600 0.84em var(--font-display); display: inline-flex; align-items: center; gap: 0.4em; }
 .groupHead:hover { background-color: var(--bg-hover); }
-.emptyNote { position: absolute; top: 0.8em; font-size: 0.82em; font-style: italic; color: var(--text-muted); }
+.emptyNote { position: absolute; top: 0.8em; font-style: italic; color: var(--text-muted); }
+.sideText, .emptyText { font-size: 0.8em; }
 .addRow {
     position: sticky;
     left: 0;
@@ -224,7 +230,7 @@
     padding: 0 0.3em;
     box-sizing: border-box;
     background-color: var(--bg-surface);
-    border-right: 1px solid var(--tbl-line);
+    border-right: calc(1px * var(--z, 1)) solid var(--tbl-line);
 }
 
 /* ── toolbar bits and the tray ── */

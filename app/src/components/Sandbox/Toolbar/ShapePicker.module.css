@@ -202,14 +202,15 @@
     cursor: pointer;
 }
 
-/* ── the Media (Insert) menu: bigger rows than the shapes list ── */
-.insertPanel { min-width: 216px; padding: 8px; }
+/* ── the Media (Insert) menu: big rows, only as wide as its labels ── */
+.insertPanel { min-width: 0; width: max-content; padding: 8px; }
 .insertItem {
     composes: menuItem;
-    gap: 13px;
-    padding: 10px 14px;
+    gap: 12px;
+    padding: 9px 18px 9px 12px;
     border-radius: 10px;
-    font-size: 14.5px;
+    font-size: 17px;
+    font-weight: 500;
 }
 .insertItem svg { flex: none; }
 .insertDivider { height: 1px; margin: 5px 8px; background-color: var(--border-default); }

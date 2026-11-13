@@ -31,6 +31,7 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { isFormat, formatPayload, nextFormatTitle, formatSize } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
+import { innerScale } from '../../components/Sandbox/formats/zoomBox'
 import { attachPatches, stampPatches, boardClips, cutLabel, widgetBorne } from '../../components/Sandbox/selection/attach'
 import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
@@ -1025,9 +1026,11 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // widget shows how many of its riders are cropped or out of view.
     const clipOf = board.clips
     const cutOn = board.cut
+    // A widget's inner scale (formats/zoomBox.js): changes only at zoom 1/2, 1/3, 1/4…
+    const widgetK = innerScale(canvas.viewport.zoom)
     const cardEl = (item) => {
         if (isFormat(item)) {
-            return <FormatWidget item={item} zoom={canvas.viewport.zoom} tool={canvas.tool}
+            return <FormatWidget item={item} k={widgetK} tool={canvas.tool}
                 selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
                 cut={cutOn.get(item.id)}
                 onSelect={onSelect} onGrab={onGrabItem} onRemove={onErase} onCommit={onCommitFormat}

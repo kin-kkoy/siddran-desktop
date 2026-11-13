@@ -1590,6 +1590,16 @@ async function runZoomFont() {
     key('Escape')
     const store = await import('../hooks/sandboxItemsStore')
     const live = () => store.getSnapshot(boardId)
+    {
+        document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Kanban')
+        const panel = btn?.parentElement, pr = panel?.getBoundingClientRect(), ir = btn?.getBoundingClientRect()
+        const anchor = document.querySelector('button[title="Media"]').getBoundingClientRect()
+        await step('media-menu', { onScreen: !!pr && pr.left >= 0 && pr.top >= 0 && pr.bottom <= innerHeight && pr.right <= innerWidth, visibility: panel && getComputedStyle(panel).visibility,
+            panel: pr && [Math.round(pr.left), Math.round(pr.top), Math.round(pr.width), Math.round(pr.height)], gapToButton: pr && Math.round(anchor.left - pr.right),
+            row: ir && [Math.round(ir.width), Math.round(ir.height)], font: btn && getComputedStyle(btn).fontSize, icon: btn && Math.round(btn.querySelector('svg').getBoundingClientRect().width), items: panel?.querySelectorAll('button').length })
+        key('Escape'); await sleep(300)
+    }
     document.querySelector('button[title="Media"]')?.click(); await sleep(500)
     ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(1200)
     const it = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
@@ -1610,14 +1620,47 @@ async function runZoomFont() {
         const wd = (k) => W().querySelector(`[data-zf="${k}"]`).getBoundingClientRect().width
         const bar = W().querySelector('header').getBoundingClientRect().height
         const tool = W().querySelector('[class*="toolbar"]')?.getBoundingClientRect().height
-        return { zoom: +z.toFixed(3), barH: +(bar / z).toFixed(1), toolbarH: +(tool / z).toFixed(1), w15: +(wd('p15') / z).toFixed(1), w8: +(wd('p8') / z).toFixed(1), wem: +(wd('pem') / z).toFixed(1) }
+        const hr = W().querySelector('header').getBoundingClientRect(), wr = W().getBoundingClientRect()
+        return { zoom: +z.toFixed(3), borderScreenPx: +((hr.left - wr.left)).toFixed(2), barH: +(bar / z).toFixed(1), toolbarH: +(tool / z).toFixed(1), w15: +(wd('p15') / z).toFixed(1), w8: +(wd('p8') / z).toFixed(1), wem: +(wd('pem') / z).toFixed(1) }
+    }
+    // A Timeline (scrolled to today): where Today sits across its view must not move as the inner scale changes.
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Timeline')?.click(); await sleep(1500)
+    const tlId = live().filter(i => i.payload?.view === 'timeline').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]?.id
+    const todayAt = () => {
+        const T = document.querySelector(`[data-sb-id="${tlId}"]`)
+        const sc = T.querySelector('[data-sb-scroll][class*="scroll_"]'), tag = T.querySelector('[class*="todayTag"]')
+        const a = sc.getBoundingClientRect(), b = tag.getBoundingClientRect()
+        return +(((b.left + b.width / 2) - a.left) / a.width).toFixed(3)
+    }
+    const tl1 = todayAt()
+    {
+        const T = document.querySelector(`[data-sb-id="${tlId}"]`), sc = T.querySelector('[data-sb-scroll][class*="scroll_"]')
+        const line = T.querySelector('[class*="today_"]:not([class*="todayTag"]):not([class*="todayText"])')
+        const tagC = (() => { const r = T.querySelector('[class*="todayTag"]').getBoundingClientRect(); return r.left + r.width / 2 })()
+        await step('tl-geom', { tagVsLine: +(tagC - line.getBoundingClientRect().left).toFixed(1), clientWidth: sc.clientWidth, scrollLeft: sc.scrollLeft, scrollWidth: sc.scrollWidth, font: getComputedStyle(sc).fontSize, tagLeft: Math.round(T.querySelector('[class*="todayTag"]').getBoundingClientRect().left - sc.getBoundingClientRect().left), rect: Math.round(sc.getBoundingClientRect().width) })
     }
     const at1 = measure()
+    // Hairline borders at the widget's inner scale: which forms draw as 1px on screen?
+    const bt = {}
+    for (const [k, css] of [['calcVar', 'border-left: calc(1px * var(--z, 1)) solid red'], ['frac', 'border-left: 0.125px solid red'], ['one', 'border-left: 1px solid red'], ['shadow', 'box-shadow: inset calc(1px * var(--z, 1)) 0 0 red']]) {
+        const d = document.createElement('div'); d.style.cssText = `${css};position:absolute;left:0;top:0;width:20px;height:20px`
+        W().appendChild(d)
+        const inner = document.createElement('div'); inner.style.cssText = 'width:100%;height:100%'; d.appendChild(inner)
+        bt[k] = { computed: getComputedStyle(d).borderLeftWidth, clientLeft: d.clientLeft, screen: +(inner.getBoundingClientRect().left - d.getBoundingClientRect().left).toFixed(2) }
+        d.remove()
+    }
+    bt.widget = { computed: getComputedStyle(W()).borderLeftWidth, clientLeft: W().clientLeft, z: getComputedStyle(W()).getPropertyValue('--z'), zoom: getComputedStyle(W()).zoom }
+    await step('borders', bt)
     const host = document.querySelector('canvas')?.closest('div[style*="cursor"]') || document.querySelector('.konvajs-content').parentElement
     const r = host.getBoundingClientRect()
-    for (let i = 0; i < 14; i++) { host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: r.left + 30, clientY: r.top + 30, bubbles: true, cancelable: true })); await sleep(80) }
-    await sleep(500)
+    const wheel = async (n, dy) => { for (let i = 0; i < n; i++) { host.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.left + 30, clientY: r.top + 30, bubbles: true, cancelable: true })); await sleep(80) } await sleep(500) }
+    await wheel(8, 120)
+    const mid = measure()
+    const tlMid = todayAt()
+    await wheel(6, 120)
     const out = measure()
+    const tlOut = todayAt()
     // Placement: a plain world-sized box in the same zoomed layer must cover the widget exactly.
     const layer = W().parentElement
     const ref = document.createElement('div')
@@ -1636,7 +1679,7 @@ async function runZoomFont() {
     const scrolled = [clip.scrollLeft, clip.scrollTop]
     await sleep(200)
     far.remove()
-    await step('zoomfont', { at1, out, placed, scrolled, after: [clip.scrollLeft, clip.scrollTop], cursor: getComputedStyle(W()).cursor, cellCursor: getComputedStyle(W().querySelector('[class*="toolbar"]')).cursor, note: 'sizes divided by zoom: equal to at1 = shrinks with the widget' })
+    await step('zoomfont', { timelineTodayAt: [tl1, tlMid, tlOut], at1, mid, out, placed, scrolled, after: [clip.scrollLeft, clip.scrollTop], cursor: getComputedStyle(W()).cursor, cellCursor: getComputedStyle(W().querySelector('[class*="toolbar"]')).cursor, note: 'sizes divided by zoom: equal to at1 = shrinks with the widget' })
     send('done', true)
 }
 

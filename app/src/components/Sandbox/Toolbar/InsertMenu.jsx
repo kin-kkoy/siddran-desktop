@@ -15,16 +15,14 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
     useLayoutEffect(() => {
         if (!open || !anchorRef.current) return
         const r = anchorRef.current.getBoundingClientRect()
-        const GAP = 12
-        const PANEL_W = 216
-        setPos({ top: r.top - 6, left: Math.max(8, r.left - GAP - PANEL_W) })
+        setPos({ top: r.top - 6, right: r.left - 12, measured: false })
     }, [open, anchorRef])
-    // Taller than the button's room below it: move up so the whole list shows.
+    // Once drawn: sit just left of the button at the list's own width, and move up if it would run off the bottom.
     useLayoutEffect(() => {
         const el = panelRef.current
-        if (!el || !pos) return
-        const max = window.innerHeight - el.offsetHeight - 8
-        if (pos.top > max) setPos(p => ({ ...p, top: Math.max(8, max) }))
+        if (!el || !pos || pos.measured) return
+        const top = Math.max(8, Math.min(pos.top, window.innerHeight - el.offsetHeight - 8))
+        setPos({ ...pos, top, left: Math.max(8, pos.right - el.offsetWidth), measured: true })
     }, [pos])
 
     useEffect(() => {
@@ -67,11 +65,12 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
     ]
 
     return createPortal(
-        <div ref={panelRef} className={`${styles.panel} ${styles.insertPanel}`} style={{ top: pos.top, left: pos.left }}>
+        <div ref={panelRef} className={`${styles.panel} ${styles.insertPanel}`}
+            style={{ top: pos.top, left: pos.left ?? -9999, visibility: pos.measured ? 'visible' : 'hidden' }}>
             {/* Bigger rows than the shapes list: it opens now and then, and should read at a glance (the user's call). */}
             {ITEMS.map((it, i) => it.divider ? <div key={`d${i}`} className={styles.insertDivider} /> : (
                 <button key={it.label} className={styles.insertItem} onClick={() => pick(it.onClick)}>
-                    <it.Icon size={20} />
+                    <it.Icon size={24} />
                     <span>{it.label}</span>
                 </button>
             ))}

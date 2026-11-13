@@ -12,7 +12,7 @@ import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
 import { cutLabel } from '../selection/attach'
 import { stepFontSize } from '../text/textStyle'
-import { widgetBox, zIcon } from './zoomBox'
+import { widgetBox, zIcon, useKeepScroll } from './zoomBox'
 import DocWidget, { DocFocus } from './doc/DocWidget'
 
 /**
@@ -119,10 +119,12 @@ const FORMAT_FONT = 15
 // Full screen: its own size once set, else 15% over the widget's.
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || FORMAT_FONT) * 1.15)
 
-function RecordWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
+function RecordWidget({ item, k, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
+    const boxRef = useRef(null)
+    useKeepScroll(boxRef, k)
 
     const onPointerDown = (e) => {
         if (e.button !== 0) return
@@ -149,7 +151,8 @@ function RecordWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onG
             data-sb-id={item.id}
             data-sb-scrollcard="true"
             className={`${styles.widget} ${selected ? styles.selected : ''}`}
-            style={widgetBox(item, zoom, item.payload?.fontSize || FORMAT_FONT)}
+            ref={boxRef}
+            style={widgetBox(item, item.payload?.fontSize || FORMAT_FONT, k)}
             onPointerDown={onPointerDown}
         >
             <Chrome item={item} source={source} commit={commit} renaming={renaming} onRenameDone={onRename}

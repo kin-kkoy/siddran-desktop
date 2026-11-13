@@ -1675,4 +1675,41 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     snapped back to 0; arrowhead 8×8 px, grey; the add box empty after Enter.
     Walks `timeline`, `cards`, `table`, `grid`, `extras`, `doc`, `doc2`,
     `slides` all pass (new `zoomfont:` walk). 766 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · user feedback: proportions right, but zooming was
+  flickery and laggy (worst when the wheel changes direction).
+  - **Cause:** the fix above changed every widget's text size, box and
+    paddings on every wheel step (a re-render of each widget, a reflow of all
+    its text, CodeMirror re-measuring the Doc, scrolled widgets sliding since
+    their scroll stayed in px while their content changed size).
+  - **Now** (`formats/zoomBox.js`): the board's CSS zoom scales widgets again,
+    as before; a widget only changes its **inner scale k** — the smallest
+    whole number with zoom × k ≥ 1 (1 at 100 % and above = the original
+    layout) — laid out at 1/k and magnified k× with its own `zoom`. Its text
+    is then specified small enough that WebKit's 9px rule never applies,
+    whatever the zoom. k changes only at 1/2, 1/3, 1/4… of zoom, so a long
+    zoom-out re-renders a widget a handful of times, not every step; at
+    each change the scroll positions inside are read before the change and
+    rescaled after it (`useKeepScroll`).
+  - Why not a fixed big k: WebKit rounds borders thinner than 1px up to 1px
+    *before* zooming (measured: 1px at k = 8 drew 8px). With zoom × k
+    between 1 and ~1.5, hairlines stay 1px.
+  - All px reachable inside a widget follow --z now, borders included: the
+    five widget stylesheets, the notes editor's theme (`cm/theme.js`, only
+    its CSS strings), its stylesheet, the find bar (`NoteSearch`), and
+    CodeMirror's own line/gutter padding inside a Doc. Outside a widget --z
+    is unset, so the Notes page is unchanged.
+  - **Timeline bugs found on the way** (em positions on elements with their
+    own smaller text count in that text): the axis header sat 46px left of
+    the body (its rail corner's 0.72em text), the Today tag at 62 % of its
+    place, tick labels, side labels and swimlane headers likewise. Positioned
+    boxes keep the body's size now; the small text sits inside. A new
+    Timeline also centres on today once it has a width.
+  - **Media menu:** 17px labels, 24px icons, 42px rows, only as wide as its
+    labels (144px; it was 216), placed beside the button after measuring.
+  - Checked in a hidden window (`zoomfont:` walk): at 100 % / 47 % / 26 %
+    the border is 1px on screen and the toolbar keeps its size relative to
+    the widget (58.9 / 58.9 / 58.8); placement exact; a scrolled Timeline
+    keeps today at 0.606 / 0.61 / 0.616 of its view across k changes; Today
+    tag vs line 0px; the Media menu on screen. All section walks pass.
+    766 tests, lint 25, build pass.
 

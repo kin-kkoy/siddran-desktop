@@ -30,7 +30,7 @@
     gap: 0.42em;
     height: 2em;
     padding: 0 0.67em;
-    border: 1px solid transparent;
+    border: calc(1px * var(--z, 1)) solid transparent;
     border-radius: 0.5em;
     background: transparent;
     color: var(--text-secondary);
@@ -50,7 +50,7 @@
     min-height: 0;
     overflow: auto;
     outline: none;
-    border: 1px solid var(--tbl-line);
+    border: calc(1px * var(--z, 1)) solid var(--tbl-line);
     border-radius: calc(7px * var(--z, 1));
 }
 .grid { width: max-content; min-width: 100%; }
@@ -60,7 +60,7 @@
     grid-template-columns: var(--cols);
     align-items: stretch;
     min-height: 2.2em;
-    border-bottom: 1px solid var(--tbl-line);
+    border-bottom: calc(1px * var(--z, 1)) solid var(--tbl-line);
 }
 .trow > * { min-width: 0; }
 .trow:not(.headRow):not(.calcRow):not(.addRow):hover { background-color: var(--bg-hover); }
@@ -76,7 +76,7 @@
 .head {
     position: relative;
     display: flex;
-    border-left: 1px solid var(--tbl-line);
+    border-left: calc(1px * var(--z, 1)) solid var(--tbl-line);
 }
 .headBtn {
     flex: 1;
@@ -123,7 +123,7 @@
 .resizer {
     position: absolute;
     top: 0;
-    right: -4px;
+    right: calc(-4px * var(--z, 1));
     width: calc(8px * var(--z, 1));
     height: 100%;
     z-index: 1;
@@ -135,7 +135,7 @@
     align-items: center;
     justify-content: center;
     border: none;
-    border-left: 1px solid var(--tbl-line);
+    border-left: calc(1px * var(--z, 1)) solid var(--tbl-line);
     background: transparent;
     color: var(--accent-warning);
     cursor: pointer;
@@ -169,7 +169,7 @@
 .rowDel:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.16); }
 
 /* ── cells ── */
-.cellWrap { position: relative; display: flex; border-left: 1px solid var(--tbl-line); }
+.cellWrap { position: relative; display: flex; border-left: calc(1px * var(--z, 1)) solid var(--tbl-line); }
 .cell {
     flex: 1;
     min-width: 0;
@@ -186,9 +186,9 @@
     overflow: hidden;
     white-space: nowrap;
 }
-div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line); }
+div.cell, button.cell[role='gridcell'] { border-left: calc(1px * var(--z, 1)) solid var(--tbl-line); }
 .cell:disabled { cursor: default; color: var(--text-primary); }
-.cell:focus-visible { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: -2px; }
+.cell:focus-visible { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: calc(-2px * var(--z, 1)); }
 .cellText { overflow: hidden; text-overflow: ellipsis; }
 .wrap { white-space: normal; align-items: flex-start; }
 .wrap .cellText { overflow-wrap: anywhere; }
@@ -235,7 +235,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     justify-content: center;
     width: 1.05em;
     height: 1.05em;
-    border: 1.5px solid var(--border-strong);
+    border: calc(1.5px * var(--z, 1)) solid var(--border-strong);
     border-radius: calc(4px * var(--z, 1));
     color: var(--bg-surface);
 }
@@ -255,10 +255,10 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     font: 0.82em var(--font-body);
     background-color: hsla(var(--opt-hue), 62%, 52%, 0.22);
     color: color-mix(in srgb, hsl(var(--opt-hue), 70%, 58%) 55%, var(--text-primary));
-    border: 1px solid hsla(var(--opt-hue), 62%, 52%, 0.4);
+    border: calc(1px * var(--z, 1)) solid hsla(var(--opt-hue), 62%, 52%, 0.4);
 }
 .optSmall { font-size: 0.78em; }
-.optDot { flex: none; width: calc(9px * var(--z, 1)); height: calc(9px * var(--z, 1)); border-radius: 50%; border: 1px dashed var(--border-strong); box-sizing: border-box; }
+.optDot { flex: none; width: calc(9px * var(--z, 1)); height: calc(9px * var(--z, 1)); border-radius: 50%; border: calc(1px * var(--z, 1)) dashed var(--border-strong); box-sizing: border-box; }
 .optDot[style] { border: none; }
 
 /* ── groups ── */
@@ -270,7 +270,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     min-height: 2em;
     padding: 0 0.5em;
     border: none;
-    border-bottom: 1px solid var(--tbl-line);
+    border-bottom: calc(1px * var(--z, 1)) solid var(--tbl-line);
     background-color: var(--bg-elevated);
     color: var(--text-secondary);
     font: 600 0.82em var(--font-body);
@@ -315,10 +315,10 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     z-index: 1;
     min-height: 1.9em;
     border-bottom: none;
-    border-top: 1px solid var(--tbl-line);
+    border-top: calc(1px * var(--z, 1)) solid var(--tbl-line);
     background-color: var(--bg-surface-alt);
 }
-.gcalc { position: static; background-color: transparent; border-top: none; border-bottom: 1px solid var(--tbl-line); }
+.gcalc { position: static; background-color: transparent; border-top: none; border-bottom: calc(1px * var(--z, 1)) solid var(--tbl-line); }
 .calcCell {
     display: flex;
     align-items: center;
@@ -348,11 +348,11 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: calc(1px * var(--z, 1));
     box-sizing: border-box;
     padding: calc(6px * var(--z, 1));
     background-color: var(--bg-elevated, rgb(18, 18, 30));
-    border: 1px solid var(--outline-contrast, var(--border-strong));
+    border: calc(1px * var(--z, 1)) solid var(--outline-contrast, var(--border-strong));
     border-radius: calc(11px * var(--z, 1));
     box-shadow: 0 calc(12px * var(--z, 1)) calc(32px * var(--z, 1)) var(--shadow-color, rgba(0, 0, 0, 0.5));
     color: var(--text-primary);
@@ -375,7 +375,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     height: calc(27px * var(--z, 1));
     box-sizing: border-box;
     padding: 0 calc(7px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -428,7 +428,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     gap: calc(5px * var(--z, 1));
     height: calc(26px * var(--z, 1));
     padding: 0 calc(10px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background: transparent;
     color: var(--text-secondary);
@@ -440,7 +440,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .popBtn:hover, .popBtnQuiet:hover { color: var(--text-primary); background-color: var(--bg-hover); }
 .popEmpty { padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1)); font-size: calc(12.5px * var(--z, 1)); color: var(--text-muted); font-style: italic; }
 .popNote { padding: calc(4px * var(--z, 1)) calc(8px * var(--z, 1)); font-size: calc(11.5px * var(--z, 1)); color: var(--text-muted); }
-.popSep { height: 1px; margin: calc(5px * var(--z, 1)) calc(2px * var(--z, 1)); background-color: var(--border-default); }
+.popSep { height: calc(1px * var(--z, 1)); margin: calc(5px * var(--z, 1)) calc(2px * var(--z, 1)); background-color: var(--border-default); }
 .popConfirm { padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1)); font-size: calc(12.5px * var(--z, 1)); color: var(--text-secondary); }
 .danger:hover { color: var(--accent-danger); }
 .dangerBtn { color: var(--accent-danger); border-color: rgba(224, 92, 92, 0.45); }
@@ -448,7 +448,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .typeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: calc(4px * var(--z, 1)); padding: calc(4px * var(--z, 1)); }
 .typeBtn {
     height: calc(28px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background: transparent;
     color: var(--text-secondary);
@@ -462,7 +462,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     box-sizing: border-box;
     resize: vertical;
     padding: calc(8px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -503,9 +503,9 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 /* ── dragging rows and columns ── */
 .dragging { opacity: 0.4; }
 .dropBefore { box-shadow: inset 0 calc(3px * var(--z, 1)) 0 var(--accent-warning); }
-.dropAfter { box-shadow: inset 0 -3px 0 var(--accent-warning); }
+.dropAfter { box-shadow: inset 0 calc(-3px * var(--z, 1)) 0 var(--accent-warning); }
 .dropLeft { box-shadow: inset calc(3px * var(--z, 1)) 0 0 var(--accent-warning); }
-.dropRight { box-shadow: inset -3px 0 0 var(--accent-warning); }
+.dropRight { box-shadow: inset calc(-3px * var(--z, 1)) 0 0 var(--accent-warning); }
 
 /* ── the style bar (fonts for selected cells) ── */
 .styleBar { display: flex; align-items: center; gap: 0.17em; }
@@ -518,7 +518,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     min-width: 2em;
     height: 2em;
     padding: 0 0.25em;
-    border: 1px solid transparent;
+    border: calc(1px * var(--z, 1)) solid transparent;
     border-radius: 0.42em;
     background: transparent;
     color: var(--text-secondary);
@@ -532,7 +532,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     height: 2em;
     max-width: 6.5em;
     padding: 0 0.33em;
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: 0.42em;
     background-color: var(--bg-surface);
     color: var(--text-secondary);
@@ -540,11 +540,11 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     color-scheme: dark light;
 }
 .styleScale { min-width: 3.2em; text-align: center; font: 0.88em var(--font-mono); color: var(--text-muted); }
-.colorA { font-weight: 700; line-height: 1; padding-bottom: 1px; border-bottom: calc(3px * var(--z, 1)) solid; }
-.fillSwatch { width: 1em; height: 1em; border-radius: 0.25em; border: 1px solid var(--border-strong); }
+.colorA { font-weight: 700; line-height: 1; padding-bottom: calc(1px * var(--z, 1)); border-bottom: calc(3px * var(--z, 1)) solid; }
+.fillSwatch { width: 1em; height: 1em; border-radius: 0.25em; border: calc(1px * var(--z, 1)) solid var(--border-strong); }
 .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: calc(6px * var(--z, 1)); padding: calc(6px * var(--z, 1)); }
-.swatch { width: calc(28px * var(--z, 1)); height: calc(28px * var(--z, 1)); border-radius: calc(6px * var(--z, 1)); border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
-.swatch:hover { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: 1px; }
+.swatch { width: calc(28px * var(--z, 1)); height: calc(28px * var(--z, 1)); border-radius: calc(6px * var(--z, 1)); border: calc(1px * var(--z, 1)) solid var(--border-strong); cursor: pointer; padding: 0; }
+.swatch:hover { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: calc(1px * var(--z, 1)); }
 .swatchNone { background: linear-gradient(135deg, transparent 45%, var(--accent-danger) 45%, var(--accent-danger) 55%, transparent 55%); }
 
 /* ── the row's ⤢ (open the record) beside its grip ── */
@@ -579,7 +579,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     min-width: 0;
     resize: vertical;
     padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -593,7 +593,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .fxFields, .fxOps { display: flex; flex-wrap: wrap; gap: calc(4px * var(--z, 1)); padding: calc(2px * var(--z, 1)) calc(4px * var(--z, 1)) calc(4px * var(--z, 1)); }
 .fxChip {
     padding: calc(2px * var(--z, 1)) calc(7px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(9px * var(--z, 1));
     background: transparent;
     color: var(--text-secondary);
@@ -609,7 +609,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     display: inline-flex;
     align-items: center;
     max-width: 14em;
-    border: 1px solid var(--tbl-line, var(--border-default));
+    border: calc(1px * var(--z, 1)) solid var(--tbl-line, var(--border-default));
     border-radius: 0.8em;
     background-color: var(--bg-elevated);
     font-size: 0.82em;
@@ -655,11 +655,11 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-strong);
+    border: calc(1px * var(--z, 1)) solid var(--border-strong);
     border-radius: calc(12px * var(--z, 1));
     background-color: var(--bg-surface);
 }
-.previewBar { display: flex; align-items: center; gap: calc(8px * var(--z, 1)); padding: calc(8px * var(--z, 1)) calc(10px * var(--z, 1)) calc(8px * var(--z, 1)) calc(14px * var(--z, 1)); border-bottom: 1px solid var(--border-default); font: calc(13px * var(--z, 1)) var(--font-body); color: var(--text-primary); }
+.previewBar { display: flex; align-items: center; gap: calc(8px * var(--z, 1)); padding: calc(8px * var(--z, 1)) calc(10px * var(--z, 1)) calc(8px * var(--z, 1)) calc(14px * var(--z, 1)); border-bottom: calc(1px * var(--z, 1)) solid var(--border-default); font: calc(13px * var(--z, 1)) var(--font-body); color: var(--text-primary); }
 .previewImg { flex: 1; min-height: 0; object-fit: contain; background-color: var(--bg-elevated); }
 .previewFrame { flex: 1; min-height: 0; border: none; background: #fff; }
 
@@ -670,7 +670,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-strong);
+    border: calc(1px * var(--z, 1)) solid var(--border-strong);
     border-radius: calc(12px * var(--z, 1));
     background-color: var(--bg-surface);
     box-shadow: 0 calc(24px * var(--z, 1)) calc(60px * var(--z, 1)) rgba(0, 0, 0, 0.6);
@@ -682,11 +682,11 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .dialogFrom { font: calc(11px * var(--z, 1)) var(--font-mono); color: var(--text-muted); }
 .dialogOpts { display: flex; flex-wrap: wrap; gap: calc(16px * var(--z, 1)); padding: 0 calc(18px * var(--z, 1)) calc(10px * var(--z, 1)); color: var(--text-secondary); }
 .dialogOpts label { display: flex; align-items: center; gap: calc(6px * var(--z, 1)); cursor: pointer; }
-.dialogScroll { flex: 1; min-height: 0; overflow: auto; margin: 0 calc(18px * var(--z, 1)); border: 1px solid var(--border-default); border-radius: calc(8px * var(--z, 1)); }
+.dialogScroll { flex: 1; min-height: 0; overflow: auto; margin: 0 calc(18px * var(--z, 1)); border: calc(1px * var(--z, 1)) solid var(--border-default); border-radius: calc(8px * var(--z, 1)); }
 .previewTable { border-collapse: collapse; width: max-content; min-width: 100%; }
-.previewTable th { position: sticky; top: 0; padding: calc(6px * var(--z, 1)); background-color: var(--bg-surface-alt); border-bottom: 1px solid var(--border-strong); text-align: left; vertical-align: top; }
+.previewTable th { position: sticky; top: 0; padding: calc(6px * var(--z, 1)); background-color: var(--bg-surface-alt); border-bottom: calc(1px * var(--z, 1)) solid var(--border-strong); text-align: left; vertical-align: top; }
 .previewTable th select { display: block; min-width: calc(140px * var(--z, 1)); margin-bottom: calc(4px * var(--z, 1)); }
-.previewTable td { max-width: calc(260px * var(--z, 1)); padding: calc(5px * var(--z, 1)) calc(8px * var(--z, 1)); border-bottom: 1px solid var(--border-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+.previewTable td { max-width: calc(260px * var(--z, 1)); padding: calc(5px * var(--z, 1)) calc(8px * var(--z, 1)); border-bottom: calc(1px * var(--z, 1)) solid var(--border-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
 .dialogFoot { display: flex; align-items: center; gap: calc(8px * var(--z, 1)); padding: calc(12px * var(--z, 1)) calc(18px * var(--z, 1)) calc(14px * var(--z, 1)); }
 .primaryBtn { color: var(--bg-surface); background-color: var(--accent-warning); border-color: var(--accent-warning); font-weight: 600; }
 .primaryBtn:hover { color: var(--bg-surface); background-color: var(--accent-warning); filter: brightness(1.08); }
@@ -703,7 +703,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--outline-contrast, var(--border-strong));
+    border: calc(1px * var(--z, 1)) solid var(--outline-contrast, var(--border-strong));
     border-radius: calc(12px * var(--z, 1));
     background-color: var(--bg-surface);
     box-shadow: 0 calc(20px * var(--z, 1)) calc(50px * var(--z, 1)) rgba(0, 0, 0, 0.55);
@@ -711,18 +711,18 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     font: calc(13.5px * var(--z, 1)) var(--font-body);
     outline: none;
 }
-.detailHead { display: flex; align-items: center; gap: calc(4px * var(--z, 1)); padding: calc(10px * var(--z, 1)) calc(8px * var(--z, 1)) calc(10px * var(--z, 1)) calc(16px * var(--z, 1)); border-bottom: 1px solid var(--border-default); background-color: var(--bg-surface-alt); }
+.detailHead { display: flex; align-items: center; gap: calc(4px * var(--z, 1)); padding: calc(10px * var(--z, 1)) calc(8px * var(--z, 1)) calc(10px * var(--z, 1)) calc(16px * var(--z, 1)); border-bottom: calc(1px * var(--z, 1)) solid var(--border-default); background-color: var(--bg-surface-alt); }
 .detailTitle { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 calc(15px * var(--z, 1)) var(--font-display); }
 .detailCount { font: calc(11px * var(--z, 1)) var(--font-mono); color: var(--text-muted); margin-right: calc(4px * var(--z, 1)); }
 .detailNote { padding: calc(6px * var(--z, 1)) calc(16px * var(--z, 1)); font-size: calc(12px * var(--z, 1)); color: var(--accent-warning); background-color: color-mix(in srgb, var(--accent-warning) 10%, transparent); }
 .detailBody { flex: 1; min-height: 0; overflow: auto; padding: calc(8px * var(--z, 1)) calc(16px * var(--z, 1)) calc(16px * var(--z, 1)); }
-.detailRow { display: flex; flex-direction: column; gap: calc(4px * var(--z, 1)); padding: calc(8px * var(--z, 1)) 0; border-bottom: 1px solid var(--border-default); }
+.detailRow { display: flex; flex-direction: column; gap: calc(4px * var(--z, 1)); padding: calc(8px * var(--z, 1)) 0; border-bottom: calc(1px * var(--z, 1)) solid var(--border-default); }
 .detailLabel { display: flex; justify-content: space-between; gap: calc(8px * var(--z, 1)); font-size: calc(12px * var(--z, 1)); font-weight: 600; color: var(--text-secondary); }
 .detailInput, .detailArea {
     width: 100%;
     box-sizing: border-box;
     padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -741,7 +741,7 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
     min-height: calc(30px * var(--z, 1));
     align-items: center;
     padding: calc(4px * var(--z, 1)) calc(8px * var(--z, 1));
-    border: 1px solid var(--border-default);
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     border-radius: calc(6px * var(--z, 1));
     background-color: var(--bg-surface);
     color: var(--text-primary);
@@ -753,8 +753,8 @@ div.cell, button.cell[role='gridcell'] { border-left: 1px solid var(--tbl-line);
 .detailCheck { align-self: flex-start; display: flex; padding: calc(4px * var(--z, 1)); border: none; background: transparent; font-size: calc(16px * var(--z, 1)); cursor: pointer; }
 .detailRead { display: flex; align-items: baseline; gap: calc(10px * var(--z, 1)); padding: calc(4px * var(--z, 1)) 0; font-size: calc(14px * var(--z, 1)); }
 .detailExpr { font: calc(11.5px * var(--z, 1)) var(--font-mono); color: var(--text-muted); }
-.detailFiles { margin: 0 -6px; }
-.detailFoot { display: flex; align-items: center; gap: calc(10px * var(--z, 1)); padding: calc(10px * var(--z, 1)) calc(16px * var(--z, 1)); border-top: 1px solid var(--border-default); }
+.detailFiles { margin: 0 calc(-6px * var(--z, 1)); }
+.detailFoot { display: flex; align-items: center; gap: calc(10px * var(--z, 1)); padding: calc(10px * var(--z, 1)) calc(16px * var(--z, 1)); border-top: calc(1px * var(--z, 1)) solid var(--border-default); }
 
 /* The record open in the detail panel. */
 .rowCurrent { background-color: color-mix(in srgb, var(--accent-warning) 16%, transparent); box-shadow: inset calc(3px * var(--z, 1)) 0 0 var(--accent-warning); }

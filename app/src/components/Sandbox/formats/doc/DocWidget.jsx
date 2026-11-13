@@ -20,7 +20,7 @@ import { printNoteToPdf } from '../../../Editor/utils/exportPdf'
 import { toast } from '../../../../utils/toast'
 import { setAttachmentTarget } from '../../../../desktop/localStore'
 import { slashMenu } from './slash'
-import { widgetBox, zIcon } from '../zoomBox'
+import { widgetBox, zIcon, useKeepScroll } from '../zoomBox'
 
 const EXTRA_EXTENSIONS = [slashMenu]
 // Spec §13.3.3: autosave about half a second after the last keystroke.
@@ -334,9 +334,11 @@ function NotePicker({ notes, current, onPick }) {
 const DOC_FONT = 15
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || DOC_FONT) * 1.15)
 
-function DocWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
+function DocWidget({ item, k, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const locked = !!item.payload?.locked
+    const boxRef = useRef(null)
+    useKeepScroll(boxRef, k)
     const onPointerDown = (e) => {
         if (e.button !== 0) return
         e.stopPropagation()
@@ -359,7 +361,8 @@ function DocWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onGrab
             data-sb-id={item.id}
             data-sb-scrollcard="true"
             className={`${styles.widget} ${dStyles.doc} ${selected ? styles.selected : ''}`}
-            style={widgetBox(item, zoom, item.payload?.fontSize || DOC_FONT)}
+            ref={boxRef}
+            style={widgetBox(item, item.payload?.fontSize || DOC_FONT, k)}
             onPointerDown={onPointerDown}
         >
             <DocChrome item={item} commit={commit} renaming={renaming} onRenameDone={onRename}
