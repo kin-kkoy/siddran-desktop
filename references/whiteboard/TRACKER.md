@@ -206,8 +206,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       `whiteboard` (session 7, 2026-11-13).
 - [~] **10 · Prototype:** ✗ dropped by the user (2026-11-13) — see Not planned. screens with click-through hotspots and a preview
       mode (§13.11).
-- [ ] **11 · Engage activities + Talktrack, solo versions (decided):** Talktrack ✗ dropped
-      by the user (2026-11-13); Engage undecided (session 7 recommends dropping it too — see Not planned).
+- [ ] **11 · Engage activities + Talktrack, solo versions (decided):** ✗ dropped by the user
+      (2026-11-13): Talktrack and Engage both — see Not planned.
       self-quizzes, flashcards, polls and votes; screen and voice recording of
       the board, saved as video in the Bag (§13.12–13.13).
 
@@ -236,10 +236,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   (everything-in-one). If the Sandbox ever grows that way, it would rather
   become its own standalone app.
 - **Talktrack (section 11)** — dropped 2026-11-13, same reason.
-- **Engage (section 11)** — polls/votes make no sense solo; session 7
-  recommended dropping self-quizzes/flashcards too (they're about remembering
-  notes, not boards — if ever, a notes feature, not a widget). Awaiting the
-  user's word.
+- **Engage (section 11)** — dropped 2026-11-13. It's Miro's live-workshop
+  tool (polls, word clouds, scales, rankings, quizzes answered by a room of
+  people); solo, every activity just records what you already think.
+  Self-quizzes/flashcards, if ever, would be a notes feature, not a widget.
 
 ## Log
 
@@ -1722,4 +1722,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     keeps today at 0.606 / 0.61 / 0.616 of its view across k changes; Today
     tag vs line 0px; the Media menu on screen. All section walks pass.
     766 tests, lint 25, build pass.
+- 2026-11-13 · session 7 · **Prototype, Talktrack and Engage dropped** by the
+  user (not a kitchen sink). Remaining: the deferred connection outlines,
+  then merge `whiteboard` into `master` in both repos (the user wants to keep
+  it), then remove this tracker. The merged worktrees wb8/wb9 and branches
+  `whiteboard-doc` / `whiteboard-slides` were removed (both repos). Handed
+  to the session WhiteboardFeatureImplementation-Final.
 
