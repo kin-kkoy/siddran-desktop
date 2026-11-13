@@ -9,7 +9,7 @@
 //   table:<boardId>  — the Table view: fields, cells, sort, filter, group (runTable)
 //   grid:<boardId>   — Table selection, cell fonts, row/column drag, long tables (runGrid)
 //   extras:<boardId> — formulas, totals, detail panel, paste, CSV import, attachments (runExtras)
-//   slides:<boardId> — frames as slides: the Slides panel, reorder, hide, presentation mode (runSlides)
+//   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -1238,9 +1238,10 @@ async function runTimeline() {
     send('done', true)
 }
 
-// ── slides:<boardId> — frames as slides (components/Sandbox/slides/).
-// Makes three frames, then: the Slides panel, drag-reorder, hide, and the
-// presentation (keys, blank, click zones, end screen, exit restoring the view).
+// ── slides:<boardId> — slides (components/Sandbox/slides/): Insert → Slides,
+// New slide, frame ⇄ slide, numbered duplicates, display sizes, the panel
+// (reorder, hide), presenting (fade, keys, exit restoring the view) and the
+// PDF export (to VITE_SLIDES_PDF, past the save dialog via a probe-only event).
 async function runSlides() {
     await waitFor(() => document.querySelector('#root')?.children.length)
     await sleep(3000)
@@ -1251,115 +1252,98 @@ async function runSlides() {
     const store = await import('../hooks/sandboxItemsStore')
     const live = () => store.getSnapshot(boardId)
     const frames = () => live().filter(i => i.payload?.kind === 'frame')
+    const slides = () => frames().filter(f => f.payload.slide === true)
     const kc = stage.content.querySelector('canvas')
     const rect = stage.container().getBoundingClientRect()
     const inWindow = (el) => { const r = el?.getBoundingClientRect(); return !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight }
-
-    // Zoom out, then place three default frames side by side with the frame tool.
-    for (let i = 0; i < 12; i++) {
-        stage.container().dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: rect.left + 40, clientY: rect.top + 40, bubbles: true, cancelable: true }))
-        await sleep(30)
-    }
-    await sleep(400)
-    const n0 = frames().length
-    const zoom = stage.scaleX()
-    const gap = 700 * zoom
-    for (let i = 0; i < 3; i++) {
-        key('f'); await sleep(200)
-        const x = rect.left + 60 + i * gap, y = rect.top + rect.height - 400 * zoom - 60
-        kc.dispatchEvent(ptr('pointerdown', x, y)); kc.dispatchEvent(ptr('pointerup', x, y)); await sleep(400)
-    }
-    key('Escape'); await sleep(300)
-    // A sticky in the middle frame, so its thumbnail has something in it.
-    {
-        const f = frames()[n0 + 1]
-        const c = { x: rect.left + stage.x() + (f.x + f.w / 2) * stage.scaleX(), y: rect.top + stage.y() + (f.y + f.h / 2) * stage.scaleY() }
-        key('n'); await sleep(200)
-        kc.dispatchEvent(ptr('pointerdown', c.x, c.y)); kc.dispatchEvent(ptr('pointerup', c.x, c.y)); await sleep(400)
-        // A new sticky opens its text editor; leave it so the board's keys work again.
-        document.activeElement?.blur?.(); await sleep(200)
-        key('Escape'); await sleep(200); key('Escape'); await sleep(200)
-    }
-    const made = frames().slice(n0)
-    await step('made', { zoom: Math.round(zoom * 1000) / 1000, frames: frames().length, made: made.map(f => [f.payload.title, Math.round(f.x), Math.round(f.y)]) })
-
-    // Shift+F opens the panel.
-    key('F', { shiftKey: true }); await sleep(600)
+    const btn = (label, root = document) => [...root.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent.trim() === label)
     const panel = () => document.querySelector('[data-slides-panel]')
-    const rows = () => [...panel().querySelectorAll('li[data-frame-id]')]
+    const rows = () => [...(panel()?.querySelectorAll('li[data-frame-id]') || [])]
     const titles = () => rows().map(r => r.querySelector('[class*="title"]')?.textContent)
-    await step('panel', { open: !!panel(), inWindow: inWindow(panel()), rows: titles(), thumbs: rows().map(r => r.querySelector('svg g')?.children.length ?? -1) })
+    const sz = (f) => [Math.round(f.w), Math.round(f.h)]
 
-    // Drag the last row to the top.
-    const rs = rows(), last = rs[rs.length - 1], first = rs[0]
-    const lr = last.getBoundingClientRect(), fr = first.getBoundingClientRect()
-    const lx = lr.left + 30, ly = lr.top + 10
-    last.dispatchEvent(ptr('pointerdown', lx, ly))
-    for (let i = 1; i <= 8; i++) { last.dispatchEvent(ptr('pointermove', lx, ly + (fr.top + 4 - ly) * i / 8)); await sleep(30) }
-    last.dispatchEvent(ptr('pointerup', lx, fr.top + 4)); await sleep(600)
-    await step('reordered', { rows: titles(), orders: frames().map(f => [f.payload.title, f.payload.slideOrder ?? null]) })
+    // 1. Media menu → Slides: one slide, sized for Display 1, the panel opens.
+    btn('Media').click(); await sleep(400)
+    ;[...document.querySelectorAll('button[class*="menuItem"]')].find(b => b.textContent.trim() === 'Slides').click(); await sleep(900)
+    const s1 = slides()
+    await step('insert', { slides: s1.map(f => [f.payload.title, ...sz(f)]), panel: !!panel(), panelInWindow: inWindow(panel()), rows: titles(), selected: s1[0] && document.querySelector('button[aria-label="Slide size"]')?.textContent })
 
-    // Hide the second slide: the title on the board says so.
-    const hideBtn = rows()[1].querySelector('button[aria-label="Hide slide"]')
+    // 2. "+ New slide" twice: to the right, same size, numbered.
+    panel().querySelector('[data-new-slide]').click(); await sleep(600)
+    panel().querySelector('[data-new-slide]').click(); await sleep(600)
+    await step('new-slides', { slides: slides().map(f => [f.payload.title, Math.round(f.x), Math.round(f.y), ...sz(f)]), rows: titles() })
+
+    // 3. A plain frame: not a slide; Ctrl+D numbers the copy; "Convert to slide".
+    key('Escape'); await sleep(200)
+    const zoom = stage.scaleX()
+    const fx = rect.left + 40, fy = rect.top + rect.height - 60
+    key('f'); await sleep(200)
+    kc.dispatchEvent(ptr('pointerdown', fx, fy)); kc.dispatchEvent(ptr('pointerup', fx, fy)); await sleep(500)
+    const plain = frames().filter(f => !f.payload.slide)
+    key('d', { ctrlKey: true }); await sleep(500)
+    const plain2 = frames().filter(f => !f.payload.slide)
+    const convertBtn = btn('Convert to slide')
+    const convertInWindow = inWindow(convertBtn)
+    convertBtn?.click(); await sleep(500)
+    await step('frames', { zoom: Math.round(zoom * 1000) / 1000, plainTitles: plain.map(f => f.payload.title), afterDup: plain2.map(f => f.payload.title), convertBtn: !!convertBtn, convertInWindow, slidesNow: slides().map(f => f.payload.title), rows: titles() })
+
+    // 4. Slide size from the floating bar: the displays.
+    const sizeBtn = btn('Slide size')
+    sizeBtn?.click(); await sleep(700)
+    const menu = document.querySelector('[data-slide-size-menu]')
+    const options = [...(menu?.querySelectorAll('button') || [])].map(b => b.textContent)
+    const menuOpen = { inWindow: inWindow(menu), rect: (() => { const r = menu?.getBoundingClientRect(); return r && [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] })() }
+    const conv = live().find(i => i.payload?.title === slides().at(-1)?.payload.title)
+    ;[...(menu?.querySelectorAll('button') || [])].find(b => b.textContent.startsWith('Display 2'))?.click(); await sleep(500)
+    const box = (el) => { const r = el?.getBoundingClientRect(); return r && [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] }
+    await step('size', { options, menuOpen, sizeBtnRect: box(sizeBtn), win: [window.innerWidth, window.innerHeight], resized: conv && sz(live().find(i => i.id === conv.id)) })
+    // …and every slide back to one size from the panel.
+    btn('Size of every slide').click(); await sleep(500)
+    ;[...panel().querySelectorAll('[role="menuitem"]')].find(b => b.textContent.startsWith('Display 1'))?.click(); await sleep(500)
+    await step('size-all', { sizes: slides().map(sz), panelSize: btn('Size of every slide')?.textContent })
+
+    // 5. Panel: drag the last row to the top, hide the second.
+    {
+        const rs = rows(), last = rs[rs.length - 1], first = rs[0]
+        const lr = last.getBoundingClientRect(), fr = first.getBoundingClientRect()
+        const lx = lr.left + 30, ly = lr.top + 10
+        last.dispatchEvent(ptr('pointerdown', lx, ly))
+        for (let i = 1; i <= 8; i++) { last.dispatchEvent(ptr('pointermove', lx, ly + (fr.top + 4 - ly) * i / 8)); await sleep(30) }
+        last.dispatchEvent(ptr('pointerup', lx, fr.top + 4)); await sleep(600)
+    }
     const hiddenTitle = rows()[1].querySelector('[class*="title"]').textContent
-    hideBtn.click(); await sleep(500)
-    const boardTitle = stage.find('Text').map(n => n.text()).find(x => x.startsWith(hiddenTitle + ' '))
-    await step('hidden', { hiddenTitle, flag: frames().find(f => f.payload.title === hiddenTitle)?.payload?.slideHidden ?? null, boardTitle, count: panel().querySelector('[class*="heading"]')?.textContent })
+    rows()[1].querySelector('button[aria-label="Hide slide"]').click(); await sleep(500)
+    await step('panel', { rows: titles(), hidden: hiddenTitle, count: panel().querySelector('[class*="heading"]')?.textContent })
 
-    // Present from the start. The view before must come back afterwards.
+    // 6. Present: the slide fills the screen (display-sized), fades between slides.
     const before = { x: stage.x(), y: stage.y(), s: stage.scaleX() }
     const itemsBefore = JSON.stringify(live())
-    const shown = rows().filter(r => !r.className.includes('hidden')).map(r => r.dataset.frameId)
-    key('F5'); await sleep(900)
+    key('F5'); await sleep(1500)
     const root = () => document.querySelector('[data-presenting]')
     const countEl = () => root()?.querySelector('[data-slide]')
     const hole = () => { const h = root()?.querySelector('[class*="hole"]'); if (!h) return null; const r = h.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] }
-    const expectHole = (id) => { const f = live().find(i => i.id === id); const r = stage.container().getBoundingClientRect(); return [Math.round(r.left + stage.x() + f.x * stage.scaleX()), Math.round(r.top + stage.y() + f.y * stage.scaleY()), Math.round(f.w * stage.scaleX()), Math.round(f.h * stage.scaleY())] }
-    const where = () => { const c = stage.container().getBoundingClientRect(); return { slide: countEl()?.dataset.slide, of: countEl()?.dataset.of, hole: hole(), stageSize: [stage.width(), stage.height()], container: [Math.round(c.width), Math.round(c.height)], win: [window.innerWidth, window.innerHeight] } }
-    await step('present', { on: !!root(), ...where(), expect: expectHole(shown[0]), toolbarGone: !document.querySelector('[class*="SandboxToolbar"]'), panelGone: !panel(), grid: stage.container().style.backgroundImage || 'none', hudInWindow: inWindow(root()?.querySelector('[class*="hud"]')) })
-
-    key('ArrowRight'); await sleep(700)
-    await step('next', { ...where(), expect: expectHole(shown[1]) })
-    key('b'); await sleep(400)
-    const veil = () => root()?.querySelector('[class*="veil"]')?.style.opacity
-    const blanked = veil()
-    key('b'); await sleep(400)
-    await step('blank', { blanked, after: veil() })
-    // Click the left third: back one.
-    const click = root().querySelector('[class*="click"]')
-    click.dispatchEvent(ptr('pointerdown', 20, window.innerHeight / 2)); await sleep(700)
-    await step('click-back', where())
-    key('End'); await sleep(700)
-    const atLast = where().slide
-    key('ArrowRight'); await sleep(400)
-    await step('end', { atLast, ...where(), endText: root()?.querySelector('[class*="end"]')?.textContent })
-    key('Escape'); await sleep(700)
+    const where = () => ({ slide: countEl()?.dataset.slide, of: countEl()?.dataset.of, hole: hole(), win: [window.innerWidth, window.innerHeight] })
+    const veil = () => root()?.querySelector('[class*="veil"]')
+    await step('present', { on: !!root(), ...where() })
+    key('ArrowRight'); await sleep(120)
+    const mid = { opacity: veil()?.style.opacity, transition: veil()?.style.transition, slide: countEl()?.dataset.slide }
+    await sleep(900)
+    await step('fade', { mid, after: { opacity: veil()?.style.opacity, ...where() } })
+    key('Escape'); await sleep(800)
     const after = { x: stage.x(), y: stage.y(), s: stage.scaleX() }
-    await step('exit', { on: !!root(), restored: before.x === after.x && before.y === after.y && before.s === after.s, before, after, boardUntouched: JSON.stringify(live()) === itemsBefore, toolbarBack: !!document.querySelector('[class*="SandboxToolbar"]') || document.querySelectorAll('button').length })
+    await step('exit', { on: !!root(), restored: before.x === after.x && before.y === after.y && before.s === after.s, boardUntouched: JSON.stringify(live()) === itemsBefore })
 
-    // Shift+F5 with the last frame selected starts there.
-    const lastId = shown[shown.length - 1]
-    const lf = live().find(i => i.id === lastId)
-    const t = { x: rect.left + stage.x() + (lf.x + 12 / stage.scaleX()) * stage.scaleX(), y: rect.top + stage.y() + (lf.y - 10 / stage.scaleX()) * stage.scaleY() }
-    kc.dispatchEvent(ptr('pointerdown', t.x, t.y)); window.dispatchEvent(ptr('pointerup', t.x, t.y)); await sleep(500)
-    const barBtn = document.querySelector('button[aria-label="Present from this frame"]')
-    const bar = { barBtn: !!barBtn, barInWindow: inWindow(barBtn) }
-    key('F5', { shiftKey: true }); await sleep(900)
-    await step('from-here', { ...where(), want: shown.indexOf(lastId) + 1, ...bar })
-    key('Escape'); await sleep(600)
+    // 7. PDF export (shown slides only), past the save dialog.
+    const pdf = import.meta.env.VITE_SLIDES_PDF
+    window.dispatchEvent(new CustomEvent('siddran-probe-export-pdf', { detail: pdf }))
+    await sleep(500)
+    const exporting = !!root()
+    const toastText = await waitFor(() => [...document.querySelectorAll('[role="status"], [class*="toast"], [class*="Toast"]')].map(n => n.textContent).find(t => /Exported|export failed/i.test(t)), 30000)
+    await step('pdf', { exporting, presentingAfter: !!root(), toast: toastText || null, file: pdf })
 
-    // A real F5 from the window manager: the walk script sends it now.
-    // It must start the presentation, not reload the page.
-    window.__slidesMark = 1
-    await step('await-real-f5', {})
-    const real = await waitFor(() => root(), 15000)
-    await step('real-f5', { presenting: !!real, notReloaded: window.__slidesMark === 1, ...where() })
-    key('Escape'); await sleep(500)
-
-    // Undo the hide and the reorder: the deck goes back.
+    // 8. Undo a step: the hide comes back off.
     key('z', { ctrlKey: true }); await sleep(400)
-    key('z', { ctrlKey: true }); await sleep(400)
-    await step('undone', { orders: frames().map(f => [f.payload.title, f.payload.slideOrder ?? null, f.payload.slideHidden ?? null]), rows: panel() ? titles() : null })
+    await step('undone', { hidden: slides().filter(f => f.payload.slideHidden).map(f => f.payload.title) })
     send('done', true)
 }
 

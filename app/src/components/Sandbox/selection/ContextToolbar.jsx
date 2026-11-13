@@ -9,8 +9,9 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
-    LuPencil, LuMaximize2, LuCrop, LuPlay,
+    LuPencil, LuMaximize2, LuCrop,
 } from 'react-icons/lu'
+import SlideButtons from '../slides/SlideButtons'
 import { DiagramIcon, NextStepIcon } from '../flow/icons'
 import styles from './ContextToolbar.module.css'
 import { getSelectionBounds, getOrientedAnchors } from './itemBounds'
@@ -137,7 +138,7 @@ function ContextToolbar({
     onToggleLock,
     onFrameSelection,
     onExportFrame,
-    onPresentFrame,     // (id) — present the slides from this frame (slides/)
+    slideActions,       // frames ⇄ slides, slide size, new slide, present (slides/SlideButtons)
     onEditText,
     onRevertInk,        // (id) — a smart-drawn shape back to the ink it came from
     beginTransaction,
@@ -472,13 +473,9 @@ function ContextToolbar({
                                 <button className={styles.btn} onClick={() => onExportFrame?.(frames[0].id)} title="Export this frame as PNG" aria-label="Export frame">
                                     <LuImageDown size={18} />
                                 </button>
-                                {onPresentFrame && (
-                                    <button className={styles.btn} onClick={() => onPresentFrame(frames[0].id)} title="Present from this slide (⇧F5)" aria-label="Present from this frame">
-                                        <LuPlay size={18} />
-                                    </button>
-                                )}
                             </>
                         )}
+                        {slideActions && <SlideButtons frames={frames} btnClass={styles.btn} actions={slideActions} />}
                         <div className={styles.sep} />
                     </>
                 )}

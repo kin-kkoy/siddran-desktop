@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { readingOrder, deckOrder, presentedFrames, reorderPatches, fitFrameViewport, startIndex, stepIndex, frameContents } from './slides'
+import { readingOrder, deckOrder, presentedFrames, reorderPatches, fitFrameViewport, startIndex, stepIndex, frameContents,
+    isSlide, nextSlideTitle, newSlideSize, newSlideRect, convertPayload, duplicateTitles, sizePresets, defaultSlideSize } from './slides'
 
+// A slide (a frame with `slide: true`); `plain` for an ordinary frame.
 const frame = (id, x, y, extra = {}, w = 100, h = 60) =>
+    ({ id, type: 'shape', x, y, w, h, payload: { kind: 'frame', title: id, slide: true, ...extra } })
+const plain = (id, x, y, extra = {}, w = 100, h = 60) =>
     ({ id, type: 'shape', x, y, w, h, payload: { kind: 'frame', title: id, ...extra } })
 const ids = (fs) => fs.map(f => f.id)
 
@@ -108,5 +112,50 @@ describe('frameContents', () => {
             frame('inner', 20, 20, {}, 50, 50),
         ]
         expect(frameContents(f, items).map(i => i.id)).toEqual(['inner', 'box', 'card'])
+    })
+})
+
+describe('slides are their own kind of frame', () => {
+    it('only slides are in the deck', () => {
+        const items = [plain('p', 0, 0), frame('s', 200, 0)]
+        expect(ids(deckOrder(items))).toEqual(['s'])
+        expect(isSlide(items[0])).toBe(false)
+        expect(isSlide(items[1])).toBe(true)
+    })
+    it('numbers slides on their own', () => {
+        expect(nextSlideTitle([plain('Frame 4', 0, 0), frame('a', 0, 0, { title: 'Slide 2' })])).toBe('Slide 3')
+        expect(nextSlideTitle([])).toBe('Slide 1')
+    })
+    it('new slides take the last slide\'s size, else the display\'s', () => {
+        expect(newSlideSize([frame('a', 0, 0, {}, 1600, 900)])).toEqual({ w: 1600, h: 900 })
+        expect(newSlideSize([], { w: 1366, h: 768 })).toEqual({ w: 1366, h: 768 })
+    })
+    it('places the first slide on the centre, the next to the right past frames', () => {
+        expect(newSlideRect([], { w: 100, h: 50 }, { center: { x: 500, y: 300 } })).toEqual({ x: 450, y: 275, w: 100, h: 50 })
+        const items = [frame('a', 0, 0, {}, 100, 60), plain('p', 220, 0, {}, 100, 60)]
+        expect(newSlideRect(items, { w: 100, h: 60 })).toEqual({ x: 440, y: 0, w: 100, h: 60 })
+    })
+    it('converts frame ⇄ slide, renaming default titles only', () => {
+        const items = [plain('f', 0, 0, { title: 'Frame 1' }), frame('s', 0, 0, { title: 'Slide 1', slideOrder: 2, slideHidden: true })]
+        expect(convertPayload(items[0], items)).toMatchObject({ slide: true, title: 'Slide 2' })
+        const back = convertPayload(items[1], items)
+        expect(back.title).toBe('Frame 2')
+        expect('slide' in back || 'slideOrder' in back || 'slideHidden' in back).toBe(false)
+        expect(convertPayload(plain('x', 0, 0, { title: 'Agenda' }), items).title).toBe('Agenda')
+    })
+    it('duplicates get the next numbers, one per copy', () => {
+        const items = [plain('a', 0, 0, { title: 'Frame 1' }), plain('b', 0, 0, { title: 'Frame 2' }), frame('s', 0, 0, { title: 'Slide 1' }), plain('t', 0, 0, { title: 'Agenda' })]
+        const m = duplicateTitles(items, items)
+        expect(m.get('a')).toBe('Frame 3')
+        expect(m.get('b')).toBe('Frame 4')
+        expect(m.get('s')).toBe('Slide 2')
+        expect(m.has('t')).toBe(false)
+    })
+    it('display presets come first, laptop as Display 1', () => {
+        const ps = sizePresets([{ kind: 'laptop', width: 1920, height: 1080 }, { kind: 'HDMI', width: 1600, height: 900 }])
+        expect(ps.map(p => p.label)).toEqual(['Display 1 (laptop)', 'Display 2 (HDMI)', 'Standard 4:3'])
+        expect(sizePresets([]).map(p => p.key)).toEqual(['16:9', '4:3'])
+        expect(defaultSlideSize([{ width: 1366, height: 768 }])).toEqual({ w: 1366, h: 768 })
+        expect(defaultSlideSize()).toEqual({ w: 1920, h: 1080 })
     })
 })

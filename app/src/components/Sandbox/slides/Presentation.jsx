@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LuChevronLeft, LuChevronRight, LuMaximize, LuMinimize, LuX, LuSquare } from 'react-icons/lu'
 import { fitFrameViewport, stepIndex } from './slides'
-import { setFullscreen } from './usePresentation'
+import { setFullscreen, invokeShell } from './usePresentation'
 import styles from './Presentation.module.css'
 
-const FADE_MS = 140
+// Fade through black between slides: out, a beat of black, back in.
+const FADE_OUT_MS = 280
+const FADE_IN_MS = 380
+// Export: time for the board to paint a slide before its picture is taken.
+const EXPORT_SETTLE_MS = 700
+const EXPORT_FIRST_MS = 1400
 const HUD_IDLE_MS = 2200
 const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'])
 const PREV_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p', 'P'])
@@ -19,21 +24,28 @@ const PREV_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p', '
  * Keys: → ↓ PageDown Space Enter next · ← ↑ PageUp Backspace previous ·
  * Home/End · a number then Enter jumps · B or . blanks · F fullscreen · Esc
  * leaves (or un-blanks). Click the left third to go back, anywhere else for next.
+ *
+ * With `exportTo` (a file path) it is the PDF export instead: no controls, it
+ * steps through every slide, has the shell photograph each one
+ * (src-tauri slides.rs), writes the PDF, reports through `onExported` and leaves.
+ * Esc cancels.
  */
-export default function Presentation({ frames, start = 0, canvas, onExit }) {
+export default function Presentation({ frames, start = 0, canvas, onExit, exportTo = null, onExported }) {
     const count = frames.length
     // `at` is a frame id, so the deck can change under us (live sync, a frame
     // deleted elsewhere) without the presentation jumping to another slide.
     const [at, setAt] = useState(() => frames[Math.min(start, count - 1)]?.id ?? null)
     const [ended, setEnded] = useState(false)
     const [blank, setBlank] = useState(false)
-    const [veil, setVeil] = useState(true)   // black cover: starts on, lifts once the first slide is placed
+    const [veil, setVeil] = useState(!exportTo)   // black cover: starts on, lifts once the first slide is placed
     const [hud, setHud] = useState(true)
     const [full, setFull] = useState(true)
     const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
     const timers = useRef(new Set())
     const digits = useRef('')
     const lastIndex = useRef(Math.max(0, Math.min(start, count - 1)))
+    const holeRef = useRef(null)
+    const cancelled = useRef(false)
 
     const later = useCallback((fn, ms) => {
         const t = setTimeout(() => { timers.current.delete(t); fn() }, ms)
@@ -73,8 +85,8 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
         setVeil(true)
         later(() => {
             setAt(target.id)
-            later(() => setVeil(false), 40)
-        }, FADE_MS)
+            later(() => setVeil(false), 60)
+        }, FADE_OUT_MS)
     }, [count, frames, at, ended, later])
 
     const next = useCallback(() => {
@@ -94,6 +106,35 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
         setFull(fullRef.current)
     }, [])
 
+    // ── PDF export: step through, photograph each slide, write the file ──
+    const exportRun = useRef({ frames, exportTo, onExported, onExit })
+    useEffect(() => {
+        const run = exportRun.current
+        if (!run.exportTo) return
+        const wait = (ms) => new Promise(r => setTimeout(r, ms))
+        ;(async () => {
+            let result
+            try {
+                await invokeShell('slides_pdf_begin')
+                for (let i = 0; i < run.frames.length; i++) {
+                    if (cancelled.current) throw new Error('cancelled')
+                    setAt(run.frames[i].id)
+                    await wait(i === 0 ? EXPORT_FIRST_MS : EXPORT_SETTLE_MS)
+                    const r = holeRef.current?.getBoundingClientRect()
+                    if (!r) throw new Error('nothing on screen to capture')
+                    await invokeShell('slides_pdf_capture', { x: r.left, y: r.top, w: r.width, h: r.height, viewWidth: window.innerWidth })
+                }
+                if (cancelled.current) throw new Error('cancelled')
+                const pages = await invokeShell('slides_pdf_finish', { path: run.exportTo })
+                result = { ok: true, pages, path: run.exportTo }
+            } catch (e) {
+                result = { ok: false, error: String(e?.message || e) }
+            }
+            run.onExported?.(result)
+            run.onExit()
+        })()
+    }, [])
+
     // The HUD (and the cursor) fade out when the pointer rests.
     const hudTimer = useRef(0)
     const poke = useCallback(() => {
@@ -110,6 +151,7 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
         const onKey = (e) => {
             const k = e.key
             const swallow = () => { e.preventDefault(); e.stopImmediatePropagation() }
+            if (exportTo) { swallow(); if (k === 'Escape') cancelled.current = true; return }
             if (e.ctrlKey || e.metaKey || e.altKey) {
                 if (k === 'F5') swallow()
                 return
@@ -139,10 +181,10 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
             window.removeEventListener('keydown', onKey, true)
             window.removeEventListener('keyup', onKeyUp, true)
         }
-    }, [blank, count, go, next, prev, onExit, toggleFull])
+    }, [blank, count, go, next, prev, onExit, toggleFull, exportTo])
 
     const onPointerDown = (e) => {
-        if (e.button !== 0) return
+        if (e.button !== 0 || exportTo) return
         if (blank) { setBlank(false); return }
         if (e.clientX < size.w * 0.3) prev(); else next()
     }
@@ -158,7 +200,7 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
     return (
         <div className={styles.root} data-presenting="1" style={{ cursor: hud ? 'default' : 'none' }}
             onPointerMove={poke} onWheel={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
-            {hole && !ended ? <div className={styles.hole} style={hole} /> : <div className={styles.black} />}
+            {hole && !ended ? <div ref={holeRef} className={styles.hole} style={hole} /> : <div className={styles.black} />}
             <div className={styles.click} onPointerDown={onPointerDown} />
             {ended && (
                 <div className={styles.end} onPointerDown={onPointerDown}>
@@ -166,9 +208,9 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
                     <small>Click or press → to leave · ← to go back</small>
                 </div>
             )}
-            <div className={styles.veil} style={{ opacity: veil || blank ? 1 : 0 }} />
+            <div className={styles.veil} style={{ opacity: veil || blank ? 1 : 0, transition: `opacity ${veil || blank ? FADE_OUT_MS : FADE_IN_MS}ms ease` }} />
 
-            <div className={`${styles.hud} ${hud ? styles.hudOn : ''}`} onPointerDown={(e) => e.stopPropagation()}
+            {!exportTo && <div className={`${styles.hud} ${hud ? styles.hudOn : ''}`} onPointerDown={(e) => e.stopPropagation()}
                 onPointerEnter={holdHud} onPointerLeave={poke}>
                 <button className={styles.btn} onClick={prev} disabled={index <= 0 && !ended} title="Previous (←)" aria-label="Previous slide"><LuChevronLeft size={20} /></button>
                 <span className={styles.count} data-slide={ended ? 'end' : index + 1} data-of={count}>
@@ -181,7 +223,7 @@ export default function Presentation({ frames, start = 0, canvas, onExit }) {
                     {full ? <LuMinimize size={17} /> : <LuMaximize size={17} />}
                 </button>
                 <button className={styles.btn} onClick={onExit} title="Stop presenting (Esc)" aria-label="Stop presenting"><LuX size={19} /></button>
-            </div>
+            </div>}
 
             <div className={styles.sr} aria-live="polite">{ended ? 'End of slides' : `Slide ${index + 1} of ${count}: ${title}`}</div>
         </div>

@@ -3185,6 +3185,7 @@ name = "siddran"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "cairo-rs",
  "notify",
  "serde",
  "serde_json",
@@ -3194,6 +3195,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "webkit2gtk",
  "webkit2gtk-sys",
 ]
 

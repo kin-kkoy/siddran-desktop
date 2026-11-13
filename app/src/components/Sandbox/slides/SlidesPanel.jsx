@@ -1,34 +1,22 @@
 import { useMemo, useRef, useState } from 'react'
-import { LuPlay, LuEye, LuEyeOff, LuX, LuGripVertical } from 'react-icons/lu'
-import { deckOrder, isHiddenSlide, fitFrameViewport, frameContents } from './slides'
+import { LuPlay, LuEye, LuEyeOff, LuX, LuGripVertical, LuPlus, LuFileDown, LuMonitor } from 'react-icons/lu'
+import { deckOrder, isHiddenSlide, frameContents, sizePresets } from './slides'
+import { flyToRect } from './fly'
+import { useDisplays } from './useDisplays'
 import Thumbnail from './Thumbnail'
 import styles from './SlidesPanel.module.css'
 
 const DRAG_PX = 5
-const FLY_MS = 260
-
-/** Glide the board to `to` (timers, not rAF: a hidden window gets no frames). */
-function fly(canvas, to) {
-    const from = canvas.viewport
-    const t0 = performance.now()
-    const step = () => {
-        const k = Math.min(1, (performance.now() - t0) / FLY_MS)
-        const e = 1 - Math.pow(1 - k, 3)
-        // Interpolate the zoom geometrically so the glide feels even.
-        const zoom = from.zoom * Math.pow(to.zoom / from.zoom, e)
-        canvas.setViewport({ x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, zoom })
-        if (k < 1) setTimeout(step, 16)
-        else canvas.setViewport(to)
-    }
-    step()
-}
-
 /**
- * The Slides panel (spec §11.6 and §13.9): every frame is a slide. Drag to
- * reorder (the frames stay where they are on the board), the eye hides one
- * from the presentation, ▶ presents from it, and a click takes the board there.
+ * The Slides panel (spec §11.6 and §13.9): the deck. "+ New slide" adds one
+ * after the last; the size menu sets every slide to a display's resolution;
+ * Export PDF writes the deck. Drag to reorder (the slides stay where they are
+ * on the board), the eye hides one from the presentation, ▶ presents from it,
+ * and a click takes the board there.
  */
-export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder, onToggleHidden, onClose }) {
+export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder, onToggleHidden, onClose, onNewSlide, onResizeAll, onExportPdf }) {
+    const { displays, refresh } = useDisplays()
+    const [sizeOpen, setSizeOpen] = useState(false)
     const rootRef = useRef(null)
     const rowRefs = useRef(new Map())
     const drag = useRef(null)   // { id, from, y0, moved }
@@ -41,14 +29,15 @@ export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder,
     const numbers = deck.map(f => (isHiddenSlide(f) ? null : ++shownNo))
 
     const goTo = (f) => {
-        const shell = rootRef.current?.parentElement?.getBoundingClientRect()
+        const shell = rootRef.current?.parentElement
         const panel = rootRef.current?.getBoundingClientRect()
-        if (!shell) return
+        const shellR = shell?.getBoundingClientRect()
         // Fit it in the part of the board the panel doesn't cover.
-        const w = Math.max(200, (panel ? panel.left - shell.left : shell.width))
         canvas.setSelection([f.id])
-        fly(canvas, fitFrameViewport(f, w, shell.height, 48))
+        flyToRect(canvas, f, shell, panel && shellR ? shellR.right - panel.left : 0)
     }
+    const deckSize = deck.length && deck.every(f => f.w === deck[0].w && f.h === deck[0].h) ? `${Math.round(deck[0].w)}×${Math.round(deck[0].h)}` : (deck.length ? 'Mixed' : null)
+    const presets = sizePresets(displays)
 
     const targetIndex = (clientY) => {
         let i = 0
@@ -96,10 +85,35 @@ export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder,
                 </button>
                 <button className={styles.icon} onClick={onClose} title="Close (Shift+F)" aria-label="Close slides"><LuX size={16} /></button>
             </header>
+            {deck.length > 0 && (
+                <div className={styles.tools}>
+                    <span className={styles.sizeWrap}>
+                        <button className={styles.tool} onClick={() => { if (!sizeOpen) refresh(); setSizeOpen(o => !o) }}
+                            title="Size of every slide" aria-label="Size of every slide" aria-expanded={sizeOpen}>
+                            <LuMonitor size={14} /> {deckSize}
+                        </button>
+                        {sizeOpen && (
+                            <div className={styles.sizeMenu} role="menu">
+                                {presets.map(p => (
+                                    <button key={p.key} role="menuitem" className={styles.sizeItem}
+                                        onClick={() => { onResizeAll({ w: p.w, h: p.h }); setSizeOpen(false) }}>
+                                        <span>{p.label}</span><span className={styles.res}>{p.w}×{p.h}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </span>
+                    <button className={styles.tool} onClick={onExportPdf} disabled={!shownNo} title="Export the deck as a PDF, one page per slide" data-export-pdf="1">
+                        <LuFileDown size={14} /> Export PDF
+                    </button>
+                </div>
+            )}
 
             {deck.length === 0 ? (
                 <div className={styles.empty}>
-                    Every frame is a slide.<br />Press <kbd>F</kbd> and drag on the board to make one.
+                    No slides yet.
+                    <button className={styles.newFirst} onClick={onNewSlide} data-new-slide="1"><LuPlus size={15} /> New slide</button>
+                    <small>Or select a frame and use <b>Convert to slide</b> on its bar.</small>
                 </div>
             ) : (
                 <ol className={styles.list}>
@@ -132,6 +146,9 @@ export default function SlidesPanel({ items, byId, canvas, onPresent, onReorder,
                             </li>
                         )
                     })}
+                    <li className={styles.addRow}>
+                        <button className={styles.add} onClick={onNewSlide} data-new-slide="1"><LuPlus size={15} /> New slide</button>
+                    </li>
                 </ol>
             )}
         </aside>

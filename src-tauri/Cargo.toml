@@ -27,6 +27,11 @@ base64 = "0.22"             # decode attachment bytes sent from the frontend
 # the tree through Tauri, so this adds no new code, only a direct name for it.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk-sys = "2"
+# Sandbox slides' PDF export (src/slides.rs): WebKitGTK's snapshot and cairo's
+# PDF writer. Both already in the tree through Tauri; `pdf` turns on cairo's
+# PDF surface (system cairo ships it).
+webkit2gtk = "2"
+cairo-rs = { version = "0.18", features = ["pdf"] }
 
 [profile.release]
 codegen-units = 1

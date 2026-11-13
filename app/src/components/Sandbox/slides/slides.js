@@ -1,16 +1,19 @@
 /**
- * Slides — every frame on the board is a slide (spec §11.8, §13.9: "a slide
- * is a frame"). There is no Slides item and no new item type: the deck is an
- * ordering layer over the frames, kept on each frame's payload.
+ * Slides (spec §11.8, §13.9). A slide is its own thing to the user — made
+ * from the Insert menu, numbered "Slide 1, 2…", sized for a display — but on
+ * disk it is a frame with `payload.slide: true` (no new item type: frames
+ * already clip, carry what's on them, and the CLI and older builds know them).
+ * Only slides are in the deck; a plain frame can be converted either way.
  *
- * Optional frame payload fields (absent = old behaviour):
- *   - `slideOrder`  (number) — position in the deck. Frames without one follow
+ * Optional slide payload fields (absent = old behaviour):
+ *   - `slide`       (true)   — this frame is a slide.
+ *   - `slideOrder`  (number) — position in the deck. Slides without one follow
  *     the ordered ones, in reading order (rows top to bottom, then left to right).
  *   - `slideHidden` (true)   — skipped when presenting; still on the board.
  *
- * Reordering never moves a frame on the canvas (spec R11.11).
+ * Reordering never moves a slide on the canvas (spec R11.11).
  */
-import { isFrame } from '../frames/frames'
+import { isFrame, framePayload, nextFrameTitle } from '../frames/frames'
 import { isFormat } from '../formats/formats'
 import { itemAABB } from '../selection/hitTest'
 
@@ -33,9 +36,11 @@ export function readingOrder(frames) {
     return rows.flatMap(r => r.frames.sort((a, b) => a.x - b.x || a.y - b.y))
 }
 
-/** Every frame, in deck order (hidden ones included). */
+export const isSlide = (it) => isFrame(it) && it.payload?.slide === true
+
+/** Every slide, in deck order (hidden ones included). */
 export function deckOrder(items) {
-    const frames = items.filter(isFrame)
+    const frames = items.filter(isSlide)
     const ordered = frames.filter(hasOrder)
     const rest = frames.filter(f => !hasOrder(f))
     // Ties (two frames with the same number, e.g. after a merge) fall back to
@@ -107,7 +112,7 @@ export function startIndex(items, shown, { selectedIds, center } = {}) {
     }
     for (const id of selectedIds || []) {
         const it = items.find(i => i.id === id)
-        if (it && isFrame(it)) { const at = pick(id); if (at >= 0) return at }
+        if (it && isSlide(it)) { const at = pick(id); if (at >= 0) return at }
     }
     if (center) {
         const under = deck
@@ -136,4 +141,112 @@ export function frameContents(frame, items) {
     return items
         .filter(it => it.id !== frame.id && meets(it))
         .sort((a, b) => rank(a) - rank(b) || (a.z_index ?? 0) - (b.z_index ?? 0))
+}
+
+// ── making slides ──
+
+export const DEFAULT_SLIDE_SIZE = { w: 1920, h: 1080 }
+const SLIDE_GAP = 120
+
+/** Next default slide title: "Slide 1", "Slide 2", … */
+export function nextSlideTitle(items) {
+    let n = 0
+    for (const it of items) {
+        const m = isSlide(it) && /^Slide (\d+)$/.exec(it.payload?.title || '')
+        if (m) n = Math.max(n, Number(m[1]))
+    }
+    return `Slide ${n + 1}`
+}
+
+export function slidePayload(title) {
+    return { ...framePayload(title), slide: true }
+}
+
+/** The size a new slide gets: the deck's last slide's, else `fallback` (the laptop display). */
+export function newSlideSize(items, fallback = DEFAULT_SLIDE_SIZE) {
+    const deck = deckOrder(items)
+    const last = deck[deck.length - 1]
+    return last ? { w: last.w, h: last.h } : { w: fallback.w, h: fallback.h }
+}
+
+const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+
+/**
+ * Where a new slide goes: to the right of `after` (default: the deck's last
+ * slide), past any frame in the way; the first slide goes centred on `center`.
+ */
+export function newSlideRect(items, { w, h }, { after = null, center = { x: 0, y: 0 } } = {}) {
+    const deck = deckOrder(items)
+    const ref = after ? items.find(i => i.id === after) : deck[deck.length - 1]
+    if (!ref) return { x: Math.round(center.x - w / 2), y: Math.round(center.y - h / 2), w, h }
+    const frames = items.filter(isFrame)
+    const r = { x: ref.x + ref.w + SLIDE_GAP, y: ref.y, w, h }
+    for (let guard = 0; guard < 500; guard++) {
+        const hit = frames.find(f => overlaps(r, f))
+        if (!hit) break
+        r.x = hit.x + hit.w + SLIDE_GAP
+    }
+    return { x: Math.round(r.x), y: Math.round(r.y), w, h }
+}
+
+/**
+ * A plain frame turned into a slide, or back. Default titles follow the
+ * kind ("Frame 2" ⇄ "Slide 3"); a title the user typed stays. Returns the new payload.
+ */
+export function convertPayload(item, items) {
+    const p = item.payload || {}
+    const title = p.title || ''
+    if (isSlide(item)) {
+        const rest = { ...p }
+        delete rest.slide; delete rest.slideOrder; delete rest.slideHidden
+        return { ...rest, title: !title || /^Slide \d+$/.test(title) ? nextFrameTitle(items) : title }
+    }
+    return { ...p, slide: true, title: !title || /^Frame \d+$/.test(title) ? nextSlideTitle(items) : title }
+}
+
+/**
+ * Titles for duplicated frames and slides: a default title ("Frame 1",
+ * "Slide 2") gets the next free number, one per copy, so copies never share a
+ * name. Returns Map(originalId → title); typed titles are left alone.
+ */
+export function duplicateTitles(originals, items) {
+    const out = new Map()
+    let pool = items
+    for (const it of originals) {
+        if (!isFrame(it)) continue
+        const t = it.payload?.title || ''
+        const slide = isSlide(it)
+        if (!(slide ? /^Slide \d+$/ : /^Frame \d+$/).test(t) && t) continue
+        const title = slide ? nextSlideTitle(pool) : nextFrameTitle(pool)
+        out.set(it.id, title)
+        pool = [...pool, { ...it, id: `dup-${it.id}`, payload: { ...it.payload, title } }]
+    }
+    return out
+}
+
+// ── display presets ──
+
+/**
+ * Size choices for a slide: each display ("Display 1 (laptop)", …) at its
+ * native resolution, then the common shapes. `displays` comes from the shell
+ * (src-tauri slides.rs `list_displays`), laptop first.
+ */
+export function sizePresets(displays = []) {
+    const out = displays.map((d, i) => ({
+        key: `display-${i + 1}`,
+        label: `Display ${i + 1}${d.kind ? ` (${d.kind})` : ''}`,
+        w: d.width, h: d.height,
+    }))
+    const seen = new Set(out.map(p => `${p.w}x${p.h}`))
+    for (const p of [
+        { key: '16:9', label: 'Widescreen 16:9', w: 1920, h: 1080 },
+        { key: '4:3', label: 'Standard 4:3', w: 1440, h: 1080 },
+    ]) if (!seen.has(`${p.w}x${p.h}`) || !out.length) out.push(p)
+    return out
+}
+
+/** The size new slides default to: Display 1 (the laptop), else 1920×1080. */
+export function defaultSlideSize(displays = []) {
+    const d = displays[0]
+    return d ? { w: d.width, h: d.height } : { ...DEFAULT_SLIDE_SIZE }
 }

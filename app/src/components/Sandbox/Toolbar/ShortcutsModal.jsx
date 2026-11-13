@@ -56,7 +56,7 @@ const GROUPS = [
         ],
     },
     {
-        title: 'Slides (every frame is a slide)',
+        title: 'Slides (media menu → Slides)',
         rows: [
             ['Slides panel', ['⇧', 'F']], ['Present from the start', ['F5']], ['Present from here', ['⇧', 'F5']],
             ['Next / previous slide', ['→', '←']], ['Go to slide n', ['n', 'Enter']],

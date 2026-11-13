@@ -1,0 +1,62 @@
+/* No transform-based centring here (the blur rule for the 0.83-scaled monitor). */
+.wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.sizeBtn {
+    width: auto !important;
+    gap: 6px;
+    padding: 0 9px !important;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 20;
+    min-width: 250px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background-color: rgba(18, 18, 30, 0.98);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.item, .itemOn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.item:hover, .itemOn:hover {
+    background: var(--bg-hover);
+}
+
+.itemOn {
+    outline: 1px solid var(--accent-warning);
+}
+
+.res {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+}

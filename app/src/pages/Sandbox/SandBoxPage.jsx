@@ -49,8 +49,11 @@ import { uploadImageFile } from '../../utils/imageUpload'
 import { toast } from '../../utils/toast'
 import SlidesPanel from '../../components/Sandbox/slides/SlidesPanel'
 import Presentation from '../../components/Sandbox/slides/Presentation'
-import { usePresentation } from '../../components/Sandbox/slides/usePresentation'
-import { presentedFrames, reorderPatches, isHiddenSlide } from '../../components/Sandbox/slides/slides'
+import { usePresentation, invokeShell } from '../../components/Sandbox/slides/usePresentation'
+import { presentedFrames, reorderPatches, isHiddenSlide, deckOrder, slidePayload, nextSlideTitle, newSlideSize, newSlideRect,
+    convertPayload, duplicateTitles, defaultSlideSize } from '../../components/Sandbox/slides/slides'
+import { useDisplays } from '../../components/Sandbox/slides/useDisplays'
+import { flyToRect } from '../../components/Sandbox/slides/fly'
 
 const CARD_TYPES = new Set(['note', 'task', 'text', 'pdf'])
 
@@ -159,6 +162,8 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const topStageRef = useRef(null)   // the top canvas (above the widgets)
     const [slidesOpen, setSlidesOpen] = useState(false)   // the Slides panel (slides/)
     const presentation = usePresentation({ canvas, items })
+    const { displays } = useDisplays()
+    const shellRef = useRef(null)   // the canvas shell (slides fly the board inside it)
     const presenting = !!presentation.session
 
     useEffect(() => { setTitleDraft(sandbox?.title ?? '') }, [sandbox?.id, sandbox?.title])
@@ -704,8 +709,84 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     // `from`: false = first slide, true = from here, or a frame id.
     const presentSlides = useCallback((from = false) => {
         setOpenMenu(null); setEditingShapeId(null); setEditingFrameId(null)
-        if (!presentation.start(from)) toast.error('No slides yet: every frame is a slide. Press F and drag to make one.')
+        if (!presentation.start(from)) toast.error('No slides to present yet. Make one from the media menu → Slides.')
     }, [presentation])
+    // A new slide: after `after` in the deck (else at the end), the deck's
+    // size (else Display 1's), placed to the right of the one before. The
+    // board glides to it and the Slides panel opens. One undo step.
+    const addSlide = useCallback((after = null) => {
+        const size = newSlideSize(items, defaultSlideSize(displays))
+        const r = newSlideRect(items, size, { after, center: centerWorld() })
+        const minZ = items.reduce((m, it) => Math.min(m, it.z_index ?? 0), 0)
+        beginTransaction()
+        const created = act.addItem({ type: 'shape', ...r, rotation: 0, z_index: minZ - 1, payload: slidePayload(nextSlideTitle(items)) })
+        if (after) {
+            const all = [...items, created]
+            const at = deckOrder(items).findIndex(f => f.id === after)
+            for (const p of reorderPatches(all, created.id, at + 1)) {
+                const it = all.find(i => i.id === p.id)
+                if (it) act.updateItem(p.id, { payload: { ...it.payload, slideOrder: p.slideOrder } })
+            }
+        }
+        endTransaction()
+        setOpenMenu(null)
+        canvas.setTool('pointer')
+        canvas.selectOnly(created.id)
+        setSlidesOpen(true)
+        flyToRect(canvas, r, shellRef.current, 290)
+        bump()
+    }, [items, displays, centerWorld, act, beginTransaction, endTransaction, canvas, bump])
+    // Frame ⇄ slide (default titles follow: "Frame 2" ⇄ "Slide 3"). One undo step.
+    const convertFrames = useCallback((ids) => {
+        let pool = items
+        beginTransaction()
+        for (const id of ids) {
+            const it = pool.find(i => i.id === id)
+            if (!it) continue
+            const payload = convertPayload(it, pool)
+            act.updateItem(id, { payload })
+            pool = pool.map(i => (i.id === id ? { ...i, payload } : i))
+        }
+        endTransaction()
+        bump()
+    }, [items, act, beginTransaction, endTransaction, bump])
+    // Size slides to a display's resolution, keeping each one's top-left.
+    const resizeSlides = useCallback((ids, { w, h }) => {
+        beginTransaction()
+        for (const id of ids) act.updateItem(id, { w, h })
+        endTransaction()
+        bump()
+    }, [act, beginTransaction, endTransaction, bump])
+    const resizeAllSlides = useCallback((size) => resizeSlides(deckOrder(items).map(f => f.id), size), [items, resizeSlides])
+    // PDF of the deck: pick a file, then the presentation steps through and
+    // the shell photographs each slide (slides/Presentation.jsx exportTo).
+    const exportSlidesPdf = useCallback(async () => {
+        if (!presentedFrames(items).length) { toast.error('No slides to export.'); return }
+        let path = null
+        try {
+            path = await invokeShell('plugin:dialog|save', { options: {
+                title: 'Export slides as PDF', defaultPath: `${(sandbox?.title || 'Slides').replace(/[\\/:*?"<>|]/g, '-')}.pdf`,
+                filters: [{ name: 'PDF', extensions: ['pdf'] }],
+            } })
+        } catch { toast.error('PDF export needs the desktop app.'); return }
+        if (!path) return
+        if (!/\.pdf$/i.test(path)) path += '.pdf'
+        setOpenMenu(null); setEditingShapeId(null); setEditingFrameId(null)
+        presentation.start(false, { exportTo: path })
+    }, [items, sandbox?.title, presentation])
+    const onSlidesExported = useCallback((r) => {
+        if (r.ok) toast.success(`Exported ${r.pages} slide${r.pages === 1 ? '' : 's'} to ${r.path}`)
+        else if (r.error !== 'cancelled') toast.error(`PDF export failed: ${r.error}`)
+    }, [])
+    // The dev probe (src/dev/perfProbe.js `slides:`) exports past the native save dialog.
+    useEffect(() => {
+        if (!import.meta.env.VITE_PERF_PROBE) return
+        const onProbe = (e) => presentation.start(false, { exportTo: e.detail })
+        window.addEventListener('siddran-probe-export-pdf', onProbe)
+        return () => window.removeEventListener('siddran-probe-export-pdf', onProbe)
+    }, [presentation])
+    const slideActions = useMemo(() => ({ present: presentSlides, convert: convertFrames, addAfter: addSlide, resize: resizeSlides }),
+        [presentSlides, convertFrames, addSlide, resizeSlides])
     const reorderSlide = useCallback((id, to) => {
         const patches = reorderPatches(items, id, to)
         if (!patches.length) return
@@ -792,12 +873,15 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const regroup = new Map()   // a duplicated group becomes a new group, not a member of the old one
         // A copied widget's copied riders attach to the copy, not the original.
         const newIdOf = new Map(sel.map(it => [it.id, newSandboxItemId()]))
+        // Copied frames and slides get the next number, not the same title (slides/).
+        const titles = duplicateTitles(sel, items)
         sel.forEach((it, i) => {
             const gid = it.payload?.groupId
             if (gid && !regroup.has(gid)) regroup.set(gid, newSandboxItemId())
             let payload = gid ? { ...it.payload, groupId: regroup.get(gid) } : it.payload
             const att = it.payload?.attachedTo
             if (att && newIdOf.has(att)) payload = { ...payload, attachedTo: newIdOf.get(att) }
+            if (titles.has(it.id)) payload = { ...payload, title: titles.get(it.id) }
             const created = act.addItem({ ...it, id: newIdOf.get(it.id), payload, x: it.x + 16, y: it.y + 16, z_index: base + i })
             newIds.push(created.id)
         })
@@ -987,7 +1071,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     <span className={styles.titleId}>{sandbox.id.slice(0, 6)}</span>
                 </div>
                 <div className={styles.headerActions}>
-                    <button className={styles.headerBtn} title="Slides: every frame is a slide (Shift+F)" aria-pressed={slidesOpen} onClick={() => setSlidesOpen(o => !o)}>Slides</button>
+                    <button className={styles.headerBtn} title="Slides panel (Shift+F)" aria-pressed={slidesOpen} onClick={() => setSlidesOpen(o => !o)}>Slides</button>
                     <button className={styles.headerBtn} title="Present (F5 from the start, Shift+F5 from here)" onClick={() => presentSlides(true)}>▶ Present</button>
                     <button className={styles.headerBtn} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setShortcutsOpen(true)}>⌨ Keys</button>
                     {mode === 'half' && (
@@ -1002,7 +1086,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                 </div>
             </header>
 
-            <div className={presenting ? `${styles.canvasShell} ${styles.presenting}` : styles.canvasShell}>
+            <div ref={shellRef} className={presenting ? `${styles.canvasShell} ${styles.presenting}` : styles.canvasShell}>
                 {!presenting && (
                 <SandboxToolbar
                     tool={canvas.tool}
@@ -1026,6 +1110,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     onPickImage={onPickImageClick}
                     onPickPdf={onPickPdf}
                     onInsertFormat={insertFormat}
+                    onInsertSlides={() => addSlide()}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}
@@ -1104,7 +1189,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onToggleLock={toggleLock}
                             onFrameSelection={frameSelection}
                             onExportFrame={onExportFrame}
-                            onPresentFrame={presentSlides}
+                            slideActions={slideActions}
                             onEditText={onEditText}
                             onRevertInk={revertToInk}
                             beginTransaction={beginTransaction}
@@ -1129,11 +1214,13 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                 {slidesOpen && !presenting && (
                     <SlidesPanel items={items} byId={itemsById} canvas={canvas}
                         onPresent={presentSlides} onReorder={reorderSlide} onToggleHidden={toggleSlideHidden}
-                        onClose={() => setSlidesOpen(false)} />
+                        onClose={() => setSlidesOpen(false)} onNewSlide={() => addSlide()}
+                        onResizeAll={resizeAllSlides} onExportPdf={exportSlidesPdf} />
                 )}
                 {presenting && (
                     <Presentation key={presentation.session.n} frames={presentedFrames(items)}
-                        start={presentation.session.start} canvas={canvas} onExit={presentation.stop} />
+                        start={presentation.session.start} canvas={canvas} onExit={presentation.stop}
+                        exportTo={presentation.session.exportTo} onExported={onSlidesExported} />
                 )}
 
                 {editingShapeId && (() => {

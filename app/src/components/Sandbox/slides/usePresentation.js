@@ -3,6 +3,13 @@ import { presentedFrames, startIndex } from './slides'
 
 const invoke = () => (typeof window !== 'undefined' && (window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke)) || null
 
+/** Call a shell command (src-tauri); rejects outside the desktop shell. */
+export async function invokeShell(cmd, args) {
+    const inv = invoke()
+    if (!inv) throw new Error('needs the desktop app')
+    return inv(cmd, args)
+}
+
 /** Ask the shell for fullscreen; resolves to whether it was fullscreen before (null outside Tauri). */
 export async function setFullscreen(enabled) {
     const inv = invoke()
@@ -16,12 +23,13 @@ export async function setFullscreen(enabled) {
  * (R11.18). Presenting never writes the board or the undo stack.
  */
 export function usePresentation({ canvas, items }) {
-    const [session, setSession] = useState(null)   // { start: index, n } | null
+    const [session, setSession] = useState(null)   // { start: index, n, exportTo } | null
     const saved = useRef(null)
 
     // `from`: false = the first slide, true = "from here" (the selected frame,
     // else the one in view), or a frame id.
-    const start = useCallback((from = false) => {
+    // `exportTo`: a PDF path — the run is the deck's PDF export, not a talk.
+    const start = useCallback((from = false, { exportTo = null } = {}) => {
         const shown = presentedFrames(items)
         if (!shown.length) return false
         const center = canvas.worldFromScreen({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
@@ -35,7 +43,7 @@ export function usePresentation({ canvas, items }) {
         }
         canvas.clearSelection()
         if (canvas.tool !== 'pointer') canvas.setTool('pointer')
-        setSession(s => ({ start: Math.max(0, at), n: (s?.n || 0) + 1 }))
+        setSession(s => ({ start: Math.max(0, at), n: (s?.n || 0) + 1, exportTo }))
         setFullscreen(true).then(was => { if (saved.current) saved.current.fullscreen = was })
         return true
     }, [items, canvas])

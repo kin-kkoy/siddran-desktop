@@ -13,6 +13,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, UriSchemeContext};
 use tauri_plugin_notification::NotificationExt;
 
+mod slides;
 mod bagsync;
 mod opened;
 mod presence;
@@ -795,6 +796,10 @@ fn main() {
             notify_deadline,
             alarm_show_window,
             set_presentation_fullscreen,
+            slides::list_displays,
+            slides::slides_pdf_begin,
+            slides::slides_pdf_capture,
+            slides::slides_pdf_finish,
             bag_allow_asset,
             viewer_set_bag,
             viewer_set_fonts,
