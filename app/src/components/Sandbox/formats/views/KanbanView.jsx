@@ -13,6 +13,7 @@ import { kanbanSetup, kanbanColumns, kanbanLanes, kanbanCells, cellKey, cardFiel
 import { orderRecords } from '../layout'
 import { optionHue } from '../fields'
 import { STATUS_OPTIONS } from '../formats'
+import { zIcon } from '../zoomBox'
 
 /**
  * The Kanban view (spec §13.6): one column per option of a select field (in
@@ -94,7 +95,7 @@ function KanbanView({ source, item, onConfig }) {
                     <p>A Kanban sorts cards into columns by a <b>Select</b> field — there isn’t one yet.</p>
                     {source.fieldsEditable && (
                         <button className={t.popBtn} onClick={() => source.addField({ name: 'Status', type: 'select', options: [...STATUS_OPTIONS] })}>
-                            <LuPlus size={13} /> Add a Status field
+                            <LuPlus {...zIcon(13)} /> Add a Status field
                         </button>
                     )}
                 </div>

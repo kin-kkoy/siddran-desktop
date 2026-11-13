@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
     dayNum, dayStr, timelineSetup, spanOf, unitStart, nextUnit, axisRange, ticks, weekends, weekday,
-    movePatch, resizePatch, schedulePatch, unschedulePatch, fitZoom, cleanLinks, routeLink, ZOOMS,
+    movePatch, resizePatch, schedulePatch, unschedulePatch, fitZoom, cleanLinks, routeLink, arrowHead, ZOOMS,
 } from './timeline'
 import { formatPayload, removeRecord } from './formats'
 
@@ -107,6 +107,10 @@ describe('dependencies', () => {
     it('routes straight when there is room, around when there isn\'t', () => {
         expect(routeLink(10, 1, 20, 3)).toBe('M10 1H10.6V3H20')
         expect(routeLink(10, 1, 5, 3)).toBe('M10 1H10.6V2.2H4.4V3H5')
+    })
+    it('an arrowhead is a small triangle ending at the point', () => {
+        expect(arrowHead(10, 2, 0)).toBe('M10 2L9.5 2.28L9.5 1.72Z')
+        expect(arrowHead(0, 0, Math.PI / 2, 1, 0.5)).toBe('M0 0L-0.5 -1L0.5 -1Z')
     })
     it('a deleted record takes its links with it', () => {
         const p = { records: [{ id: 'a', values: {} }, { id: 'b', values: {} }], timeline: { links: [{ from: 'a', to: 'b' }] } }

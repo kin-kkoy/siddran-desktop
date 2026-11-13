@@ -11,7 +11,7 @@
     overflow: auto;
     outline: none;
     border: 1px solid var(--tbl-line);
-    border-radius: 7px;
+    border-radius: calc(7px * var(--z, 1));
 }
 .canvas { position: relative; min-width: 100%; }
 
@@ -75,7 +75,7 @@
 .weekend { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--text-primary) 4%, transparent); }
 .gridLine { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid color-mix(in srgb, var(--tbl-line) 55%, transparent); }
 .gridStrong { border-left-color: var(--tbl-line); }
-.today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent-danger); opacity: 0.75; }
+.today { position: absolute; top: 0; bottom: 0; width: 0; border-left: calc(2px * var(--z, 1)) solid var(--accent-danger); opacity: 0.75; }
 .dropDay { position: absolute; top: 0; bottom: 0; background-color: color-mix(in srgb, var(--accent-warning) 22%, transparent); }
 
 .links { position: absolute; top: 0; z-index: 1; overflow: visible; pointer-events: none; }
@@ -83,6 +83,9 @@
 .linkLate { stroke: var(--accent-danger); }
 .linkSel { stroke: var(--accent-warning); stroke-width: 2.5; }
 .linkDraft { stroke: var(--accent-warning); stroke-dasharray: 5 4; }
+.head { fill: var(--text-secondary); }
+.headLate { fill: var(--accent-danger); }
+.headSel { fill: var(--accent-warning); }
 .linkHit { fill: none; stroke: transparent; stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
 
 .row { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
@@ -102,7 +105,7 @@
     cursor: default;
 }
 .rail:hover { background-color: color-mix(in srgb, var(--bg-hover) 70%, var(--bg-surface)); }
-.rowSel .rail { box-shadow: inset 3px 0 0 var(--accent-warning); }
+.rowSel .rail { box-shadow: inset calc(3px * var(--z, 1)) 0 0 var(--accent-warning); }
 .railTitle { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.85em; }
 .railInput {
     flex: 1;
@@ -159,10 +162,10 @@
     cursor: grab;
     touch-action: none;
 }
-.barSel { outline: 2px solid var(--accent-warning); outline-offset: 1px; }
+.barSel { outline: calc(2px * var(--z, 1)) solid var(--accent-warning); outline-offset: 1px; }
 .milestone.barSel { background-color: var(--accent-warning); }
 .barLifted { cursor: grabbing; opacity: 0.85; }
-.barTarget { outline: 2px dashed var(--accent-warning); outline-offset: 2px; }
+.barTarget { outline: calc(2px * var(--z, 1)) dashed var(--accent-warning); outline-offset: calc(2px * var(--z, 1)); }
 .edge { position: absolute; top: 0; bottom: 0; width: 0.45em; cursor: ew-resize; }
 .edgeL { left: -0.15em; }
 .edgeR { right: -0.15em; }

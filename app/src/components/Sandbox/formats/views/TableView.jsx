@@ -16,6 +16,7 @@ import { AttachmentPreview } from './table/Attachments'
 import { useOpenAttachment } from './table/attachKinds'
 import { parseDelimited, applyImport } from '../importer'
 import { requestOpenExternal } from '../../../../desktop/openExternal'
+import { zIcon } from '../zoomBox'
 
 /**
  * The Table view (spec §13.4): records as rows, fields as typed columns,
@@ -495,7 +496,7 @@ function TableView({ source, item, onConfig }) {
             return (
                 <button key={it.key} data-vkey={it.key} className={styles.groupHead}
                     onClick={() => setCollapsed(s => { const n = new Set(s); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })}>
-                    {it.open ? <LuChevronDown size={13} /> : <LuChevronRight size={13} />}
+                    {it.open ? <LuChevronDown {...zIcon(13)} /> : <LuChevronRight {...zIcon(13)} />}
                     {g.key !== 'empty' && hasOptions(t.groupField) ? <OptionChip label={g.label} small /> : <span className={styles.groupLabel}>{g.label}</span>}
                     <span className={styles.groupCount}>{g.records.length}</span>
                 </button>

@@ -18,6 +18,10 @@ function OverlayLayer({ viewport, width, height, passThrough = false, children }
                 overflow: 'hidden',
                 pointerEvents: 'none',
             }}
+            // Clipped, but the browser can still scroll it to bring a focused or
+            // off-screen element into view — every card would then sit away from
+            // where the board (its selection, its hit-testing) thinks it is. Never.
+            onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop || el.scrollLeft) { el.scrollTop = 0; el.scrollLeft = 0 } }}
         >
             {/* Pan with a plain translate, ROUNDED to whole pixels + promoted to its
                 own compositor layer (translate3d + will-change). A fractional

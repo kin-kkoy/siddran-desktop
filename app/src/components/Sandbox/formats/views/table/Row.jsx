@@ -8,6 +8,7 @@ import { FONT_FAMILIES } from '../../../text/textStyle'
 import { OptionPicker, OptionChip } from '../TableMenus'
 import { AttachChip, AttachEditor } from './Attachments'
 import { attKey } from './attachKinds'
+import { zIcon } from '../../zoomBox'
 
 /**
  * One table row, memoized: editing a cell re-renders only its own row
@@ -165,13 +166,13 @@ function Row({ rec, gk, ri, fields, wrap, st, editFid, editSeed, selC0 = -1, sel
                             aria-disabled={!canEdit || undefined}
                             title={f.type === 'formula' ? `= ${f.expr || ''}` : TEXTLIKE.has(f.type) ? cellText(f, val) || undefined : undefined}>
                             {f.type === 'check'
-                                ? <span className={`${styles.box} ${val ? styles.boxOn : ''}`}>{val && <LuCheck size={11} strokeWidth={3} />}</span>
+                                ? <span className={`${styles.box} ${val ? styles.boxOn : ''}`}>{val && <LuCheck {...zIcon(11)} strokeWidth={3} />}</span>
                                 : <CellValue field={f} value={val} error={rec.errors?.[f.id]} onOpen={api.openAttachment} />}
                         </button>
                         {href && (
                             <button className={styles.openLink} title={`Open ${href}`} aria-label="Open link" onMouseDown={noFocus}
                                 onPointerDown={(e) => e.stopPropagation()} onClick={() => api.openLink(href)}>
-                                <LuExternalLink size={11} />
+                                <LuExternalLink {...zIcon(11)} />
                             </button>
                         )}
                         {editFid === f.id && (

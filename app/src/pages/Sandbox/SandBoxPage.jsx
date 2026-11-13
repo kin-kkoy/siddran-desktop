@@ -1027,7 +1027,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     const cutOn = board.cut
     const cardEl = (item) => {
         if (isFormat(item)) {
-            return <FormatWidget item={item} tool={canvas.tool}
+            return <FormatWidget item={item} zoom={canvas.viewport.zoom} tool={canvas.tool}
                 selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
                 cut={cutOn.get(item.id)}
                 onSelect={onSelect} onGrab={onGrabItem} onRemove={onErase} onCommit={onCommitFormat}

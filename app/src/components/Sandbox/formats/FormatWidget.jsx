@@ -12,6 +12,7 @@ import { useTasksApi } from '../../../contexts/TasksApiContext'
 import SourceMenu from './SourceMenu'
 import { cutLabel } from '../selection/attach'
 import { stepFontSize } from '../text/textStyle'
+import { widgetBox, zIcon } from './zoomBox'
 import DocWidget, { DocFocus } from './doc/DocWidget'
 
 /**
@@ -45,7 +46,7 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
         <>
             <header className={styles.bar} onPointerDown={onTitlePointerDown}
                 onDoubleClick={(e) => { if (!e.target.closest('button')) setTitleEdit(true) }}>
-                {(() => { const Icon = VIEW_ICONS[p.view] || LuTable2; return <Icon size={focus ? 16 : 14} className={styles.barIcon} /> })()}
+                {(() => { const Icon = VIEW_ICONS[p.view] || LuTable2; return <Icon {...zIcon(focus ? 16 : 14)} className={styles.barIcon} /> })()}
                 {editing ? (
                     <input className={styles.renameInput} autoFocus defaultValue={p.title || ''} aria-label="Widget title"
                         onPointerDown={(e) => e.stopPropagation()}
@@ -62,14 +63,14 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
                 {/* The view switcher (spec §13.2.4): the same records as a Table, Kanban or Matrix; each view keeps its own settings. */}
                 <button ref={viewRef} className={styles.srcBtn} onClick={() => setViewMenu(m => !m)} title="Show these records as…" aria-label="View">
                     <span>{viewLabel(p.view)}</span>
-                    <LuChevronDown size={11} />
+                    <LuChevronDown {...zIcon(11)} />
                 </button>
                 <button ref={srcRef} className={`${styles.srcBtn} ${linked ? styles.srcLinked : ''}`} onClick={() => setMenu(m => !m)}
                     title="Where the records come from" aria-label="Data source">
-                    {linked && <LuLink size={11} />}
+                    {linked && <LuLink {...zIcon(11)} />}
                     <span>{sourceLabel(p, bundles)}</span>
                     <span className={styles.srcCount}>{source.records.length}</span>
-                    <LuChevronDown size={11} />
+                    <LuChevronDown {...zIcon(11)} />
                 </button>
                 {focus && onFocusSize && (
                     // Full screen has its own text size (payload.focusFontSize), so a big table on the board can still fit here.
@@ -81,7 +82,7 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
                 )}
                 <button className={styles.barBtn} onClick={onToggleFocus} title={focus ? 'Back to the board (Esc)' : 'Full screen (Enter)'}
                     aria-label={focus ? 'Exit full screen' : 'Full screen'}>
-                    {focus ? <LuMinimize2 size={15} /> : <LuMaximize2 size={13} />}
+                    {focus ? <LuMinimize2 {...zIcon(15)} /> : <LuMaximize2 {...zIcon(13)} />}
                 </button>
             </header>
             {/* data-sb-scroll: the board's wheel scrolls this instead of zooming. */}
@@ -115,11 +116,10 @@ function Chrome({ item, source, commit, focus, focusSize, onFocusSize, renaming,
 
 // The size of a widget's contents (payload.fontSize, set from the floating bar).
 const FORMAT_FONT = 15
-const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_FONT}px` })
 // Full screen: its own size once set, else 15% over the widget's.
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || FORMAT_FONT) * 1.15)
 
-function RecordWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
+function RecordWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
@@ -149,7 +149,7 @@ function RecordWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, o
             data-sb-id={item.id}
             data-sb-scrollcard="true"
             className={`${styles.widget} ${selected ? styles.selected : ''}`}
-            style={{ left: item.x, top: item.y, width: item.w, height: item.h, ...fontVar(item) }}
+            style={widgetBox(item, zoom, item.payload?.fontSize || FORMAT_FONT)}
             onPointerDown={onPointerDown}
         >
             <Chrome item={item} source={source} commit={commit} renaming={renaming} onRenameDone={onRename}

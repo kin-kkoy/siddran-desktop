@@ -16,9 +16,16 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
         if (!open || !anchorRef.current) return
         const r = anchorRef.current.getBoundingClientRect()
         const GAP = 12
-        const PANEL_W = 172
+        const PANEL_W = 216
         setPos({ top: r.top - 6, left: Math.max(8, r.left - GAP - PANEL_W) })
     }, [open, anchorRef])
+    // Taller than the button's room below it: move up so the whole list shows.
+    useLayoutEffect(() => {
+        const el = panelRef.current
+        if (!el || !pos) return
+        const max = window.innerHeight - el.offsetHeight - 8
+        if (pos.top > max) setPos(p => ({ ...p, top: Math.max(8, max) }))
+    }, [pos])
 
     useEffect(() => {
         if (!open) return
@@ -45,6 +52,7 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
         { label: 'Task', Icon: LuListTodo, onClick: onPickTask },
         { label: 'Image', Icon: LuImage, onClick: onPickImage },
         { label: 'PDF', Icon: LuFileText, onClick: onPickPdf },
+        { divider: true },
         // Format widgets: records you keep in the board, or your tasks — each a view of the same records.
         ...(onPickFormat ? [
             { label: 'Table', Icon: LuTable2, onClick: () => onPickFormat('table') },
@@ -59,10 +67,11 @@ function InsertMenu({ open, anchorRef, onClose, onPickNote, onPickTask, onPickIm
     ]
 
     return createPortal(
-        <div ref={panelRef} className={styles.panel} style={{ top: pos.top, left: pos.left }}>
-            {ITEMS.map(it => (
-                <button key={it.label} className={styles.menuItem} onClick={() => pick(it.onClick)}>
-                    <it.Icon size={15} />
+        <div ref={panelRef} className={`${styles.panel} ${styles.insertPanel}`} style={{ top: pos.top, left: pos.left }}>
+            {/* Bigger rows than the shapes list: it opens now and then, and should read at a glance (the user's call). */}
+            {ITEMS.map((it, i) => it.divider ? <div key={`d${i}`} className={styles.insertDivider} /> : (
+                <button key={it.label} className={styles.insertItem} onClick={() => pick(it.onClick)}>
+                    <it.Icon size={20} />
                     <span>{it.label}</span>
                 </button>
             ))}

@@ -1641,4 +1641,38 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   desktop 765 tests, lint 25, build, `cargo check`, `cargo test slides`; CLI
   90 tests, clippy unchanged. The branches `whiteboard-doc` /
   `whiteboard-slides` and worktrees wb8 / wb9 are left for the user to remove.
+- 2026-11-13 · session 7 · user feedback after the merge (Slides OK):
+  - **Widgets keep their proportions at any board zoom.** Zoomed out, a
+    widget's text and everything sized in em stopped shrinking with it (the
+    toolbar grew 5.5× relative to the widget at 26 % zoom). Cause, measured:
+    WebKit's "smart minimum" font size — text specified at ≥9px is never drawn
+    below 9px when CSS `zoom` shrinks it, and WebKitGTK can't turn it off.
+    Fix (`formats/zoomBox.js`): a widget cancels the board's zoom
+    (`zoom: 1/z`) and is laid out at screen size — box and text size × z, its
+    stylesheets' sizes as `calc(Npx * var(--z, 1))` (all five widget
+    stylesheets; under 2px left alone; pop-ups and full screen sit outside a
+    widget so --z falls back to 1), icons via `zIcon(n)`, base text
+    `calc(15px * var(--z))`. Same sharpness as before (still no transforms).
+    Note/task/image cards are untouched — they may show the same effect.
+  - **Widgets shifted off their selection box** (seen during Ctrl+wheel):
+    the board's clipped card layer could be scrolled by the browser bringing
+    a focused element into view whenever something stuck out past the window
+    (the user's Doc did); every card then sat away from where the board
+    thinks it is. OverlayLayer now resets any such scroll at once.
+  - **Crosshair inside widgets:** the board's tool cursor is set on the
+    layer's container and widgets inherited it (crosshair near a shape's
+    edge). A widget now has its own default cursor.
+  - **Timeline:** the add box comes back empty after Enter; dependency
+    arrowheads are drawn as small triangles in the arrow's colour (the SVG
+    marker was sized in em user units — huge — and WebKit doesn't support
+    `context-stroke`, so it was black).
+  - **Media menu:** bigger rows (20px icons, 14.5px labels), a divider
+    between Note/Task/Image/PDF and the widgets, and it moves up when it
+    would run off the bottom.
+  - Checked in a hidden window: at 26 % zoom the toolbar keeps its height
+    relative to the widget (58.8 vs 58.9; was 324), the widget lands exactly
+    where the old placement put it, cursor `default`; a scrolled layer
+    snapped back to 0; arrowhead 8×8 px, grey; the add box empty after Enter.
+    Walks `timeline`, `cards`, `table`, `grid`, `extras`, `doc`, `doc2`,
+    `slides` all pass (new `zoomfont:` walk). 766 tests, lint 25, build pass.
 

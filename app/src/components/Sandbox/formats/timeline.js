@@ -229,3 +229,14 @@ export function routeLink(ax, ay, bx, by, gap = 0.6, half = 1.2) {
     const mid = by > ay ? ay + half : ay - half
     return `M${f(ax)} ${f(ay)}H${f(ax + gap)}V${f(mid)}H${f(bx - gap)}V${f(by)}H${f(bx)}`
 }
+
+/**
+ * An arrowhead at (x, y) pointing along `angle` (radians), as SVG path data in
+ * the same units as the route (em): a small closed triangle.
+ */
+export function arrowHead(x, y, angle = 0, len = 0.5, half = 0.28) {
+    const f = (v) => Math.round(v * 1000) / 1000
+    const c = Math.cos(angle), s = Math.sin(angle)
+    const bx = x - c * len, by = y - s * len
+    return `M${f(x)} ${f(y)}L${f(bx - s * half)} ${f(by + c * half)}L${f(bx + s * half)} ${f(by - c * half)}Z`
+}

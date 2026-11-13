@@ -13,6 +13,7 @@ import { matrixSetup, matrixLayout, cellKey, cardFields, applyCardStyle, cardLoo
 import { orderRecords } from '../layout'
 import * as F from '../fields'
 import { MATRIX_FIELDS, MATRIX_CELLS } from '../formats'
+import { zIcon } from '../zoomBox'
 
 /**
  * The Matrix view (spec §13.7): two select fields make the rows and columns
@@ -115,7 +116,7 @@ function MatrixView({ source, item, onConfig }) {
                 <div className={styles.setup}>
                     <p>A Matrix places cards by two <b>Select</b> fields, one for its rows and one for its columns{row ? ` — there’s only ${row.name} so far` : ' — there are none yet'}.</p>
                     {source.fieldsEditable && source.apply && (
-                        <button className={t.popBtn} onClick={addAxes}><LuPlus size={13} /> {row ? 'Add an Effort field' : 'Add Impact and Effort fields'}</button>
+                        <button className={t.popBtn} onClick={addAxes}><LuPlus {...zIcon(13)} /> {row ? 'Add an Effort field' : 'Add Impact and Effort fields'}</button>
                     )}
                 </div>
             </div>

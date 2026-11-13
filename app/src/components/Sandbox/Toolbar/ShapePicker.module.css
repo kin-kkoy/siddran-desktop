@@ -201,3 +201,15 @@
     background: none;
     cursor: pointer;
 }
+
+/* ── the Media (Insert) menu: bigger rows than the shapes list ── */
+.insertPanel { min-width: 216px; padding: 8px; }
+.insertItem {
+    composes: menuItem;
+    gap: 13px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14.5px;
+}
+.insertItem svg { flex: none; }
+.insertDivider { height: 1px; margin: 5px 8px; background-color: var(--border-default); }

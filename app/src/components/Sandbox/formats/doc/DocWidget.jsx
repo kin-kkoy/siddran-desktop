@@ -20,6 +20,7 @@ import { printNoteToPdf } from '../../../Editor/utils/exportPdf'
 import { toast } from '../../../../utils/toast'
 import { setAttachmentTarget } from '../../../../desktop/localStore'
 import { slashMenu } from './slash'
+import { widgetBox, zIcon } from '../zoomBox'
 
 const EXTRA_EXTENSIONS = [slashMenu]
 // Spec §13.3.3: autosave about half a second after the last keystroke.
@@ -139,7 +140,7 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
         <>
             <header className={styles.bar} onPointerDown={onTitlePointerDown}
                 onDoubleClick={(e) => { if (!e.target.closest('button')) setTitleEdit(true) }}>
-                <LuFilePen size={focus ? 16 : 14} className={styles.barIcon} />
+                <LuFilePen {...zIcon(focus ? 16 : 14)} className={styles.barIcon} />
                 {editing ? (
                     <input className={styles.renameInput} autoFocus defaultValue={p.title || ''} aria-label="Doc title"
                         onPointerDown={(e) => e.stopPropagation()}
@@ -154,16 +155,16 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                 )}
                 <span className={styles.barSpacer} />
                 <button className={styles.barBtn} onClick={() => setFind(t => (t ? null : 1))} title="Find in this Doc (Ctrl+F)" aria-label="Find">
-                    <LuSearch size={13} />
+                    <LuSearch {...zIcon(13)} />
                 </button>
                 <button ref={moreRef} className={styles.barBtn} onClick={() => setMore(m => !m)} title="Export, save as a template" aria-label="More">
-                    <LuEllipsis size={14} />
+                    <LuEllipsis {...zIcon(14)} />
                 </button>
                 <button ref={srcRef} className={`${styles.srcBtn} ${linked ? styles.srcLinked : ''}`} onClick={() => setMenu(m => !m)}
                     title={linked ? 'This Doc is a note in your Bag' : 'This Doc’s text is kept in the board'} aria-label="Where the text lives">
-                    {linked && <LuLink size={11} />}
+                    {linked && <LuLink {...zIcon(11)} />}
                     <span>{linked ? (note?.title || 'Note gone') : 'In this board'}</span>
-                    <LuChevronDown size={11} />
+                    <LuChevronDown {...zIcon(11)} />
                 </button>
                 {focus && onFocusSize && (
                     <span className={styles.sizeStep}>
@@ -174,7 +175,7 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                 )}
                 <button className={styles.barBtn} onClick={onToggleFocus} title={focus ? 'Back to the board (Esc)' : 'Full screen (Enter)'}
                     aria-label={focus ? 'Exit full screen' : 'Full screen'}>
-                    {focus ? <LuMinimize2 size={15} /> : <LuMaximize2 size={13} />}
+                    {focus ? <LuMinimize2 {...zIcon(15)} /> : <LuMaximize2 {...zIcon(13)} />}
                 </button>
             </header>
             {find != null && (
@@ -333,7 +334,7 @@ function NotePicker({ notes, current, onPick }) {
 const DOC_FONT = 15
 const focusFont = (item) => item.payload?.focusFontSize || Math.round((item.payload?.fontSize || DOC_FONT) * 1.15)
 
-function DocWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
+function DocWidget({ item, zoom, tool, selected, renaming, cut, onSelect, onGrab, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const locked = !!item.payload?.locked
     const onPointerDown = (e) => {
@@ -358,7 +359,7 @@ function DocWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onCo
             data-sb-id={item.id}
             data-sb-scrollcard="true"
             className={`${styles.widget} ${dStyles.doc} ${selected ? styles.selected : ''}`}
-            style={{ left: item.x, top: item.y, width: item.w, height: item.h, '--fmt-font': `${item.payload?.fontSize || DOC_FONT}px` }}
+            style={widgetBox(item, zoom, item.payload?.fontSize || DOC_FONT)}
             onPointerDown={onPointerDown}
         >
             <DocChrome item={item} commit={commit} renaming={renaming} onRenameDone={onRename}

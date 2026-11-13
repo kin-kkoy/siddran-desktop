@@ -1150,12 +1150,13 @@ async function runTimeline() {
     // A new record from the rail starts today; one in the tray has no dates.
     ;[...W().querySelectorAll('button')].find(b => b.textContent.includes('New, from today')).click(); await sleep(250)
     let ri = W().querySelector('input[aria-label="Title"]'); setInput(ri, 'Design'); kd(ri, 'Enter'); await sleep(300)
+    const emptyAfter = W().querySelector('input[aria-label="Title"]')?.value
     ri = W().querySelector('input[aria-label="Title"]'); setInput(ri, 'Build'); kd(ri, 'Enter'); await sleep(300)
     ri = W().querySelector('input[aria-label="Title"]'); if (ri) { kd(ri, 'Escape'); await sleep(200) }
     ;[...W().querySelector('[data-tl-tray]').querySelectorAll('button')].find(b => b.textContent.includes('Add')).click(); await sleep(250)
     const ta = W().querySelector('textarea[aria-label="New card"]'); setArea(ta, 'Launch'); kd(ta, 'Enter'); await sleep(300)
     kd(W().querySelector('textarea[aria-label="New card"]'), 'Escape'); await sleep(250)
-    await step('tl-added', { design: span('Design'), build: span('Build'), launch: span('Launch'), bars: W().querySelectorAll('[data-bar]').length, tray: W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]').length, barOnScreen: onScreen(bar('Design')) })
+    await step('tl-added', { emptyAfter, design: span('Design'), build: span('Build'), launch: span('Launch'), bars: W().querySelectorAll('[data-bar]').length, tray: W().querySelector('[data-tl-tray]').querySelectorAll('[data-rid]').length, barOnScreen: onScreen(bar('Design')) })
 
     // Move Design 3 days right; Ctrl+Z puts both dates back in one step.
     await drag(bar('Design'), 3 * pxDay())
@@ -1184,7 +1185,10 @@ async function runTimeline() {
     const [dx0, dy0] = center(dot), [lx, ly] = center(bar('Launch'))
     await drag(dot, lx - dx0, ly - dy0)
     const paths = [...W().querySelectorAll('svg path[class*="link_"]')]
-    await step('tl-link', { links: P().timeline?.links?.length, late: paths.some(p => p.getAttribute('class').includes('linkLate')), drawn: paths.length })
+    const head = W().querySelector('svg path[class*="head"]')
+    const hr = head?.getBoundingClientRect()
+    await step('tl-link', { links: P().timeline?.links?.length, late: paths.some(p => p.getAttribute('class').includes('linkLate')), drawn: paths.length,
+        headPx: hr && [Math.round(hr.width), Math.round(hr.height)], headFill: head && getComputedStyle(head).fill, rowPx: Math.round(bar('Design').getBoundingClientRect().height) })
 
     // Shift+click both bars, → moves both a day, one undo step.
     const before = [span('Design'), span('Launch')]
@@ -1576,6 +1580,67 @@ async function runSlides() {
     send('done', true)
 }
 
+// Board zoom vs widget text: does em-sized content shrink with the widget? (WebKit's "smart minimum" font size)
+async function runZoomFont() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(1200)
+    const it = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const W = () => document.querySelector(`[data-sb-id="${it.id}"]`)
+    // Test spans: one at 15px, one at 8px (below the 9px "smart minimum"), and one sized 1em.
+    const probeEls = () => {
+        const host = W().querySelector('header')
+        for (const [k, css] of [['p15', 'font-size:15px'], ['p8', 'font-size:8px'], ['pem', 'font-size:1em']]) {
+            if (W().querySelector(`[data-zf="${k}"]`)) continue
+            const s = document.createElement('span'); s.dataset.zf = k; s.textContent = 'MMMMMMMMMM'; s.style.cssText = `${css};position:absolute;left:0;top:40px;white-space:nowrap;visibility:hidden`
+            host.appendChild(s)
+        }
+    }
+    const measure = () => {
+        probeEls()
+        const w = W().getBoundingClientRect().width
+        const z = w / it.w
+        const wd = (k) => W().querySelector(`[data-zf="${k}"]`).getBoundingClientRect().width
+        const bar = W().querySelector('header').getBoundingClientRect().height
+        const tool = W().querySelector('[class*="toolbar"]')?.getBoundingClientRect().height
+        return { zoom: +z.toFixed(3), barH: +(bar / z).toFixed(1), toolbarH: +(tool / z).toFixed(1), w15: +(wd('p15') / z).toFixed(1), w8: +(wd('p8') / z).toFixed(1), wem: +(wd('pem') / z).toFixed(1) }
+    }
+    const at1 = measure()
+    const host = document.querySelector('canvas')?.closest('div[style*="cursor"]') || document.querySelector('.konvajs-content').parentElement
+    const r = host.getBoundingClientRect()
+    for (let i = 0; i < 14; i++) { host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: r.left + 30, clientY: r.top + 30, bubbles: true, cancelable: true })); await sleep(80) }
+    await sleep(500)
+    const out = measure()
+    // Placement: a plain world-sized box in the same zoomed layer must cover the widget exactly.
+    const layer = W().parentElement
+    const ref = document.createElement('div')
+    ref.style.cssText = `position:absolute;left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;pointer-events:none`
+    layer.appendChild(ref)
+    const a = W().getBoundingClientRect(), b = ref.getBoundingClientRect()
+    const placed = [a.left - b.left, a.top - b.top, a.width - b.width, a.height - b.height].map(v => +v.toFixed(2))
+    ref.remove()
+    // The clipped layer springs back if something scrolls it.
+    let clip = W().parentElement
+    while (clip && getComputedStyle(clip).overflow !== 'hidden') clip = clip.parentElement
+    // Something sticking out past the window's right edge (as the user's Doc did) makes the layer scrollable.
+    const far = document.createElement('div'); far.style.cssText = `position:absolute;left:${it.x + 6000}px;top:${it.y}px;width:400px;height:400px`; layer.appendChild(far)
+    await sleep(100)
+    clip.scrollLeft = 150; clip.scrollTop = 80
+    const scrolled = [clip.scrollLeft, clip.scrollTop]
+    await sleep(200)
+    far.remove()
+    await step('zoomfont', { at1, out, placed, scrolled, after: [clip.scrollLeft, clip.scrollTop], cursor: getComputedStyle(W()).cursor, cellCursor: getComputedStyle(W().querySelector('[class*="toolbar"]')).cursor, note: 'sizes divided by zoom: equal to at1 = shrinks with the widget' })
+    send('done', true)
+}
+
+if (spec.startsWith('zoomfont:') && boardId) runZoomFont().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('timeline:') && boardId) runTimeline().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('cards:') && boardId) runCards().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('extras:') && boardId) runExtras().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

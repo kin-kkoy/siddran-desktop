@@ -9,12 +9,13 @@ import { useCards } from './board/useCards'
 import { useViewRows } from './board/useViewRows'
 import {
     timelineSetup, spanOf, axisRange, ticks, upperLabel, weekends, zoomOf, ZOOMS, todayNum,
-    movePatch, resizePatch, schedulePatch, unschedulePatch, fitZoom, cleanLinks, routeLink,
+    movePatch, resizePatch, schedulePatch, unschedulePatch, fitZoom, cleanLinks, routeLink, arrowHead,
 } from '../timeline'
 import { kanbanLanes, keyOf, valueOf, primaryField, applyCardStyle, cardLook, NONE } from '../boards'
 import { optionHue, isEmptyValue } from '../fields'
 import * as F from '../fields'
 import { FONT_FAMILIES } from '../../text/textStyle'
+import { zIcon } from '../zoomBox'
 
 /**
  * The Timeline view (spec §13.5): records as bars on a date axis, a rail of
@@ -125,6 +126,7 @@ function TimelineView({ source, item, onConfig }) {
     const [multi, setMulti] = useState(() => new Set())
     const [link, setLink] = useState(null)        // the selected arrow, "from>to"
     const [adding, setAdding] = useState(false)   // the rail's new-record box
+    const [addKey, setAddKey] = useState(0)       // bumped after each add, so the box comes back empty
     const pending = useRef(null)                  // { day, atPx }: scroll so `day` sits `atPx` from the left, after the next render
 
     // ---- what's where ----
@@ -355,7 +357,7 @@ function TimelineView({ source, item, onConfig }) {
             <div className={b.view}>
                 <div className={b.setup}>
                     <p>A Timeline places records by a <b>Date</b> field — {source.type === 'own' ? 'there isn’t one yet' : 'this project’s tasks have no dates'}.</p>
-                    {source.fieldsEditable && source.apply && <button className={t.popBtn} onClick={addDates}><LuPlus size={13} /> Add Start and End fields</button>}
+                    {source.fieldsEditable && source.apply && <button className={t.popBtn} onClick={addDates}><LuPlus {...zIcon(13)} /> Add Start and End fields</button>}
                 </div>
             </div>
         )
@@ -435,11 +437,6 @@ function TimelineView({ source, item, onConfig }) {
 
                         {/* Dependency arrows, in em (viewBox = the axis in em; strokes keep their width). */}
                         <svg className={styles.links} style={{ left: `${RAIL}em`, width: `${W}em`, height: `${H}em` }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-                            <defs>
-                                <marker id="tl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-                                    <path d="M0 0L10 5L0 10z" fill="context-stroke" />
-                                </marker>
-                            </defs>
                             {links.map(l => {
                                 const a = rowOf.get(l.from), z = rowOf.get(l.to)
                                 if (!a || !z) return null
@@ -449,7 +446,9 @@ function TimelineView({ source, item, onConfig }) {
                                 const d = routeLink(p.x, p.y, q.x, q.y, 0.6, rowH / 2)
                                 return (
                                     <g key={k}>
-                                        <path d={d} className={`${styles.link} ${late ? styles.linkLate : ''} ${link === k ? styles.linkSel : ''}`} markerEnd="url(#tl-arrow)" />
+                                        <path d={d} className={`${styles.link} ${late ? styles.linkLate : ''} ${link === k ? styles.linkSel : ''}`} />
+                                        {/* Every route ends running right, into the second bar's start. */}
+                                        <path d={arrowHead(q.x, q.y, 0)} className={`${styles.head} ${late ? styles.headLate : ''} ${link === k ? styles.headSel : ''}`} />
                                         <path d={d} className={styles.linkHit} onPointerDown={(e) => { e.stopPropagation(); rootRef.current?.focus({ preventScroll: true }); setLink(k) }}>
                                             <title>{late ? 'Starts before the one it waits for ends' : 'Waits for the first to finish'} — click, then Delete to remove</title>
                                         </path>
@@ -458,7 +457,12 @@ function TimelineView({ source, item, onConfig }) {
                             })}
                             {drag?.mode === 'link' && rowOf.get(drag.from) && (() => {
                                 const p = anchorOut(rowOf.get(drag.from))
-                                return <path d={`M${p.x} ${p.y}L${drag.x} ${drag.y}`} className={`${styles.link} ${styles.linkDraft}`} markerEnd="url(#tl-arrow)" />
+                                return (
+                                    <>
+                                        <path d={`M${p.x} ${p.y}L${drag.x} ${drag.y}`} className={`${styles.link} ${styles.linkDraft}`} />
+                                        <path d={arrowHead(drag.x, drag.y, Math.atan2(drag.y - p.y, drag.x - p.x))} className={`${styles.head} ${styles.headSel}`} />
+                                    </>
+                                )
                             })()}
                         </svg>
 
@@ -525,7 +529,7 @@ function TimelineView({ source, item, onConfig }) {
                     {source.type === 'own' && source.canAdd && (
                         <div className={styles.addRow} style={{ width: `${RAIL}em` }}>
                             {adding ? (
-                                <RailInput value="" onDone={(v) => { if (v?.trim()) { addScheduled(v.trim()); setAdding(true) } else setAdding(false) }} />
+                                <RailInput key={addKey} value="" onDone={(v) => { if (v?.trim()) { addScheduled(v.trim()); setAddKey(k => k + 1) } else setAdding(false) }} />
                             ) : (
                                 <button className={b.addCard} onClick={() => setAdding(true)} title="A new record, starting today"><LuPlus size="1em" /> New, from today</button>
                             )}

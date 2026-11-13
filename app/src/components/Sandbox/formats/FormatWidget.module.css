@@ -3,14 +3,16 @@
 .widget {
     position: absolute;
     pointer-events: auto;
+    cursor: default;   /* its own, not the board tool's (the board shows a crosshair near a shape's edge) */
+    font-size: calc(15px * var(--z, 1));   /* the page's 15px, following the board zoom (zoomBox.js) */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+    border-radius: calc(10px * var(--z, 1));
+    box-shadow: 0 calc(8px * var(--z, 1)) calc(22px * var(--z, 1)) rgba(0, 0, 0, 0.5);
     color: var(--text-primary);
     font-family: var(--font-body);
     -webkit-user-select: none;
@@ -24,9 +26,9 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 6px 0 11px;
+    gap: calc(7px * var(--z, 1));
+    height: calc(34px * var(--z, 1));
+    padding: 0 calc(6px * var(--z, 1)) 0 calc(11px * var(--z, 1));
     background-color: var(--bg-surface-alt);
     border-bottom: 1px solid var(--border-default);
     cursor: grab;
@@ -39,19 +41,19 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     font-family: var(--font-display);
-    font-size: 13px;
+    font-size: calc(13px * var(--z, 1));
     font-weight: 600;
     letter-spacing: 0.02em;
 }
 .renameInput {
     min-width: 0;
-    flex: 0 1 180px;
-    font: 600 13px var(--font-display);
+    flex: 0 1 calc(180px * var(--z, 1));
+    font: 600 calc(13px * var(--z, 1)) var(--font-display);
     color: var(--text-primary);
     background: var(--bg-surface);
     border: 1px solid var(--accent-warning);
-    border-radius: 5px;
-    padding: 2px 6px;
+    border-radius: calc(5px * var(--z, 1));
+    padding: calc(2px * var(--z, 1)) calc(6px * var(--z, 1));
     outline: none;
 }
 .barSpacer { flex: 1; }
@@ -59,27 +61,27 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 5px;
-    height: 24px;
+    gap: calc(5px * var(--z, 1));
+    height: calc(24px * var(--z, 1));
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--z, 1));
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
 }
-.barBtn { width: 26px; justify-content: center; }
+.barBtn { width: calc(26px * var(--z, 1)); justify-content: center; }
 .srcBtn {
     max-width: 60%;
-    padding: 0 7px;
-    font: 11px var(--font-mono);
+    padding: 0 calc(7px * var(--z, 1));
+    font: calc(11px * var(--z, 1)) var(--font-mono);
     border-color: var(--border-default);
 }
 .srcBtn span:first-of-type { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .srcLinked { color: var(--accent-success); border-color: rgba(82, 196, 122, 0.35); }
 .srcCount {
     flex: none;
-    padding: 0 5px;
-    border-radius: 8px;
+    padding: 0 calc(5px * var(--z, 1));
+    border-radius: calc(8px * var(--z, 1));
     background-color: var(--bg-hover);
     color: var(--text-secondary);
 }
@@ -90,22 +92,22 @@
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 6px 8px 8px;
+    padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1)) calc(8px * var(--z, 1));
     /* Everything in the body is sized in em off the widget's text size. */
-    font-size: var(--fmt-font, 15px);
+    font-size: var(--fmt-font, calc(15px * var(--z, 1)));
 }
 .viewFade { height: 100%; animation: fmtFade 150ms ease-out; }
 @keyframes fmtFade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── the plain list ── */
-.list { display: flex; flex-direction: column; gap: 2px; }
+.list { display: flex; flex-direction: column; gap: calc(2px * var(--z, 1)); }
 .row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--z, 1));
     min-height: 2em;
-    padding: 0 6px;
-    border-radius: 6px;
+    padding: 0 calc(6px * var(--z, 1));
+    border-radius: calc(6px * var(--z, 1));
 }
 .row:hover { background-color: var(--bg-hover); }
 .rowDone .titleInput { color: var(--text-muted); text-decoration: line-through; }
@@ -132,8 +134,8 @@
     color: var(--text-primary);
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 2px 4px;
+    border-radius: calc(4px * var(--z, 1));
+    padding: calc(2px * var(--z, 1)) calc(4px * var(--z, 1));
     outline: none;
     -webkit-user-select: text;
     user-select: text;
@@ -146,8 +148,8 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    padding: 1px 7px;
-    border-radius: 9px;
+    padding: 1px calc(7px * var(--z, 1));
+    border-radius: calc(9px * var(--z, 1));
     font: 0.7em var(--font-mono);
     color: var(--text-secondary);
     background-color: var(--bg-elevated);
@@ -158,11 +160,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: calc(20px * var(--z, 1));
+    height: calc(20px * var(--z, 1));
     padding: 0;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--z, 1));
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
@@ -171,38 +173,38 @@
 .row:hover .rowRemove { opacity: 1; }
 .rowRemove:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.12); }
 .addInput {
-    margin-top: 4px;
+    margin-top: calc(4px * var(--z, 1));
     font: 0.93em var(--font-body);
     color: var(--text-primary);
     background: transparent;
     border: 1px dashed var(--border-strong);
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: calc(6px * var(--z, 1));
+    padding: calc(6px * var(--z, 1)) calc(10px * var(--z, 1));
     outline: none;
     -webkit-user-select: text;
     user-select: text;
 }
 .addInput:focus { border-style: solid; border-color: var(--accent-warning); }
-.empty { padding: 14px 8px; font-size: 0.93em; color: var(--text-muted); font-style: italic; }
+.empty { padding: calc(14px * var(--z, 1)) calc(8px * var(--z, 1)); font-size: 0.93em; color: var(--text-muted); font-style: italic; }
 
 /* ── the source menu (portalled) ── */
 .menu {
     position: fixed;
     z-index: 1300;
-    width: 232px;
+    width: calc(232px * var(--z, 1));
     max-height: 60vh;
     overflow: auto;
     display: flex;
     flex-direction: column;
     background-color: rgb(18, 18, 30);
     border: 1px solid var(--border-default);
-    border-radius: 12px;
-    box-shadow: 0 12px 32px var(--shadow-color);
-    padding: 6px;
+    border-radius: calc(12px * var(--z, 1));
+    box-shadow: 0 calc(12px * var(--z, 1)) calc(32px * var(--z, 1)) var(--shadow-color);
+    padding: calc(6px * var(--z, 1));
 }
 .menuHead {
-    padding: 8px 10px 4px;
-    font: 10px var(--font-mono);
+    padding: calc(8px * var(--z, 1)) calc(10px * var(--z, 1)) calc(4px * var(--z, 1));
+    font: calc(10px * var(--z, 1)) var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-muted);
@@ -210,32 +212,32 @@
 .menuItem {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
+    gap: calc(6px * var(--z, 1));
+    padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1));
     border: none;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--z, 1));
     background: transparent;
     color: var(--text-secondary);
-    font: 13px var(--font-body);
+    font: calc(13px * var(--z, 1)) var(--font-body);
     text-align: left;
     cursor: pointer;
 }
 .menuItem:hover { background-color: var(--bg-hover); color: var(--text-primary); }
-.menuTick { flex: none; width: 14px; color: var(--accent-warning); display: flex; }
+.menuTick { flex: none; width: calc(14px * var(--z, 1)); color: var(--accent-warning); display: flex; }
 .menuLabel { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.menuShows { display: flex; gap: 4px; padding: 2px 8px 6px; }
+.menuShows { display: flex; gap: calc(4px * var(--z, 1)); padding: calc(2px * var(--z, 1)) calc(8px * var(--z, 1)) calc(6px * var(--z, 1)); }
 .show, .showOn {
     flex: 1;
-    padding: 4px 0;
-    border-radius: 6px;
+    padding: calc(4px * var(--z, 1)) 0;
+    border-radius: calc(6px * var(--z, 1));
     border: 1px solid var(--border-default);
     background: transparent;
     color: var(--text-secondary);
-    font: 11px var(--font-mono);
+    font: calc(11px * var(--z, 1)) var(--font-mono);
     cursor: pointer;
 }
 .showOn { border-color: var(--accent-warning); color: var(--accent-warning); }
-.menuNote { padding: 6px 10px 4px; font-size: 12px; color: var(--text-muted); }
+.menuNote { padding: calc(6px * var(--z, 1)) calc(10px * var(--z, 1)) calc(4px * var(--z, 1)); font-size: calc(12px * var(--z, 1)); color: var(--text-muted); }
 
 /* ── focus mode ── */
 .focusBackdrop {
@@ -246,37 +248,37 @@
     display: flex;
     align-items: stretch;
     justify-content: center;
-    padding: 36px 48px;
+    padding: calc(36px * var(--z, 1)) calc(48px * var(--z, 1));
 }
 .focusPanel {
     flex: 1;
-    max-width: 1280px;
+    max-width: calc(1280px * var(--z, 1));
     display: flex;
     flex-direction: column;
     overflow: hidden;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-strong);
-    border-radius: 12px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    border-radius: calc(12px * var(--z, 1));
+    box-shadow: 0 calc(24px * var(--z, 1)) calc(60px * var(--z, 1)) rgba(0, 0, 0, 0.6);
     color: var(--text-primary);
     font-family: var(--font-body);
 }
-.focusPanel .bar { height: 44px; padding: 0 10px 0 16px; cursor: default; }
-.focusPanel .barTitle { font-size: 16px; }
+.focusPanel .bar { height: calc(44px * var(--z, 1)); padding: 0 calc(10px * var(--z, 1)) 0 calc(16px * var(--z, 1)); cursor: default; }
+.focusPanel .barTitle { font-size: calc(16px * var(--z, 1)); }
 /* Full screen has its own text size (payload.focusFontSize; FormatWidget focusFont). */
-.focusPanel .body { padding: 10px 16px 16px; }
-.sizeStep { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
-.sizeStep .barBtn { font-size: 16px; }
-.sizeValue { min-width: 22px; text-align: center; font: 12px var(--font-mono); color: var(--text-secondary); }
+.focusPanel .body { padding: calc(10px * var(--z, 1)) calc(16px * var(--z, 1)) calc(16px * var(--z, 1)); }
+.sizeStep { display: flex; align-items: center; gap: calc(2px * var(--z, 1)); margin-right: calc(4px * var(--z, 1)); }
+.sizeStep .barBtn { font-size: calc(16px * var(--z, 1)); }
+.sizeValue { min-width: calc(22px * var(--z, 1)); text-align: center; font: calc(12px * var(--z, 1)) var(--font-mono); color: var(--text-secondary); }
 
 /* Things attached to the widget but cut off by its edge. */
 .hiddenBadge {
     position: absolute;
-    right: 8px;
-    bottom: 6px;
-    padding: 1px 8px;
-    border-radius: 9px;
-    font: 10.5px var(--font-mono);
+    right: calc(8px * var(--z, 1));
+    bottom: calc(6px * var(--z, 1));
+    padding: 1px calc(8px * var(--z, 1));
+    border-radius: calc(9px * var(--z, 1));
+    font: calc(10.5px * var(--z, 1)) var(--font-mono);
     color: var(--accent-warning);
     background-color: var(--bg-elevated);
     border: 1px solid rgba(240, 184, 64, 0.4);

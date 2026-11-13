@@ -1,6 +1,7 @@
 import { memo, useState } from 'react'
 import { LuCheck, LuX } from 'react-icons/lu'
 import styles from '../FormatWidget.module.css'
+import { zIcon } from '../zoomBox'
 
 /**
  * The plain list — every view's stand-in until it has its own (Table,
@@ -73,7 +74,7 @@ function ListView({ source }) {
                                 disabled={!editable.has('status')}
                                 onClick={() => source.update(rec.id, { status: done ? 'To do' : 'Done' })}
                                 title={done ? 'Mark not done' : 'Mark done'} aria-label={done ? 'Mark not done' : 'Mark done'}>
-                                {done && <LuCheck size={11} strokeWidth={3} />}
+                                {done && <LuCheck {...zIcon(11)} strokeWidth={3} />}
                             </button>
                         )}
                         <TitleInput value={v.title || ''} disabled={!editable.has('title')} onCommit={(t) => source.update(rec.id, { title: t })} />
@@ -86,7 +87,7 @@ function ListView({ source }) {
                         )}
                         {source.canRemove && (
                             <button className={styles.rowRemove} onClick={() => source.remove(rec.id)} title="Delete record" aria-label="Delete record">
-                                <LuX size={12} />
+                                <LuX {...zIcon(12)} />
                             </button>
                         )}
                     </div>
