@@ -1760,4 +1760,19 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     border gives an 18 ring, unchanged in board units after zooming out, both
     bar rows 778px wide and flush, nothing glows after select-all. `cards`
     walk passes. 776 tests, lint 25, build pass.
+- 2026-11-13 · session Final · outlines round 2 (user: "looks like a
+  highlighter passing through, layered, not connected; big gap"). The glow is
+  now ONE outline that hugs each box's real border (registry path: rounded
+  corners, ellipse, diamond…) with no gap. Its band is 1.5× the item's line
+  width past the line. Links carry the same band. Everything is drawn at full
+  strength on the glow layer's own canvas, which is faded once by CSS
+  (0.55), so a link's band and a box's band merge instead of darkening each
+  other. Box interiors (including the clicked box's) are cut out
+  (destination-out), so a band stops exactly at a border. Rotation is now
+  about the centre, as the board draws it. PNG export hides `.sb-glow`.
+  Checked with pixel samples in a hidden window (`glow:` walk): C's band is
+  solid at 2–3.5 units outside its 2px border, empty at 5 and inside; where a
+  link meets a box it is solid above the border and empty below; a 6px border
+  gives a band to 12 units, unchanged in board units after zooming out.
+  776 tests, lint 25, build pass.
 

@@ -1729,45 +1729,53 @@ async function runGlow() {
     const boxes = added.filter(i => i.type !== 'connector')
     const minX = Math.min(...boxes.map(b => b.x)), maxX = Math.max(...boxes.map(b => b.x + b.w))
     const minY = Math.min(...boxes.map(b => b.y)), maxY = Math.max(...boxes.map(b => b.y + b.h))
-    const z = stage.scaleX()
-    // The page centres on the window's middle (centerWorld).
-    const view = { x: (innerWidth / 2 - stage.x()) / z, y: (innerHeight / 2 - stage.y()) / z }
-    const glowRects = () => stage.find('Rect').filter(n => n.stroke() === '#22d3ee' || n.stroke() === '#0d7f86')
-    const glowLines = () => stage.find('Line').filter(n => n.stroke() === '#22d3ee' || n.stroke() === '#0d7f86')
-    await step('diagram', { added: added.map(i => i.type), centreOff: [Math.round((minX + maxX) / 2 - view.x), Math.round((minY + maxY) / 2 - view.y)], selectedAllGlow: [glowRects().length, glowLines().length] })
+    const z0 = stage.scaleX()
+    const view = { x: (innerWidth / 2 - stage.x()) / z0, y: (innerHeight / 2 - stage.y()) / z0 }
+    const glowLayer = () => stage.find('.sb-glow')[0]
+    // Alpha (0–255) of the glow canvas at a board point, before the CSS fade.
+    const alpha = (wx, wy) => {
+        const L = glowLayer(); if (!L) return null
+        L.draw()   // a hidden window gets no animation frames, so Konva's batched redraw may not have run
+        const cv = L.getCanvas()._canvas, pr = cv.width / stage.width()
+        const px = Math.round((stage.x() + wx * stage.scaleX()) * pr), py = Math.round((stage.y() + wy * stage.scaleY()) * pr)
+        return cv.getContext('2d').getImageData(px, py, 1, 1).data[3]
+    }
+    await step('diagram', { added: added.map(i => i.type), centreOff: [Math.round((minX + maxX) / 2 - view.x), Math.round((minY + maxY) / 2 - view.y)], glowWithAllSelected: !!glowLayer() })
 
     // Click the middle box: its two links and both neighbours glow.
     const byText = (t) => boxes.find(b => b.payload?.text === t)
-    const B = byText('Two')
+    const A = byText('One'), B = byText('Two'), C = byText('Three')
     key('Escape'); await sleep(300)
     const kc = stage.content.querySelector('canvas')
     const pB = toClient(B.x + B.w / 2, B.y + B.h / 2)
     kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(700)
-    const ringWidths = () => glowRects().map(n => +n.strokeWidth().toFixed(2))
-    const haloWidths = () => glowLines().map(n => +n.strokeWidth().toFixed(2))
-    const bar = document.querySelector('[class*="twoRows"]')
-    const rows = bar ? [...bar.children].filter(c => c.children.length) : []
-    const rowGeom = rows.map(r => {
-        const rr = r.getBoundingClientRect(), kids = [...r.children].filter(k => k.getBoundingClientRect().width > 0)
-        const a = kids[0].getBoundingClientRect(), b = kids[kids.length - 1].getBoundingClientRect()
-        return { w: Math.round(rr.width), leftGap: Math.round(a.left - rr.left), rightGap: Math.round(rr.right - b.right), items: kids.length }
+    // Across C's left edge (its border is 2 wide, the band 3 past it): outside → inside.
+    const midY = C.y + C.h / 2
+    const across = (it, y) => [-8, -5, -3.5, -2, 0, 2, 5].map(d => [d, alpha(it.x + d, y)])
+    const conn = live().find(i => i.type === 'connector' && i.payload?.to?.itemId === C.id)
+    const L = glowLayer()
+    await step('clickB', {
+        layer: !!L, cssOpacity: L?.getCanvas()._canvas.style.opacity,
+        acrossC: across(C, midY),
+        insideB: alpha(B.x + B.w / 2, B.y + B.h / 2), insideC: alpha(C.x + C.w / 2, midY),
+        twoRows: !!document.querySelector('[class*="twoRows"]'),
     })
-    const br = bar?.getBoundingClientRect()
-    await step('clickB', { selected: [...live()].length, rings: ringWidths(), halos: haloWidths(), twoRows: !!bar, rowGeom, barOnScreen: !!br && br.left >= 0 && br.right <= innerWidth && br.top >= 0 })
+    // Where C's link arrives (its top-side anchor): the band is solid just above the border, empty inside.
+    const top = { x: C.x + C.w / 2, y: C.y }
+    await step('junction', { above: [-6, -3, -1].map(d => alpha(top.x, top.y + d)), inside: [3, 8].map(d => alpha(top.x, top.y + d)), side: conn?.payload?.to?.side })
 
-    // A thicker border on a neighbour → a thicker ring (board units, × its line width).
-    const A = byText('One')
+    // A thicker border → a wider band (× its line width); zooming leaves it in proportion.
     store.updateItem(boardId, A.id, { payload: { ...A.payload, strokeWidth: 6 } }); await sleep(700)
-    const r6 = ringWidths()
-    // Zoom out: the ring's width in board units stays the same, so it shrinks on screen with the shapes.
+    const ay = A.y + A.h / 2
+    const thick = [-14, -11, -8, -5].map(d => [d, alpha(A.x + d, ay)])
+    const A1 = live().find(i => i.id === A.id)
     const host = stage.container().parentElement
     for (let i = 0; i < 4; i++) { host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: rect.left + 40, clientY: rect.top + 40, bubbles: true, cancelable: true })); await sleep(80) }
     await sleep(600)
-    await step('thick+zoom', { rings: r6, ringsAfterZoom: ringWidths(), zoom: [+z.toFixed(3), +stage.scaleX().toFixed(3)] })
+    await step('thick+zoom', { thick, thickAfterZoom: [-14, -11, -8, -5].map(d => [d, alpha(A.x + d, ay)]), zoom: [+z0.toFixed(3), +stage.scaleX().toFixed(3)], A: boxOf(A1), sw: A1?.payload?.strokeWidth, sel: [...document.querySelectorAll('[class*="twoRows"]')].length })
 
-    // A plain text card: one row.
     key('a', { ctrlKey: true }); await sleep(600)
-    await step('selectAll', { rings: glowRects().length, halos: glowLines().length })
+    await step('selectAll', { glow: !!glowLayer() })
     send('done', true)
 }
 if (spec.startsWith('glow:') && boardId) runGlow().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

@@ -882,7 +882,7 @@ function SandboxCanvas({
                 pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) : 1}
             >
                 <FrameLayer frameItems={frameItems} zoom={canvas.viewport.zoom} editingFrameId={editingFrameId} clips={clips} cutLabels={frameCutLabels} />
-                <GlowLayer glow={glow} byId={byId} />
+                <GlowLayer glow={glow} byId={byId} cutIds={canvas.selectedIds} />
                 <ConnectorLayer connectorItems={connectorItems} byId={byId} selectedIds={canvas.selectedIds} />
                 <GraphicsLayer graphicItems={visibleGraphics} editingShapeId={editingShapeId} clips={clips} />
             </Stage>
@@ -907,7 +907,7 @@ function SandboxCanvas({
                 listening={false}
                 style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
             >
-                {glow && topIds.size > 0 && <GlowLayer glow={glow} byId={byId} only={topIds} />}
+                {glow && topIds.size > 0 && <GlowLayer glow={glow} byId={byId} only={topIds} cutIds={canvas.selectedIds} />}
                 {topConnectorItems.length > 0 && <ConnectorLayer connectorItems={topConnectorItems} byId={byId} selectedIds={canvas.selectedIds} />}
                 {topGraphicItems.length > 0 && <GraphicsLayer graphicItems={topGraphicItems} editingShapeId={editingShapeId} clips={clips} />}
                 <ActiveLayer

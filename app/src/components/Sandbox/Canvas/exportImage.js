@@ -52,6 +52,8 @@ export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = nu
         const out = document.createElement('canvas')
         out.width = W; out.height = H
         const ctx = out.getContext('2d')
+        // The connection outlines are a selection aid, not part of the board.
+        for (const s of stages) s.find('.sb-glow').forEach(l => l.visible(false))
         for (const s of stages) {
             s.scale({ x: scale, y: scale })
             s.position({ x: -minX * scale, y: -minY * scale })
@@ -62,6 +64,7 @@ export function exportStagePNG(stage, graphicItems, title = 'sandbox', clip = nu
         url = out.toDataURL('image/png')
     } finally {
         for (const n of snaps) {
+            n.s.find('.sb-glow').forEach(l => l.visible(true))
             n.s.scale({ x: n.sx, y: n.sy })
             n.s.position({ x: n.x, y: n.y })
             n.s.size({ width: n.width, height: n.height })
