@@ -44,7 +44,7 @@ const GROUPS = [
             ['Next step, connected', ['Tab']], ['Next branch beside it', ['⇧', 'Tab']],
             ['Step in a direction', ['Alt', 'Arrows']], ['Connect two boxes', ['C']],
             ['Tidy the layout', ['⇧', 'T']], ['Diagram — nodes or text (edits the selected one)', ['D']],
-            ['Connected box from a dot', ['Click dot']], ['New box at the drop', ['Drag dot', 'release']],
+            ['Connected box from a dot', ['Shift', 'Click dot']], ['New box at the drop', ['Drag dot', 'Shift', 'release']],
             ['Free-ended arrow', ['Drag dot', 'Alt']],
         ],
     },

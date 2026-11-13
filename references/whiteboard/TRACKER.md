@@ -1775,4 +1775,16 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
   link meets a box it is solid above the border and empty below; a 6px border
   gives a band to 12 units, unchanged in board units after zooming out.
   776 tests, lint 25, build pass.
+- 2026-11-13 · session Final · user: the outline is "exactly it". Last two
+  fixes. **Connection dots make a box only with Shift:** a plain click on a dot,
+  or a drag released on empty board, makes nothing. Shift+click or Shift+release
+  makes the connected box. Alt+release still leaves a free-ended arrow. While a
+  new arrow points at empty board, a hint sits above its head: "Hold Shift to
+  add a shape here", or "Release to add a shape here" while Shift is held,
+  including when Shift is pressed without moving. **Rotate knob raised** to 40px
+  above the top edge (was 26), clear of the top dot's hit area. The shortcuts
+  sheet is updated. Checked in a hidden window (new `dots:` walk): plain click
+  0 items, plain drag 0, the hint centred 22px above the head, Shift drag +2
+  (shape + connector), Shift click +2, knob 26px from the dot centre and on top
+  at its centre. `glow:` passes. 776 tests, lint 25, build pass.
 

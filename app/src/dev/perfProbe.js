@@ -12,6 +12,7 @@
 //   doc:<boardId>    — a Doc: template, typing + autosave, undo, slash menu, find, note link, full screen (runDoc)
 //   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
 //   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
+//   dots:<boardId>   — connection dots: no box without Shift, the drag hint, the rotate knob clear of the top dot (runDots)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
@@ -1779,3 +1780,75 @@ async function runGlow() {
     send('done', true)
 }
 if (spec.startsWith('glow:') && boardId) runGlow().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── dots:<boardId> — a shape's connection dots: a plain click or a drag onto
+// empty board makes nothing; Shift makes a connected box; the hint above the
+// arrow's head; the rotate knob sits clear of the top dot.
+async function runDots() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    const before = new Set(live().map(i => i.id))
+    document.querySelector('button[title^="Diagram"]')?.click(); await sleep(800)
+    ;[...document.querySelectorAll('button[role="tab"]')].find(b => b.textContent === 'Text')?.click(); await sleep(400)
+    const area = document.querySelector('textarea')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, 'A[One] --> B[Two]')
+    area.dispatchEvent(new Event('input', { bubbles: true })); await sleep(600)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent === 'Insert')?.click(); await sleep(1200)
+    const B = live().find(i => !before.has(i.id) && i.payload?.text === 'Two')
+    key('Escape'); await sleep(300)
+    const kc = stage.content.querySelector('canvas')
+    const pB = toClient(B.x + B.w / 2, B.y + B.h / 2)
+    kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(700)
+    const dots = () => [...document.querySelectorAll('g[data-sb-handle="true"]')].filter(g => g.querySelector('title')?.textContent.startsWith('Drag to connect'))
+    const centre = (g) => { const r = g.querySelector('circle').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }
+    const ds = dots()
+    const south = ds.reduce((a, g) => (centre(g).y > centre(a).y ? g : a), ds[0])
+    const north = ds.reduce((a, g) => (centre(g).y < centre(a).y ? g : a), ds[0])
+    const knob = [...document.querySelectorAll('svg circle')].find(c => c.style.cursor === 'grab' && c.getAttribute('r') === '6' && !c.closest('g[data-sb-handle="true"]'))
+    const kr = knob?.getBoundingClientRect(), nc = centre(north)
+    const knobGap = kr && +Math.hypot(kr.left + kr.width / 2 - nc.x, kr.top + kr.height / 2 - nc.y).toFixed(1)
+    // Is the knob what the pointer hits at its centre (not the dot)?
+    const atKnob = kr && document.elementFromPoint(kr.left + kr.width / 2, kr.top + kr.height / 2)
+    await step('handles', { dots: ds.length, knobGap, knobOnTop: atKnob === knob })
+
+    const count = () => live().length
+    const hint = () => { const el = [...document.querySelectorAll('div')].find(d => /add a shape here/.test(d.textContent) && d.children.length === 0); if (!el || el.style.display === 'none') return null; const r = el.getBoundingClientRect(); return { text: el.textContent, bottom: Math.round(r.bottom), cx: Math.round(r.left + r.width / 2) } }
+    const s0 = centre(south)
+    // 1. A plain click on the bottom dot.
+    let n0 = count()
+    south.dispatchEvent(ptr('pointerdown', s0.x, s0.y)); window.dispatchEvent(ptr('pointerup', s0.x, s0.y)); await sleep(600)
+    const plainClick = count() - n0
+    // 2. A plain drag onto empty board, 220px down.
+    const drag2 = async (shift) => {
+        const g = dots().reduce((a, x) => (centre(x).y > centre(a).y ? x : a), dots()[0]), c = centre(g)
+        g.dispatchEvent(ptr('pointerdown', c.x, c.y, { shiftKey: shift }))
+        for (let i = 1; i <= 10; i++) { await frame(); window.dispatchEvent(ptr('pointermove', c.x, c.y + i * 22, { shiftKey: shift })) }
+        await sleep(200)
+        const h = hint()
+        window.dispatchEvent(ptr('pointerup', c.x, c.y + 220, { shiftKey: shift })); await sleep(700)
+        return { hint: h, head: [Math.round(c.x), Math.round(c.y + 220)], hintAfter: hint() }
+    }
+    n0 = count(); const plain = await drag2(false); const plainDrag = count() - n0
+    await step('plain', { plainClick, plainDrag, ...plain })
+    // Re-select B (a new box would have taken the selection).
+    kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(600)
+    n0 = count(); const sh = await drag2(true); const shiftDrag = count() - n0
+    const made = live().slice(-2).map(i => i.type)
+    await step('shift', { shiftDrag, made, ...sh })
+    kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(600)
+    const w = dots().reduce((a, x) => (centre(x).x < centre(a).x ? x : a), dots()[0]), wc = centre(w)
+    n0 = count()
+    w.dispatchEvent(ptr('pointerdown', wc.x, wc.y, { shiftKey: true })); window.dispatchEvent(ptr('pointerup', wc.x, wc.y, { shiftKey: true })); await sleep(700)
+    await step('shiftClick', { shiftClick: count() - n0 })
+    send('done', true)
+}
+if (spec.startsWith('dots:') && boardId) runDots().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+

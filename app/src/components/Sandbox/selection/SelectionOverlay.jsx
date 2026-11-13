@@ -31,7 +31,10 @@ import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 
 const DEG = Math.PI / 180
 const HANDLE = 9          // screen px
-const ROTATE_GAP = 26     // screen px above the top edge
+// Screen px above the top edge: clear of the top connection dot (DOT_OUT + its
+// DOT_HIT reach + the knob's radius + a little room), so the two sit side by
+// side as neighbours instead of one covering the other.
+const ROTATE_GAP = 40
 const SNAP_PX = 10        // screen-px magnet radius for snapping (was 6 — the user wanted it stronger)
 const SNAP_GRID = 24      // world units between grid snap lines (matches GRID_MINOR)
 // Connection dots: drawn DOT_OUT screen px outside each edge midpoint, with a
@@ -59,6 +62,7 @@ const clampScale = (s) => (Math.abs(s) < 0.05 ? (s < 0 ? -0.05 : 0.05) : s)
 
 function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt, onMoveEnd, onFrameGesture }) {
     const rootRef = useRef(null)
+    const hintRef = useRef(null)   // the new-arrow hint (placeHint)
     const dragRef = useRef(null)
     const connectorRef = useRef(null)   // active connector drag, separate from transform
     const [guides, setGuides] = useState([])  // [{type:'v'|'h', pos}] world coords
@@ -357,16 +361,24 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         connectorRef.current = null
         setDropTarget(null)
         canvas.setDragging?.(false)
+        showHint(null)
+        window.removeEventListener('keydown', onConnectorKey)
+        window.removeEventListener('keyup', onConnectorKey)
         if (canvas.activeConnectorRef) canvas.activeConnectorRef.current = null  // stop the preview loop
         const dist = Math.hypot(d.movingPoint.x - d.fixedPoint.x, d.movingPoint.y - d.fixedPoint.y)
         const clicked = !d.targetId && dist <= 6 / viewport.zoom
+        // A new box comes only with Shift held (the user's call: a stray click or
+        // a drag that misses its target must not drop shapes on the board).
+        const shift = !!(e?.shiftKey || d.shift)
         if (d.mode === 'create' && clicked) {
-            // A plain click on a dot: the next box that way, already connected (spec §9.7).
-            onQuickAdd?.(d.fromId, d.fromSide)
-        } else if (d.mode === 'create' && !d.targetId && !e?.altKey && onQuickAddAt) {
-            // Released on empty canvas: a new box right there, joined to this one.
-            // (Alt+release leaves a free-ended arrow instead.)
+            // Shift+click on a dot: the next box that way, already connected (spec §9.7).
+            if (shift) onQuickAdd?.(d.fromId, d.fromSide)
+        } else if (d.mode === 'create' && !d.targetId && shift && onQuickAddAt) {
+            // Shift+release on empty canvas: a new box right there, joined to this one.
             onQuickAddAt(d.fromId, d.fromSide, { x: d.movingPoint.x, y: d.movingPoint.y })
+        } else if (d.mode === 'create' && !d.targetId && !e?.altKey) {
+            // Released on empty canvas without Shift: nothing to connect to, so
+            // nothing is made. (Alt+release still leaves a free-ended arrow.)
         } else if (!clicked) {
             const movingEnd = d.targetId
                 ? { itemId: d.targetId, side: d.targetSide }
@@ -406,11 +418,38 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         }
         const key = d.targetId ? `${d.targetId}:${d.targetSide}` : null
         if (key !== d.dropKey) { d.dropKey = key; setDropTarget(d.targetId ? { id: d.targetId, side: d.targetSide } : null) }
+        d.shift = e.shiftKey
+        placeHint(d)
         if (canvas.activeConnectorRef) {
             const fromPoint = d.headIsMoving ? d.fixedPoint : d.movingPoint
             const toPoint = d.headIsMoving ? d.movingPoint : d.fixedPoint
             canvas.activeConnectorRef.current = { fromPoint, toPoint, routing: d.routing }
         }
+    }
+
+    // The hint above a new arrow's head, while it points at empty board: what
+    // Shift does on release. Moved imperatively (no re-render per move).
+    const showHint = (h) => {
+        const el = hintRef.current
+        if (!el) return
+        if (!h) { el.style.display = 'none'; return }
+        el.textContent = h.text
+        el.style.display = 'block'
+        el.style.left = `${Math.round(h.x)}px`
+        el.style.top = `${Math.round(h.y)}px`
+    }
+    const placeHint = (d) => {
+        const far = Math.hypot(d.movingPoint.x - d.fixedPoint.x, d.movingPoint.y - d.fixedPoint.y) > 6 / viewport.zoom
+        if (d.mode !== 'create' || d.targetId || !far) { showHint(null); return }
+        const p = screenOf(d.movingPoint)
+        showHint({ x: p.x, y: p.y - 22, text: d.shift ? 'Release to add a shape here' : 'Hold Shift to add a shape here' })
+    }
+    // Shift pressed or let go without moving the pointer: the hint follows.
+    const onConnectorKey = (e) => {
+        const d = connectorRef.current
+        if (!d || e.key !== 'Shift') return
+        d.shift = e.type === 'keydown'
+        placeHint(d)
     }
 
     const beginConnectorDrag = (init) => {
@@ -424,6 +463,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         }
         window.addEventListener('pointermove', onConnectorMove)
         window.addEventListener('pointerup', onConnectorUp)
+        window.addEventListener('keydown', onConnectorKey)
+        window.addEventListener('keyup', onConnectorKey)
     }
 
     // CREATE: drag out from one of a shape's 4 connection dots (or from anywhere
@@ -521,6 +562,13 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             data-sb-handle="true"
             style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}
         >
+            {/* the new-arrow hint (placeHint) — bottom-centred above the arrow's head */}
+            <div ref={hintRef} style={{
+                position: 'absolute', display: 'none', transform: 'translate(-50%, -100%)', zIndex: 6,
+                padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', pointerEvents: 'none',
+                background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)',
+                fontFamily: 'var(--font-body)', fontSize: 12, boxShadow: '0 2px 8px var(--shadow-color)',
+            }} />
             {gesturing && createPortal(
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9998, cursor: 'grabbing' }} />,
                 document.body,
@@ -630,7 +678,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                                 onPointerEnter={() => setHotDot(side)}
                                 onPointerLeave={() => setHotDot(h => (h === side ? null : h))}
                                 onPointerDown={onConnectorDotDown(side)}>
-                                <title>Drag to connect · click for a connected box</title>
+                                <title>Drag to connect · Shift+click for a connected box</title>
                                 {/* invisible, larger hit target */}
                                 <circle cx={cx} cy={cy} r={DOT_HIT} fill="transparent" />
                                 {/* magnet ring: the pointer is "caught" by this dot */}
