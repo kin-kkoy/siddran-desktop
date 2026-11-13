@@ -1113,7 +1113,7 @@ async function runTimeline() {
     await sleep(1500)
     key('Escape')
     const store = await import('../hooks/sandboxItemsStore')
-    const { dayNum, dayStr, todayNum } = await import('../components/Sandbox/formats/timeline')
+    const { dayNum, todayNum } = await import('../components/Sandbox/formats/timeline')
     const live = () => store.getSnapshot(boardId)
     document.querySelector('button[title="Media"]')?.click(); await sleep(500)
     ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Timeline')?.click(); await sleep(1200)
