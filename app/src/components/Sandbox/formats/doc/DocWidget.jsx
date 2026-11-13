@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { LuFilePen, LuMaximize2, LuMinimize2, LuChevronDown, LuLink, LuCheck, LuExternalLink, LuSearch, LuFilePlus2, LuUnlink } from 'react-icons/lu'
+import { LuFilePen, LuMaximize2, LuMinimize2, LuChevronDown, LuLink, LuCheck, LuExternalLink, LuSearch, LuFilePlus2, LuUnlink, LuEllipsis, LuDownload, LuPrinter, LuBookmarkPlus, LuX } from 'react-icons/lu'
 import styles from '../FormatWidget.module.css'
 import dStyles from './Doc.module.css'
 import tStyles from '../Table.module.css'
@@ -12,10 +12,16 @@ import { useBagNotes } from '../../../../contexts/BagNotesContext'
 import { useNotesApi } from '../../../../contexts/NotesApiContext'
 import { cutLabel } from '../../selection/attach'
 import { stepFontSize } from '../../text/textStyle'
-import { isNoteDoc, docStats, statsLabel, DOC_TEMPLATES, DOC_CHAR_LIMIT, templateTitle } from './doc'
-import { slashCompletions } from './slash'
+import { isNoteDoc, docStats, statsLabel, DOC_TEMPLATES, DOC_CHAR_LIMIT, templateTitle, userTemplates, saveTemplate, removeTemplate, asTemplate, docMarkdown } from './doc'
+import { useSettings } from '../../../../contexts/SettingsContext'
+import { useApi } from '../../../../contexts/ApiContext'
+import { slugifyForFilename, downloadMarkdown } from '../../../../utils/markdownIO'
+import { printNoteToPdf } from '../../../Editor/utils/exportPdf'
+import { toast } from '../../../../utils/toast'
+import { setAttachmentTarget } from '../../../../desktop/localStore'
+import { slashMenu } from './slash'
 
-const EXTRA_COMPLETIONS = [slashCompletions]
+const EXTRA_EXTENSIONS = [slashMenu]
 // Spec §13.3.3: autosave about half a second after the last keystroke.
 const SAVE_DELAY = 500
 
@@ -36,6 +42,12 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
     const [menu, setMenu] = useState(false)
     const [find, setFind] = useState(null)   // a token that bumps on each Ctrl+F; null = closed
     const srcRef = useRef(null)
+    const moreRef = useRef(null)
+    const [more, setMore] = useState(false)       // the ⋯ menu
+    const closeMore = useCallback(() => setMore(false), [])
+    const { settings, updateSetting } = useSettings()
+    const { authFetch, API } = useApi()
+    const mine = userTemplates(settings)
     const searchApiRef = useRef(null)
     const closeMenu = useCallback(() => setMenu(false), [])
     const editing = titleEdit || renaming
@@ -83,9 +95,28 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
         const body = t.body()
         commit(q => {
             const isDefault = !q.title || /^Doc( \d+)?$/.test(q.title)
-            return { ...q, body, title: isDefault ? templateTitle(t.id, q.title) : q.title }
+            return { ...q, body, title: isDefault ? (t.own ? t.label : templateTitle(t.id, q.title)) : q.title }
         })
     }
+
+    // ---- your own templates: the Bag's settings (settings.siddran), saved now —
+    // the Settings window only saves when it closes, and this isn't that window.
+    const storeTemplates = (list) => {
+        updateSetting('docTemplates', list)
+        authFetch?.(`${API}/settings`, { method: 'PUT', body: JSON.stringify({ settings: { ...settings, docTemplates: list } }) })
+            .catch(() => toast.error('Couldn’t save the template'))
+    }
+    const saveAsTemplate = (name) => {
+        setMore(false)
+        if (!live.trim()) return
+        storeTemplates(saveTemplate(mine, name || p.title, live))
+        toast.success(`Saved “${(name || p.title || 'My template').trim()}” as a template`)
+    }
+    const dropTemplate = (id) => storeTemplates(removeTemplate(mine, id))
+
+    // ---- export (what's on screen, saved or not) ----
+    const exportMd = () => { setMore(false); downloadMarkdown(`${slugifyForFilename(p.title)}.md`, docMarkdown(p.title, live)) }
+    const exportPdf = () => { setMore(false); printNoteToPdf({ title: p.title || 'Doc', body: live }) }
 
     const showTemplates = !linked && !live.trim()
     const nearLimit = stats.chars >= DOC_CHAR_LIMIT * 0.9
@@ -124,6 +155,9 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                 <span className={styles.barSpacer} />
                 <button className={styles.barBtn} onClick={() => setFind(t => (t ? null : 1))} title="Find in this Doc (Ctrl+F)" aria-label="Find">
                     <LuSearch size={13} />
+                </button>
+                <button ref={moreRef} className={styles.barBtn} onClick={() => setMore(m => !m)} title="Export, save as a template" aria-label="More">
+                    <LuEllipsis size={14} />
                 </button>
                 <button ref={srcRef} className={`${styles.srcBtn} ${linked ? styles.srcLinked : ''}`} onClick={() => setMenu(m => !m)}
                     title={linked ? 'This Doc is a note in your Bag' : 'This Doc’s text is kept in the board'} aria-label="Where the text lives">
@@ -164,10 +198,19 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                                 {DOC_TEMPLATES.filter(t => t.id !== 'blank').map(t => (
                                     <button key={t.id} className={dStyles.template} onClick={() => applyTemplate(t)} title={t.hint}>{t.label}</button>
                                 ))}
+                                {mine.map(t => (
+                                    <span key={t.id} className={dStyles.ownTemplate}>
+                                        <button className={dStyles.template} onClick={() => applyTemplate(asTemplate(t))} title="Your template">{t.label}</button>
+                                        <button className={dStyles.templateDrop} onClick={() => dropTemplate(t.id)} title={`Remove the “${t.label}” template`} aria-label={`Remove template ${t.label}`}><LuX size={11} /></button>
+                                    </span>
+                                ))}
                                 <span className={dStyles.templatesHint}>or just type — <kbd>/</kbd> for blocks</span>
                             </div>
                         )}
-                        <div className={dStyles.editor} data-sb-noedit="true">
+                        <div className={dStyles.editor} data-sb-noedit="true"
+                            // Pasted/dropped images: beside the board's files, or in the linked note's folder.
+                            onFocus={() => setAttachmentTarget(linked ? { noteId: note.id } : { dir: 'attachments/_boards' })}
+                            onBlur={() => setAttachmentTarget(null)}>
                             <CodeMirrorEditor
                                 // A new source is a new document: remount rather than merge one into the other.
                                 key={linked ? `note:${p.source.noteId}` : 'own'}
@@ -181,7 +224,7 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                                 onNavigateNote={(id) => navigate(`/notes/${id}`)}
                                 showDock={false}
                                 saveDelay={SAVE_DELAY}
-                                extraCompletions={EXTRA_COMPLETIONS}
+                                extraExtensions={EXTRA_EXTENSIONS}
                                 searchApiRef={searchApiRef}
                             />
                         </div>
@@ -197,6 +240,18 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                     </span>
                 )}
             </footer>
+            {more && (
+                <Popover anchor={moreRef} onClose={closeMore} width={240} label="Doc menu">
+                    <button className={tStyles.popItem} onClick={exportMd} disabled={!live.trim()}>
+                        <span className={tStyles.popTick} /><LuDownload size={14} /> <span className={tStyles.popLabel}>Export as Markdown</span>
+                    </button>
+                    <button className={tStyles.popItem} onClick={exportPdf} disabled={!live.trim()}>
+                        <span className={tStyles.popTick} /><LuPrinter size={14} /> <span className={tStyles.popLabel}>Export as PDF</span>
+                    </button>
+                    <div className={tStyles.popSep} />
+                    <TemplateSaver defaultName={p.title} disabled={!live.trim()} onSave={saveAsTemplate} />
+                </Popover>
+            )}
             {menu && (
                 <Popover anchor={srcRef} onClose={closeMenu} width={250} label="Where the text lives">
                     <div className={tStyles.popHead}>The text lives</div>
@@ -226,6 +281,22 @@ function DocChrome({ item, commit, focus, focusSize, onFocusSize, renaming, onRe
                     </div>
                 </Popover>
             )}
+        </>
+    )
+}
+
+/** "Save as a template": a name (the Doc's title to start with) and Save. Same name replaces. */
+function TemplateSaver({ defaultName, disabled, onSave }) {
+    const [name, setName] = useState(defaultName || '')
+    return (
+        <>
+            <div className={tStyles.popHead}><LuBookmarkPlus size={12} /> Save as a template</div>
+            <div className={tStyles.popRow}>
+                <input className={tStyles.popInput} value={name} onChange={(e) => setName(e.target.value)} aria-label="Template name"
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !disabled) onSave(name) }} />
+                <button className={tStyles.popBtn} disabled={disabled} onClick={() => onSave(name)}>Save</button>
+            </div>
+            <div className={tStyles.popNote}>{disabled ? 'Write something first.' : 'Offered in every empty Doc in this Bag. Same name replaces it.'}</div>
         </>
     )
 }

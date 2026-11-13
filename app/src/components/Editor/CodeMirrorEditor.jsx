@@ -53,7 +53,7 @@ const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000
 //   interfaceMode   true = read-only
 //   saveDelay       ms: also save this long after the last keystroke (the
 //                   Sandbox Doc; notes keep the 2-minute interval + blur)
-//   extraCompletions  more completion sources (the Doc's slash menu)
+//   extraExtensions more CodeMirror extensions, added at mount (the Doc's slash menu)
 function CodeMirrorEditor({
   initialContent = '',
   externalBody,
@@ -86,7 +86,7 @@ function CodeMirrorEditor({
   commentApiRef,
   onComment,
   saveDelay,
-  extraCompletions,
+  extraExtensions,
 }) {
   const hostRef = useRef(null)
   const rootRef = useRef(null)
@@ -302,7 +302,6 @@ function CodeMirrorEditor({
             tasks: () => tasksRef.current,
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,
-            extraSources: extraCompletions,
           }),
           calcGhostText,
           commentsExtension({
@@ -313,6 +312,7 @@ function CodeMirrorEditor({
           editableRef.current.of(editableExt(interfaceMode)),
           updateListener,
           domHandlers,
+          ...(extraExtensions || []),
         ],
       }),
     })

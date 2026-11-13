@@ -97,3 +97,29 @@ export function statsLabel({ words, minutes }) {
     if (!words) return 'Empty'
     return `${words.toLocaleString()} word${words === 1 ? '' : 's'} · ${minutes} min read`
 }
+
+// ---- your own templates (R13.16: "save any Doc as a template") ----
+// Kept in the Bag's settings (`settings.docTemplates`, settings.siddran), so every
+// board in the Bag offers them and the file merges key by key like other settings.
+
+export const userTemplates = (settings) => (Array.isArray(settings?.docTemplates) ? settings.docTemplates.filter(t => t && typeof t.body === 'string') : [])
+
+/** Add (or, same name, replace) a template. Returns the new list. */
+export function saveTemplate(list, label, body, id = `u_${Date.now().toString(36)}`) {
+    const name = String(label || '').trim() || 'My template'
+    const rest = (list || []).filter(t => t.label !== name)
+    return [...rest, { id, label: name, body: String(body || '') }]
+}
+
+export const removeTemplate = (list, id) => (list || []).filter(t => t.id !== id)
+
+/** A user template as the chips use it (a body function, like the built-ins). */
+export const asTemplate = (t) => ({ id: t.id, label: t.label, hint: 'Your template', body: () => t.body, own: true })
+
+// ---- export ----
+
+/** A Doc as a Markdown file, with frontmatter (spec §13.3.3). */
+export function docMarkdown(title, body, now = new Date().toISOString()) {
+    const q = (s) => (/[:#'"]/.test(s) || s !== s.trim() ? `'${s.replace(/'/g, "''")}'` : s)
+    return `---\ntitle: ${q(String(title || 'Doc'))}\nexported_at: ${now}\nsource: siddran board doc\n---\n\n${body || ''}`
+}

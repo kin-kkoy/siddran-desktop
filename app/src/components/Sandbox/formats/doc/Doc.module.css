@@ -28,6 +28,21 @@
     -webkit-user-select: none;
     user-select: none;
 }
+.ownTemplate { display: inline-flex; align-items: center; }
+.ownTemplate .template { border-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.templateDrop {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    padding: 0 4px;
+    border: 1px dashed var(--border-default);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.templateDrop:hover { color: var(--accent-danger); background-color: var(--bg-hover); }
 .templatesHead { color: var(--text-muted); margin-right: 2px; }
 .template {
     padding: 3px 10px;

@@ -52,3 +52,27 @@ describe('templates', () => {
         expect(templateTitle('blank', 'Doc')).toBe('Doc')
     })
 })
+
+describe('your own templates', () => {
+    it('saves, replaces by name, removes', async () => {
+        const { saveTemplate, removeTemplate, userTemplates, asTemplate } = await import('./doc')
+        let l = saveTemplate([], ' Weekly ', '# W', 'a')
+        expect(l).toEqual([{ id: 'a', label: 'Weekly', body: '# W' }])
+        l = saveTemplate(l, 'Weekly', '# W2', 'b')
+        expect(l).toEqual([{ id: 'b', label: 'Weekly', body: '# W2' }])
+        l = saveTemplate(l, '', 'x', 'c')
+        expect(l.map(t => t.label)).toEqual(['Weekly', 'My template'])
+        expect(removeTemplate(l, 'b').map(t => t.id)).toEqual(['c'])
+        expect(userTemplates({ docTemplates: [...l, null, { id: 'z' }] })).toHaveLength(2)
+        expect(userTemplates({})).toEqual([])
+        expect(asTemplate(l[0]).body()).toBe('# W2')
+    })
+})
+
+describe('docMarkdown', () => {
+    it('adds frontmatter, quoting a title that needs it', async () => {
+        const { docMarkdown } = await import('./doc')
+        expect(docMarkdown('Plan', '# Hi', 'T')).toBe("---\ntitle: Plan\nexported_at: T\nsource: siddran board doc\n---\n\n# Hi")
+        expect(docMarkdown("Q3: Bob's", '', 'T')).toContain("title: 'Q3: Bob''s'")
+    })
+})

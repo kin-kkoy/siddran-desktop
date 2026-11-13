@@ -195,7 +195,8 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
       hands-on check.
 - [x] **8 · Doc:** a rich-text block on the canvas. Consider reusing the notes
       editor (CodeMirror), or embedding a real note as the Doc (§13.3).
-      ✅ built (session 8, branch `whiteboard-doc`) — awaiting the user's hands-on check.
+      ✅ built (session 8, branch `whiteboard-doc`). Round 1 checked by the user;
+      round 2 (slash fix, export, your templates, image folder) awaiting their check.
 - [ ] **9 · Slides:** frames as slides plus a presentation mode with
       F5/arrows/Esc (§11.8, §13.10).
 - [ ] **10 · Prototype:** screens with click-through hotspots and a preview
@@ -1343,3 +1344,54 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     6. Enter for full screen; Esc, Esc. Floating bar −/+ text size.
     7. Ctrl+F inside a Doc; mouse wheel over a long Doc.
     8. Drop a sticky on a Doc and move the Doc (it should carry it).
+- 2026-11-13 · session 8 · **Doc, round 2** (the user checked round 1: all
+  fine except the slash menu). Suggestion mode, mentions and comments are
+  dropped (user's decision). Doc → Slides waits for the merge with section 9.
+  - **Bug: "/" on a new line showed nothing** (after a word it worked). The
+    list opened but CodeMirror hid it. The notes editor's fold gutter is
+    "fixed", so CodeMirror counts it as a scroll margin and hides any tooltip
+    anchored over it, i.e. the first ~20 px of every line, where the theme
+    pulls the gutter into the padding. Un-fixing the gutter shifted the Notes
+    text 25 px, so it was reverted. The slash menu is now its own tooltip
+    with `clip: false` (`formats/doc/slash.js`: a state field, its keys
+    ↑/↓ Enter Tab Esc, and the completion list's classes), passed in through
+    a new `extraExtensions` prop on CodeMirrorEditor. The Doc no longer adds
+    a completion source, so cm/wikilinks.js is back to the base. Esc closes
+    it until the next "/". **Same trap in Notes:** a `[[` typed at column 0
+    is likely hidden the same way (not fixed here; Notes is untouched).
+  - **⋯ menu** in the Doc's title bar: Export as Markdown (frontmatter:
+    title, exported_at; the Notes download helper), Export as PDF (the Notes
+    `printNoteToPdf`), **Save as a template** (a name, defaulting to the
+    title; the same name replaces it). Your templates live in the Bag's
+    settings (`settings.docTemplates`, saved at once through PUT /settings,
+    since the Settings window only saves on close). Every empty Doc offers
+    them after the built-ins, each with a × to remove it.
+  - **Pasted/dropped images** used to land in `attachments/<the last open
+    note>/`. Now `localStore.setAttachmentTarget` (set while a Doc's text
+    has focus) sends them to `attachments/_boards/` (own Doc) or the linked
+    note's folder.
+  - Not built: board search for Doc text (there is no board/global search
+    over board contents), the "split at 80k" offer (we never block typing).
+  - Checks: desktop 741 tests, lint 25, build. `doc2:` walk (new; it stubs
+    print so no dialog opens): the "/" list on screen after a word, on an
+    empty line and on a new line after text; narrowing picks Checklist /
+    Heading 2 / Quote; Enter inserts `- [ ] ` / `## ` / `> `, and the list
+    closes; .md export file `doc-2.md` with frontmatter and body; the PDF
+    page built with the title and both h2s; a saved template appears in a
+    new Doc and fills title + text; × removes it; a pasted PNG went to
+    `attachments/_boards/…` and was linked, with no image on the board.
+    The `doc:` walk still passes in full. Text offset in the editor -4 px
+    (the Notes layout unchanged).
+  - Coordination: sessions 8 and 9 take the dev-app lock with
+    `locked-walk.sh` (lock, backup, a fresh Bag copy, seed, walk,
+    restore, unlock). The two Docs on board d3bef492 in
+    ~/Documents/Siddran-TestBag are the user's own from their check.
+  - **Please try:**
+    1. `/` on an empty line, on a new line after text, after a word. Then
+       ↑/↓, Enter, Esc (then type on: it stays shut until the next `/`).
+    2. ⋯ → Export as Markdown, and Export as PDF. Where does WebKit put the
+       .md file?
+    3. ⋯ → Save as a template "Weekly". Insert a new Doc and pick Weekly;
+       remove it with ×.
+    4. Paste a screenshot into a Doc: it should show inline and go to
+       attachments/_boards/.
