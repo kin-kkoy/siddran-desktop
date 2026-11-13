@@ -153,10 +153,13 @@ const clickHandler = EditorView.domEventHandlers({
   },
 })
 
+// `config.extraSources`: more completion sources sharing this one list (the
+// Sandbox Doc's slash menu). There can be only one `autocompletion({ override })`,
+// so they're assembled here rather than registered separately.
 export function wikilinks(config) {
   return [
     wikilinkConfig.of(config),
-    autocompletion({ override: [wikilinkComplete], activateOnTyping: true, icons: false }),
+    autocompletion({ override: [wikilinkComplete, ...(config.extraSources || [])], activateOnTyping: true, icons: false }),
     // Highest precedence so the open completion list owns Arrow/Enter/Esc; when
     // no completion is active these fall through to caret motion / newline.
     Prec.highest(keymap.of(completionKeymap)),

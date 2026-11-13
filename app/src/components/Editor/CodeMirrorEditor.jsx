@@ -51,6 +51,9 @@ const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000
 //   noteId          stable id (editor is remounted per note via key); draft key
 //   placeholder     empty-state text
 //   interfaceMode   true = read-only
+//   saveDelay       ms: also save this long after the last keystroke (the
+//                   Sandbox Doc; notes keep the 2-minute interval + blur)
+//   extraCompletions  more completion sources (the Doc's slash menu)
 function CodeMirrorEditor({
   initialContent = '',
   externalBody,
@@ -82,6 +85,8 @@ function CodeMirrorEditor({
   onCommentClick,
   commentApiRef,
   onComment,
+  saveDelay,
+  extraCompletions,
 }) {
   const hostRef = useRef(null)
   const rootRef = useRef(null)
@@ -189,6 +194,7 @@ function CodeMirrorEditor({
     // reads the store on the next mode switch). A pure doc edit shifts where folds
     // sit, so refresh the stored line numbers on a debounce to keep them current.
     let foldSaveTimer = null
+    let idleSaveTimer = null
     const persistFolds = () => {
       if (!rememberRef.current || !viewRef.current) return
       writeFolds(noteId, foldedLineSet(viewRef.current.state))
@@ -212,6 +218,10 @@ function CodeMirrorEditor({
       // Report remapped comment anchors (offsets + fresh quotes + orphan flags).
       if (onCommentsRemapRef.current) onCommentsRemapRef.current(readAnchors(u.state))
       if (!dirtyRef.current) { dirtyRef.current = true; onDirtyRef.current?.(true) }
+      if (saveDelay) {
+        if (idleSaveTimer) clearTimeout(idleSaveTimer)
+        idleSaveTimer = setTimeout(saveBackend, saveDelay)
+      }
     })
 
     // Checkbox toggle from its rendered widget + save-on-blur.
@@ -292,6 +302,7 @@ function CodeMirrorEditor({
             tasks: () => tasksRef.current,
             bundles: () => bundlesRef.current,
             sandboxes: () => sandboxesRef.current,
+            extraSources: extraCompletions,
           }),
           calcGhostText,
           commentsExtension({
@@ -364,6 +375,7 @@ function CodeMirrorEditor({
       window.removeEventListener('siddran:flush-editors', onFlushRequest)
       clearInterval(autosaveTimer)
       if (foldSaveTimer) clearTimeout(foldSaveTimer)
+      if (idleSaveTimer) clearTimeout(idleSaveTimer)
       // Flush to the Bag on unmount so edits persist to disk across navigation.
       // (In-session remounts are already covered by NotePage's doc cache.)
       if (dirtyRef.current) {
