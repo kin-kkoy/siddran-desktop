@@ -62,6 +62,14 @@ done, so the next session knows where things stand.
    (decided 2026-11-13). One file: the CLI carries it, undo works as for
    everything else, and a copied board keeps its data. No sibling file.
 
+6. **A widget doesn't carry what's underneath it** (2026-11-13). Board shapes
+   paint beneath widgets, so any under one stay put when it moves.
+
+7. **Sticky attachment is a TRIAL, widgets only** (2026-11-13). Frames keep
+   their positional membership for now. If the user likes the trial, extend
+   it to frames. If not, remove it (see the log for what to take out),
+   because things "hanging" off a frame or widget is also nice.
+
 **Check-ins:** the user reviews by hand after **section 2** and after
 **section 5**. Stop at those points and ask them to try it. Other sections can
 run straight on, and the user reviews them at the end.
@@ -610,4 +618,57 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     Table), per-view settings, record reordering (a merge currently keeps
     base order, then new records). **Stopped at the planned check-in;
     section 6 not started.**
+- 2026-11-13 · session 5 · user feedback on section 5: all 9 "please try"
+  items work. #9 answered: a widget doesn't carry what's under it (decision
+  6). Two follow-ups built:
+  - **Sticky attachment + clipping — TRIAL, widgets only** (decision 7;
+    `formats/attach.js`, tested).
+    - A card or smaller widget DROPPED on a widget (or inserted onto one)
+      gets `payload.attachedTo`; dragged off on its own, it detaches. Both
+      are part of the same undo step as the move or insert.
+    - A widget carries what's attached to it (recursively), wherever it
+      hangs. Resizing never detaches. What sticks out past the widget's edge
+      is clipped (CSS `clip-path` on a zero-size wrapper round every card,
+      so attaching never remounts a card — a PDF iframe would reload). The
+      widget shows "+N hidden" while anything is cut off.
+    - Duplicating a widget with its riders re-points the copies at the copy.
+    - Bug found and fixed on the way: moving a widget re-checked its riders
+      on drop, and a card hanging past a shrunk widget's edge (centre
+      outside) was detached. Items that moved with their own widget are now
+      left alone.
+    - **To remove the trial:**
+      - delete `formats/attach.js` and its test;
+      - in SandBoxPage: `addCard` → `act.addItem`, and drop `onMoveEnd`, the
+        clip wrapper and `hiddenOn`;
+      - drop the `onMoveEnd` prop in SelectionOverlay, useCardPointer and the
+        four cards;
+      - in SelectionOverlay startMove, give widgets back positional riders
+        (DOM items above the widget whose centre is inside, as in 4eef61f),
+        or none;
+      - drop the duplicate re-pointing and the `.hiddenBadge` style.
+
+      Old boards keep a harmless `attachedTo` field.
+  - **Text size per widget**: `payload.fontSize` (default 15), set with
+    − n + on the floating bar (any number of widgets selected) or
+    Ctrl+Shift+> / <. The body is sized in em off it; full screen reads 15%
+    larger.
+  - Checked by the probe's `attach:` scenario (this time in a HIDDEN window on
+    an unused workspace, no headless output; frames fall back to 50 ms
+    ticks). All observed:
+    - placing a text card on a widget attaches it;
+    - shrinking past it keeps it attached with "+1 hidden";
+    - moving the widget carries it (still attached, still clipped);
+    - growing shows it whole (badge gone, still attached);
+    - text 15 → 16 → 18;
+    - dragging it off detaches;
+    - Ctrl+Z re-attaches.
+    **What the clipping looks like was NOT seen** (see the next entry); the
+    user checks it by hand.
+  - **Headless trap, twice this session:** creating the headless output
+    moves the user's workspaces 3, 6 and 9 onto it, every time. The app
+    once landed on the user's workspace 10 on HDMI. `grim` of the output then
+    captured the user's browser instead of the app. Those captures were
+    deleted, the output removed and the workspaces checked back. While the
+    user is at the computer, run probes in a hidden window instead
+    (`[workspace 19 silent]`, data only, no screenshots).
 

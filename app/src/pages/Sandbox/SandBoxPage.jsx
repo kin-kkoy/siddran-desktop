@@ -31,6 +31,8 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
+import { attachPatches, clipRect, isClipped } from '../../components/Sandbox/formats/attach'
+import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
 import { isInkTool } from '../../components/Sandbox/ink/presets'
@@ -162,6 +164,15 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
 
     const bump = useCallback(() => { if (sandboxId) touch(sandboxId) }, [sandboxId, touch])
     const nextZ = useCallback(() => items.reduce((m, it) => Math.max(m, it.z_index ?? 0), 0) + 1, [items])
+    // Add a card (or widget): if it lands on a widget it attaches straight away
+    // (formats/attach.js, a trial for widgets) — one undo step for both.
+    const addCard = useCallback((partial) => {
+        beginTransaction()
+        const created = act.addItem(partial)
+        for (const p of attachPatches([created.id], boardItemsNow(sandboxId))) act.updateItem(p.id, { payload: p.payload })
+        endTransaction()
+        return created
+    }, [act, beginTransaction, endTransaction, sandboxId])
 
     // Item buckets, z-sorted for paint order. Strokes + shapes + images share
     // ONE Konva layer so z-order works across all graphic types.
@@ -506,42 +517,43 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         return true
     }, [textTargets, act, beginTransaction, endTransaction, bump])
     const stepTextSize = useCallback((dir) => {
-        const t = textTargets()
+        // Text, shapes with text, and Format widgets (their contents' size).
+        const t = [...textTargets(), ...items.filter(i => canvas.selectedIds.has(i.id) && isFormat(i) && !i.payload?.locked)]
         if (!t.length) return false
         beginTransaction()
         t.forEach(it => {
-            const cur = it.payload?.fontSize || (it.type === 'text' ? 18 : 16)
+            const cur = it.payload?.fontSize || (it.type === 'text' ? 18 : isFormat(it) ? 15 : 16)
             act.updateItem(it.id, { payload: { ...it.payload, fontSize: stepFontSize(cur, dir) } })
         })
         endTransaction()
         bump()
         return true
-    }, [textTargets, act, beginTransaction, endTransaction, bump])
+    }, [textTargets, items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
     const onPickNote = (note) => {
         const w = centerWorld()
-        act.addItem({ type: 'note', x: w.x - 165, y: w.y - 215, w: 330, h: 430, rotation: 0, z_index: nextZ(), payload: { noteId: note.id } })
+        addCard({ type: 'note', x: w.x - 165, y: w.y - 215, w: 330, h: 430, rotation: 0, z_index: nextZ(), payload: { noteId: note.id } })
         setNotePickerOpen(false)
         bump()
         toast.success(`Attached "${note.title || 'Untitled'}"`)
     }
     const onPickTask = (task) => {
         const w = centerWorld()
-        act.addItem({ type: 'task', x: w.x - 110, y: w.y - 55, w: 220, h: 110, rotation: 0, z_index: nextZ(), payload: { taskId: task.id } })
+        addCard({ type: 'task', x: w.x - 110, y: w.y - 55, w: 220, h: 110, rotation: 0, z_index: nextZ(), payload: { taskId: task.id } })
         setTaskPickerOpen(false)
         bump()
         toast.success(`Attached "${task.title || 'Untitled task'}"`)
     }
 
     const onPlaceText = useCallback((world) => {
-        const created = act.addItem({
+        const created = addCard({
             type: 'text', x: world.x, y: world.y, w: 180, h: 44, rotation: 0, z_index: nextZ(),
             payload: { text: '', fontSize: 18, color: canvas.strokeColor },
         })
         canvas.setTool('pointer')
         canvas.selectOnly(created.id)
         bump()
-    }, [act, nextZ, canvas, bump])
+    }, [addCard, nextZ, canvas, bump])
 
     const placeImageFile = useCallback(async (file, world) => {
         let created
@@ -589,9 +601,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         if (!r) return
         const w = 360, h = 460
         const at = centerWorld()
-        act.addItem({ type: 'pdf', x: at.x - w / 2, y: at.y - h / 2, w, h, rotation: 0, z_index: nextZ(), payload: { path: r.path, name: r.name } })
+        addCard({ type: 'pdf', x: at.x - w / 2, y: at.y - h / 2, w, h, rotation: 0, z_index: nextZ(), payload: { path: r.path, name: r.name } })
         bump()
-    }, [act, nextZ, centerWorld, bump])
+    }, [addCard, nextZ, centerWorld, bump])
 
     const toggleMenu = useCallback((m) => setOpenMenu(cur => (cur === m ? null : m)), [])
     const openDiagram = useCallback((source) => { setOpenMenu(null); setDiagram({ source }) }, [])
@@ -677,10 +689,18 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
             : gid ? items.filter(i => i.payload?.groupId === gid).map(i => i.id) : [id]
         canvas.overlayApiRef?.current?.beginMove?.(e, ids)
     }, [canvas, items, onSelect])
+    // A drop: anything that moved may now sit on a widget (attach) or have left
+    // one (detach) — formats/attach.js, a trial for widgets only. Called inside
+    // the move's transaction, so it is the same undo step. Reads the store as
+    // it is now: the last move frame hasn't rendered yet.
+    const onMoveEnd = useCallback((ids) => {
+        const patches = attachPatches(ids, boardItemsNow(sandboxId))
+        for (const p of patches) act.updateItem(p.id, { payload: p.payload })
+    }, [sandboxId, act])
     const insertFormat = useCallback((view = 'table') => {
         const c = centerWorld()
         const { w, h } = FORMAT_SIZE
-        const created = act.addItem({
+        const created = addCard({
             type: 'shape', x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w, h, rotation: 0, z_index: nextZ(),
             payload: formatPayload(view, nextFormatTitle(items, view)),
         })
@@ -688,7 +708,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         canvas.setTool('pointer')
         canvas.selectOnly(created.id)
         bump()
-    }, [centerWorld, act, nextZ, items, canvas, bump])
+    }, [centerWorld, addCard, nextZ, items, canvas, bump])
     // A full-screen widget that goes away (undo, the CLI) takes focus mode with it,
     // or the page would go on ignoring keys.
     useEffect(() => {
@@ -708,11 +728,15 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         const base = nextZ()
         const newIds = []
         const regroup = new Map()   // a duplicated group becomes a new group, not a member of the old one
+        // A copied widget's copied riders attach to the copy, not the original.
+        const newIdOf = new Map(sel.map(it => [it.id, newSandboxItemId()]))
         sel.forEach((it, i) => {
             const gid = it.payload?.groupId
             if (gid && !regroup.has(gid)) regroup.set(gid, newSandboxItemId())
-            const payload = gid ? { ...it.payload, groupId: regroup.get(gid) } : it.payload
-            const created = act.addItem({ ...it, id: undefined, payload, x: it.x + 16, y: it.y + 16, z_index: base + i })
+            let payload = gid ? { ...it.payload, groupId: regroup.get(gid) } : it.payload
+            const att = it.payload?.attachedTo
+            if (att && newIdOf.has(att)) payload = { ...payload, attachedTo: newIdOf.get(att) }
+            const created = act.addItem({ ...it, id: newIdOf.get(it.id), payload, x: it.x + 16, y: it.y + 16, z_index: base + i })
             newIds.push(created.id)
         })
         endTransaction()
@@ -847,24 +871,42 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         )
     }
 
-    const cardEls = cardItems.map(item => {
+    // Things attached to a widget are clipped to it (formats/attach.js); a
+    // widget shows how many of its riders are partly hidden.
+    const clipOf = new Map()
+    const hiddenOn = new Map()
+    for (const it of cardItems) {
+        const r = it.payload?.attachedTo ? clipRect(it, itemsById) : null
+        if (!r) continue
+        clipOf.set(it.id, r)
+        if (isClipped(it, r)) hiddenOn.set(it.payload.attachedTo, (hiddenOn.get(it.payload.attachedTo) || 0) + 1)
+    }
+    const cardEl = (item) => {
         if (isFormat(item)) {
-            return <FormatWidget key={item.id} item={item} tool={canvas.tool}
+            return <FormatWidget item={item} tool={canvas.tool}
                 selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
+                hiddenCount={hiddenOn.get(item.id) || 0}
                 onSelect={onSelect} onGrab={onGrabFormat} onRemove={onErase} onCommit={onCommitFormat}
                 onOpenFocus={openFormatFocus} onRenameDone={endFormatRename} />
         }
         const shared = {
             item, zoom: canvas.viewport.zoom, tool: canvas.tool,
             selected: canvas.selectedIds.has(item.id), onSelect,
-            onUpdate: act.updateItem, onRemove: onErase, beginTransaction, endTransaction,
+            onUpdate: act.updateItem, onRemove: onErase, beginTransaction, endTransaction, onMoveEnd,
         }
-        if (item.type === 'note') return <AttachedNoteCard key={item.id} {...shared} notes={notes} />
-        if (item.type === 'task') return <AttachedTaskCard key={item.id} {...shared} tasks={tasks} onToggleTask={toggleTaskCompletion} />
-        if (item.type === 'pdf') return <SandboxPdfCard key={item.id} {...shared} />
-        return <TextBoxCard key={item.id} {...shared}
+        if (item.type === 'note') return <AttachedNoteCard {...shared} notes={notes} />
+        if (item.type === 'task') return <AttachedTaskCard {...shared} tasks={tasks} onToggleTask={toggleTaskCompletion} />
+        if (item.type === 'pdf') return <SandboxPdfCard {...shared} />
+        return <TextBoxCard {...shared}
             onAutoSize={(id, h) => base.updateItem(id, { h })}
             editRequest={textEditReq?.id === item.id ? textEditReq.n : 0} />
+    }
+    // Every card sits in a zero-size wrapper, clipped or not, so attaching or
+    // detaching never remounts it (a remounted PDF iframe reloads — or worse).
+    const cardEls = cardItems.map(item => {
+        const r = clipOf.get(item.id)
+        const clip = r ? `polygon(${r.x}px ${r.y}px, ${r.x + r.w}px ${r.y}px, ${r.x + r.w}px ${r.y + r.h}px, ${r.x}px ${r.y + r.h}px)` : undefined
+        return <div key={item.id} style={{ position: 'absolute', left: 0, top: 0, clipPath: clip }}>{cardEl(item)}</div>
     })
 
     return (
@@ -977,6 +1019,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onCreateConnector={onCreateConnector}
                             onQuickAdd={(id, side) => flow.createNext(id, side)}
                             onQuickAddAt={flow.createConnectedAt}
+                            onMoveEnd={onMoveEnd}
                         />
                     }
                     contextToolbar={

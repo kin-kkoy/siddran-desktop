@@ -90,6 +90,8 @@
     min-height: 0;
     overflow: auto;
     padding: 6px 8px 8px;
+    /* Everything in the body is sized in em off the widget's text size. */
+    font-size: var(--fmt-font, 15px);
 }
 
 /* ── the plain list ── */
@@ -98,7 +100,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 30px;
+    min-height: 2em;
     padding: 0 6px;
     border-radius: 6px;
 }
@@ -109,8 +111,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 1.07em;
+    height: 1.07em;
     padding: 0;
     border: 1.5px solid var(--border-strong);
     border-radius: 50%;
@@ -123,7 +125,7 @@
 .titleInput {
     flex: 1;
     min-width: 0;
-    font: 15px var(--font-body);
+    font: 1em var(--font-body);
     color: var(--text-primary);
     background: transparent;
     border: 1px solid transparent;
@@ -137,13 +139,13 @@
 .titleInput:disabled { color: var(--text-primary); }
 .chip {
     flex: none;
-    max-width: 110px;
+    max-width: 7.3em;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     padding: 1px 7px;
     border-radius: 9px;
-    font: 10.5px var(--font-mono);
+    font: 0.7em var(--font-mono);
     color: var(--text-secondary);
     background-color: var(--bg-elevated);
     border: 1px solid var(--border-default);
@@ -167,7 +169,7 @@
 .rowRemove:hover { color: var(--accent-danger); background-color: rgba(224, 92, 92, 0.12); }
 .addInput {
     margin-top: 4px;
-    font: 14px var(--font-body);
+    font: 0.93em var(--font-body);
     color: var(--text-primary);
     background: transparent;
     border: 1px dashed var(--border-strong);
@@ -178,7 +180,7 @@
     user-select: text;
 }
 .addInput:focus { border-style: solid; border-color: var(--accent-warning); }
-.empty { padding: 14px 8px; font-size: 14px; color: var(--text-muted); font-style: italic; }
+.empty { padding: 14px 8px; font-size: 0.93em; color: var(--text-muted); font-style: italic; }
 
 /* ── the source menu (portalled) ── */
 .menu {
@@ -258,6 +260,19 @@
 }
 .focusPanel .bar { height: 44px; padding: 0 10px 0 16px; cursor: default; }
 .focusPanel .barTitle { font-size: 16px; }
-.focusPanel .body { padding: 10px 16px 16px; }
-.focusPanel .titleInput { font-size: 17px; }
-.focusPanel .row { min-height: 36px; }
+/* Full screen reads a little larger than the widget's own size. */
+.focusPanel .body { padding: 10px 16px 16px; font-size: calc(var(--fmt-font, 15px) * 1.15); }
+
+/* Things attached to the widget but cut off by its edge. */
+.hiddenBadge {
+    position: absolute;
+    right: 8px;
+    bottom: 6px;
+    padding: 1px 8px;
+    border-radius: 9px;
+    font: 10.5px var(--font-mono);
+    color: var(--accent-warning);
+    background-color: var(--bg-elevated);
+    border: 1px solid rgba(240, 184, 64, 0.4);
+    pointer-events: none;
+}

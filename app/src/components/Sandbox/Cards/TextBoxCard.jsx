@@ -12,7 +12,7 @@ import { cssTextStyle } from '../text/textStyle'
  * dragging/selection don't fire, and the isEditable keyboard guard keeps canvas
  * shortcuts from stealing keystrokes.
  */
-function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, tool, selected, onSelect, beginTransaction, endTransaction }) {
+function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd }) {
     const p = item.payload || {}
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState(p.text || '')
@@ -29,7 +29,7 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
     }, [editing, draft, p.fontSize, p.fontFamily, p.lineHeight])
 
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
-        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction,
+        item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd,
     })
 
     const commit = () => {

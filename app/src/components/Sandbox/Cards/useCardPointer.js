@@ -10,7 +10,7 @@ import { useRef } from 'react'
  * Children that should NOT start a drag/select (links, buttons, edit areas)
  * carry `data-sb-card-title`, a <button>, or `data-sb-noedit`.
  */
-export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction }) {
+export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd }) {
     const elRef = useRef(null)
     const dragRef = useRef(null)
 
@@ -56,7 +56,10 @@ export function useCardPointer({ item, tool, zoom, onSelect, onUpdate, onRemove,
         if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0 }
         dragRef.current = null
         elRef.current?.releasePointerCapture?.(e.pointerId)
-        if (d.moved) onUpdate(item.id, { x: d.lastX, y: d.lastY })
+        if (d.moved) {
+            onUpdate(item.id, { x: d.lastX, y: d.lastY })
+            onMoveEnd?.([item.id])   // dropped: attach to / detach from a widget (formats/attach.js), same undo step
+        }
         endTransaction?.()
     }
 

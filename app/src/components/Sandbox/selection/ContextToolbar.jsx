@@ -463,6 +463,20 @@ function ContextToolbar({
                     </>
                 )}
 
+                {formats.length > 0 && formats.length === boxItems.length && !locked && (() => {
+                    // The size of the widgets' contents (Ctrl+Shift+> / <).
+                    const size = formats[0].payload?.fontSize || 15
+                    return (
+                        <>
+                            <button className={styles.stepBtn} onClick={() => patchItems(formats, { fontSize: stepFontSize(size, -1) })}
+                                title="Smaller text (Ctrl+Shift+<)" aria-label="Smaller text">−</button>
+                            <span className={styles.stepValue} title="Text size">{size}</span>
+                            <button className={styles.stepBtn} onClick={() => patchItems(formats, { fontSize: stepFontSize(size, 1) })}
+                                title="Bigger text (Ctrl+Shift+>)" aria-label="Bigger text">+</button>
+                            <div className={styles.sep} />
+                        </>
+                    )
+                })()}
                 {formats.length === 1 && selectedCount === 1 && (
                     <>
                         <button className={styles.btn} onClick={() => onOpenFormat?.(formats[0].id)} title="Full screen (Enter)" aria-label="Full screen">

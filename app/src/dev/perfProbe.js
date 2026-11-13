@@ -2,6 +2,7 @@
 // they never ship:
 //   drag:<boardId>   — drag smoothness (below)
 //   format:<boardId> — a scripted walk through a Format widget (runFormat)
+//   attach:<boardId> — sticky attachment, clipping and text size (runAttach)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
 // Hyprland has no click/move dispatcher) and samples, per frame:
@@ -16,7 +17,8 @@ const [, boardId] = spec.split(':')
 
 const send = (name, data) => fetch(SINK, { method: 'POST', body: JSON.stringify({ name, data }) }).catch(() => {})
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-const frame = () => new Promise(r => requestAnimationFrame(r))
+// A frame — or 50 ms, for a window that isn't on screen (no frames come then).
+const frame = () => Promise.race([new Promise(r => requestAnimationFrame(r)), sleep(50)])
 async function waitFor(fn, ms = 30000) {
     const t0 = performance.now()
     for (;;) {
@@ -161,7 +163,7 @@ const setInput = (el, v) => {
 const enter = (el) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 const cached = () => { try { return JSON.parse(localStorage.getItem(`cinder_sandbox_${boardId}`) || '{}').items || [] } catch { return [] } }
 const boxOf = (it) => it && { x: Math.round(it.x), y: Math.round(it.y), w: Math.round(it.w), h: Math.round(it.h), z: it.z_index }
-async function step(name, data) { send('step', { name, ...data }); await sleep(3000) }
+async function step(name, data) { send('step', { name, ...data }); await sleep(Number(import.meta.env.VITE_PERF_STEP_MS ?? 3000)) }
 
 async function runFormat() {
     await waitFor(() => document.querySelector('#root')?.children.length)
@@ -255,5 +257,99 @@ async function runFormat() {
     send('done', true)
 }
 
+// ── attach:<boardId> — sticky attachment + clipping + text size (session 5 follow-up).
+async function dragEl(el, x, y, dx, dy, n = 20) {
+    el.dispatchEvent(ptr('pointerdown', x, y))
+    for (let i = 1; i <= n; i++) { await frame(); const e = ptr('pointermove', x + dx * i / n, y + dy * i / n); el.dispatchEvent(e); window.dispatchEvent(e) }
+    const up = ptr('pointerup', x + dx, y + dy)
+    el.dispatchEvent(up); window.dispatchEvent(up)
+    await sleep(700)
+}
+async function runAttach() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Table')?.click(); await sleep(1000)
+    // The widget this run inserted: the newest one (the Bag may hold others).
+    const fmt = () => cached().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const widget = () => document.querySelector(`[data-sb-id="${fmt()?.id}"]`)
+    const add = widget().querySelector('input[placeholder="+ Add a record"]')
+    for (const t of ['Plan the week', 'Make the stock', 'Write the tracker']) { add.focus(); setInput(add, t); enter(add); await sleep(300) }
+    add.blur()
+    // A text card placed on the widget's lower right — attaches as it lands.
+    let wr = widget().getBoundingClientRect()
+    key('t'); await sleep(300)
+    const kc = stage.content.querySelector('canvas')
+    kc.dispatchEvent(ptr('pointerdown', wr.right - 170, wr.bottom - 60)); kc.dispatchEvent(ptr('pointerup', wr.right - 170, wr.bottom - 60))
+    await sleep(500)
+    const ta = document.activeElement
+    if (ta && ta.tagName === 'TEXTAREA') { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'A note pinned here'); ta.dispatchEvent(new Event('input', { bubbles: true })) }
+    ta?.blur?.(); key('Escape'); await sleep(600)
+    const text = () => cached().filter(i => i.type === 'text').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    await step('placed', { attachedTo: text()?.payload?.attachedTo, widget: fmt()?.id })
+
+    // Shrink the widget from its bottom-right corner past the card.
+    widget().querySelector('header').dispatchEvent(ptr('pointerdown', wr.left + 60, wr.top + 10)); window.dispatchEvent(ptr('pointerup', wr.left + 60, wr.top + 10))
+    await sleep(500)
+    wr = widget().getBoundingClientRect()
+    let se = [...document.querySelectorAll('svg rect')].find(r => r.style.cursor === 'nwse-resize' && r.getBoundingClientRect().top > wr.top + wr.height / 2)
+    let r0 = se.getBoundingClientRect()
+    await dragEl(se, r0.left + 4, r0.top + 4, -150, -110)
+    await step('shrunk', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent })
+
+    // Move the shrunk widget: the clipped card rides along.
+    const t0 = boxOf(text()), f0 = boxOf(fmt())
+    const hb = widget().querySelector('header').getBoundingClientRect()
+    await dragEl(widget().querySelector('header'), hb.left + 40, hb.top + 10, -200, 60)
+    const t1 = boxOf(text()), f1 = boxOf(fmt())
+    await step('moved', { widgetMoved: [f1.x - f0.x, f1.y - f0.y], textMoved: [t1.x - t0.x, t1.y - t0.y], stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent || null })
+
+    // Zoomed out, the clip still lines up.
+    stage.container().parentElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, clientX: hb.left, clientY: hb.top, bubbles: true, cancelable: true }))
+    await sleep(600)
+    await step('zoomed', { zoom: stage.scaleX() })
+    stage.container().parentElement.dispatchEvent(new WheelEvent('wheel', { deltaY: -240, clientX: hb.left, clientY: hb.top, bubbles: true, cancelable: true }))
+    await sleep(600)
+
+    // Grow it back: the card shows whole again.
+    wr = widget().getBoundingClientRect()
+    se = [...document.querySelectorAll('svg rect')].find(r => r.style.cursor === 'nwse-resize' && r.getBoundingClientRect().top > wr.top + wr.height / 2)
+    r0 = se.getBoundingClientRect()
+    await dragEl(se, r0.left + 4, r0.top + 4, 220, 160)
+    await step('grown', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent || null })
+
+    // Bigger text, twice (Ctrl+Shift+>).
+    key('>', { ctrlKey: true, shiftKey: true, code: 'Period' }); await sleep(300)
+    key('>', { ctrlKey: true, shiftKey: true, code: 'Period' }); await sleep(500)
+    await step('bigger-text', { fontSize: fmt()?.payload?.fontSize })
+
+    // Drag the card off the widget: it detaches.
+    const card = document.querySelector(`[data-sb-id="${text()?.id}"]`)
+    const cr = card.getBoundingClientRect()
+    await dragEl(card, cr.left + 10, cr.top + 10, wr.width + 200, 0)
+    await step('dragged-off', { attachedTo: text()?.payload?.attachedTo ?? null, box: boxOf(text()), active: document.activeElement?.tagName })
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId).find(i => i.id === text()?.id)?.payload?.attachedTo ?? null
+    const trail = [live()]
+    key('z', { ctrlKey: true })
+    trail.push(live())
+    for (let i = 0; i < 8; i++) { await sleep(75); trail.push(live()) }
+    await step('undo-trail', { trail })
+    await step('undo-drag', { attachedTo: text()?.payload?.attachedTo ?? null, box: boxOf(text()), active: document.activeElement?.tagName })
+    send('done', true)
+}
+
+if (spec.startsWith('attach:') && boardId) runAttach().catch(e => send('error', {
+    message: `${e?.message} @ ${e?.stack}`,
+    widgets: document.querySelectorAll('[data-sb-scrollcard="true"][data-sb-card="true"]').length,
+    withHeader: document.querySelectorAll('[data-sb-card="true"] > header').length,
+    inputs: [...document.querySelectorAll('[data-sb-card="true"] input')].map(i => i.placeholder),
+    formats: cached().filter(i => i.payload?.kind === 'format').map(i => ({ id: i.id, source: i.payload.source, attachedTo: i.payload.attachedTo })),
+    path: location.pathname,
+}))
 if (spec.startsWith('drag:') && boardId) run().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 if (spec.startsWith('format:') && boardId) runFormat().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

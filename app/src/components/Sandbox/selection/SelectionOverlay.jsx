@@ -9,6 +9,7 @@ import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameChildren, frameTitleRect } from '../frames/frames'
 import { isFormat } from '../formats/formats'
+import { attachedItems } from '../formats/attach'
 import { isLineKind } from '../shapes/registry'
 import { lineHandles, dragLineHandle, straightenLine } from './lineHandles'
 
@@ -54,13 +55,9 @@ const HANDLES = {
     w: { opp: 'e', sx: true, sy: false, cursor: 'ew-resize' },
 }
 
-// Drawn in the DOM above the board (cards and Format widgets), not on the Konva stage.
-const DOM_TYPES = new Set(['note', 'task', 'text', 'pdf'])
-const isDomItem = (it) => DOM_TYPES.has(it.type) || isFormat(it)
-
 const clampScale = (s) => (Math.abs(s) < 0.05 ? (s < 0 ? -0.05 : 0.05) : s)
 
-function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt }) {
+function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTransaction, endTransaction, onCreateConnector, onQuickAdd, onQuickAddAt, onMoveEnd }) {
     const rootRef = useRef(null)
     const dragRef = useRef(null)
     const connectorRef = useRef(null)   // active connector drag, separate from transform
@@ -138,11 +135,17 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         lastMoveRef.current = null
         window.removeEventListener('pointermove', onWindowMove)
         window.removeEventListener('pointerup', onWindowUp)
-        const wasPending = dragRef.current.pending
+        const d = dragRef.current
+        const wasPending = d.pending
         dragRef.current = null
         setGuides([])
         // A press that never moved opened nothing (see applyMove) — nothing to close.
-        if (!wasPending) { setGesturing(false); endTransaction() }
+        if (!wasPending) {
+            setGesturing(false)
+            // Dropped: what moved may now sit on (or off) a widget — inside the same undo step.
+            if (d.mode === 'move') onMoveEnd?.(d.snap.map(s => s.id))
+            endTransaction()
+        }
     }
 
     const onWindowUp = () => { flushMove(); endGesture() }
@@ -264,19 +267,15 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         const moving = list.filter(it => it.type !== 'connector' && !it.payload?.locked)
         if (!moving.length) return false
         const selIds = new Set(moving.map(it => it.id))
-        // A frame carries what sits on it, and so does a Format widget. A widget
-        // is a DOM window, so only what shows ON it rides along: cards and
-        // smaller widgets stacked above it. Board shapes always paint beneath
-        // the DOM, so any under a widget are hidden and stay where they are.
-        // Decided now, at grab time, from where things are — not stored — so
-        // there is no membership to keep in sync.
+        // A frame carries what sits on it — decided now, at grab time, from
+        // where things are (not stored), so there is no membership to keep in
+        // sync. A Format widget carries what is ATTACHED to it (stored on drop,
+        // formats/attach.js — a trial, widgets only), wherever it now hangs;
+        // board shapes under a widget never ride.
         const riders = []
-        for (const f of moving.filter(it => isFrame(it) || isFormat(it))) {
-            for (const c of frameChildren(f, items || [])) {
-                if (isFormat(f) && !(isDomItem(c) && (c.z_index ?? 0) > (f.z_index ?? 0))) continue
-                if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) }
-            }
-        }
+        const ride = (c) => { if (!selIds.has(c.id) && !c.payload?.locked) { selIds.add(c.id); riders.push(c) } }
+        for (const f of moving.filter(isFrame)) for (const c of frameChildren(f, items || [])) ride(c)
+        for (const f of [...moving, ...riders].filter(isFormat)) for (const c of attachedItems(f, items || [])) ride(c)
         startGesture(e, {
             mode: 'move',
             baseAABB: unionAABB(moving),

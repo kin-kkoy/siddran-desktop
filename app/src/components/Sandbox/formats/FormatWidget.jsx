@@ -68,7 +68,11 @@ function Chrome({ item, source, focus, renaming, onRenameDone, onToggleFocus, on
     )
 }
 
-function FormatWidget({ item, tool, selected, renaming, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
+// The size of a widget's contents (payload.fontSize, set from the floating bar).
+const FORMAT_FONT = 15
+const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_FONT}px` })
+
+function FormatWidget({ item, tool, selected, renaming, hiddenCount = 0, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
@@ -99,11 +103,16 @@ function FormatWidget({ item, tool, selected, renaming, onSelect, onGrab, onRemo
             data-sb-id={item.id}
             data-sb-scrollcard="true"
             className={`${styles.widget} ${selected ? styles.selected : ''}`}
-            style={{ left: item.x, top: item.y, width: item.w, height: item.h }}
+            style={{ left: item.x, top: item.y, width: item.w, height: item.h, ...fontVar(item) }}
             onPointerDown={onPointerDown}
         >
             <Chrome item={item} source={source} renaming={renaming} onRenameDone={onRename}
                 onToggleFocus={() => onOpenFocus?.(item.id)} onPickSource={onPickSource} onTitlePointerDown={onTitlePointerDown} />
+            {hiddenCount > 0 && (
+                <span className={styles.hiddenBadge} title={`${hiddenCount} thing${hiddenCount > 1 ? 's' : ''} on this widget ${hiddenCount > 1 ? 'are' : 'is'} cut off — make it bigger to see ${hiddenCount > 1 ? 'them' : 'it'}, or drag ${hiddenCount > 1 ? 'them' : 'it'} off`}>
+                    +{hiddenCount} hidden
+                </span>
+            )}
         </div>
     )
 }
@@ -125,7 +134,7 @@ export function FormatFocus({ item, onClose, onCommit }) {
     }, [onClose])
     return createPortal(
         <div className={styles.focusBackdrop} onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-            <div className={styles.focusPanel} role="dialog" aria-label={item.payload?.title || 'Widget'}>
+            <div className={styles.focusPanel} role="dialog" aria-label={item.payload?.title || 'Widget'} style={fontVar(item)}>
                 <Chrome item={item} source={source} focus onToggleFocus={onClose}
                     onPickSource={(s) => commit(p => ({ ...p, source: s }))}
                     onRenameDone={(v) => { if (v && v !== item.payload?.title) commit(p => ({ ...p, title: v })) }} />
