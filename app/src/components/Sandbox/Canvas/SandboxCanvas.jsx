@@ -10,7 +10,8 @@ import OverlayLayer from './OverlayLayer'
 import { strokeOutline } from './strokeOutline'
 import { SHAPE_TOOLS } from '../../../hooks/useSandboxCanvas'
 import { isLineKind } from '../shapes/registry'
-import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon } from '../selection/hitTest'
+import { itemHitTest, marqueeIntersects, normalizeRect, itemAABB, pointInPolygon, nearBoxBorder } from '../selection/hitTest'
+import { lineWorldPoints } from '../selection/lineHandles'
 import { connectorPoints, connectorHitTest } from '../connectors/geometry'
 import { isFrame, frameHit, marqueeTakesFrame } from '../frames/frames'
 import { isFormat } from '../formats/formats'
@@ -200,18 +201,37 @@ function SandboxCanvas({
             const zoom = latestRef.current.canvas.viewport.zoom || 1
             // Format widgets are DOM windows that take their own presses (like cards).
             const sorted = all.filter(i => GRAPHIC_TYPES.has(i.type) && !isFrame(i) && !isFormat(i)).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
-            for (const it of sorted) if (itemHitTest(it, world.x, world.y, 2)) return it
-            // Connectors sit below shapes — test them only when no shape was hit.
+            const tol = 6 / zoom
+            // What actually paints at the point wins. A filled shape, or the
+            // outline of an unfilled one, covers the links beneath it. The empty
+            // middle of an unfilled shape doesn't: a link showing through there
+            // is what you clicked (else the shape, as before). A line or arrow
+            // shape counts only near its line, not anywhere in its box.
+            let hollow = null
+            for (const it of sorted) {
+                const p = it.payload || {}
+                const lineShape = it.type === 'shape' && isLineKind(p.kind) && p.kind !== 'taperedArrow'
+                if (!lineShape && !itemHitTest(it, world.x, world.y, 2)) continue
+                if (lineShape) {
+                    const flat = lineWorldPoints(it).flatMap(q => [q.x, q.y])
+                    if (connectorHitTest(flat, world.x, world.y, tol + (p.strokeWidth || 2) / 2)) return it
+                    continue
+                }
+                const unfilled = it.type === 'shape' && !isLineKind(p.kind) && (!p.fill || p.fill === 'transparent')
+                if (!unfilled || nearBoxBorder(it, world.x, world.y, tol + (p.strokeWidth || 2) / 2)) return it
+                if (!hollow) hollow = it
+            }
+            // Connectors sit below shapes: reached when nothing painted covers the point.
             const connectors = all.filter(i => i.type === 'connector')
             if (connectors.length) {
                 const byId = new Map(all.map(i => [i.id, i]))
-                const tol = 6 / (latestRef.current.canvas.viewport.zoom || 1)
                 const ordered = connectors.sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
                 for (const c of ordered) {
                     const pts = connectorPoints(c, byId)
                     if (pts && connectorHitTest(pts, world.x, world.y, tol)) return c
                 }
             }
+            if (hollow) return hollow
             // Frames paint beneath everything, so they are hit last — and only by
             // their title or border, leaving the interior free for a marquee.
             const frames = all.filter(isFrame).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))

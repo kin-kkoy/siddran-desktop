@@ -88,3 +88,20 @@ export function normalizeRect(x0, y0, x1, y1) {
         h: Math.abs(y1 - y0),
     }
 }
+
+/**
+ * Is the point within `tol` of the item's box border (its oriented bounds)?
+ * Used to tell a click ON an unfilled shape's outline from a click in its
+ * empty middle, where whatever shows through (a link) should be picked.
+ */
+export function nearBoxBorder(item, wx, wy, tol) {
+    const b = getItemBounds(item)
+    const w = Math.abs(b.w), h = Math.abs(b.h)
+    const a = -(b.rotation || 0) * Math.PI / 180
+    const dx = wx - (b.x + w / 2), dy = wy - (b.y + h / 2)
+    const lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a)
+    const ox = Math.abs(lx) - w / 2, oy = Math.abs(ly) - h / 2
+    const dist = (ox > 0 || oy > 0) ? Math.hypot(Math.max(ox, 0), Math.max(oy, 0)) : Math.min(-ox, -oy)
+    return dist <= tol
+}
+

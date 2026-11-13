@@ -13,6 +13,7 @@
 //   doc2:<boardId>   — a Doc: the slash menu at a line start, export, your own templates, image paste (runDoc2)
 //   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
 //   dots:<boardId>   — connection dots: no box without Shift, the drag hint, the rotate knob clear of the top dot (runDots)
+//   hits:<boardId>   — clicks reach links inside an unfilled box; a drawn arrow becomes a curved link (runHits)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
 // It opens a board, then drives drags with synthetic pointer events (headless
@@ -1851,4 +1852,68 @@ async function runDots() {
     send('done', true)
 }
 if (spec.startsWith('dots:') && boardId) runDots().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── hits:<boardId> — what a click picks: a link inside a big unfilled box (not
+// the box), the box's empty middle (the box), a diagonal arrow shape only near
+// its line; then the arrow made into a curved link from the floating bar.
+async function runHits() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const z = stage.scaleX()
+    const c0 = { x: (innerWidth / 2 - stage.x()) / z, y: (innerHeight / 2 - stage.y()) / z }
+    const sh = (x, y, w, h, extra = {}) => store.addItem(boardId, { type: 'shape', x: c0.x + x, y: c0.y + y, w, h, rotation: 0, z_index: 900 + live().length, payload: { kind: 'roundedRect', fill: 'transparent', stroke: '#e2ddf5', strokeWidth: 2, ...extra } })
+    sh(-300, -250, 600, 500)   // the big unfilled container
+    const top = sh(-60, -200, 120, 50)
+    const left = sh(-250, 100, 120, 60), right = sh(130, 100, 120, 60)
+    const conn = store.addItem(boardId, { type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: 2000, payload: { from: { itemId: top.id, side: 's' }, to: { itemId: left.id, side: 'n' }, routing: 'elbow', head: 'arrow', stroke: '#e2ddf5', strokeWidth: 2 } })
+    // A diagonal arrow SHAPE from the top box's bottom edge to the right box's top edge.
+    const a0 = { x: c0.x + 40, y: c0.y - 150 }, a1 = { x: c0.x + 190, y: c0.y + 100 }
+    const arrow = store.addItem(boardId, { type: 'shape', x: a0.x, y: a0.y, w: a1.x - a0.x, h: a1.y - a0.y, rotation: 0, z_index: 2001,
+        payload: { kind: 'arrow', points: [0, 0, a1.x - a0.x, a1.y - a0.y], baseW: a1.x - a0.x, baseH: a1.y - a0.y, stroke: '#5a9cf0', strokeWidth: 2 } })
+    await sleep(900)
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    const kc = stage.content.querySelector('canvas')
+    const click = async (wx, wy) => {
+        key('Escape'); await sleep(250)
+        const p = toClient(wx, wy)
+        kc.dispatchEvent(ptr('pointerdown', p.x, p.y)); window.dispatchEvent(ptr('pointerup', p.x, p.y)); kc.dispatchEvent(ptr('pointerup', p.x, p.y)); await sleep(600)
+        if (document.querySelector('input[aria-label="Arrow label"]')) return 'link'
+        if (document.querySelector('button[title*="makes it a link"]')) return 'arrowShape'
+        if (document.querySelector('select[aria-label="Change shape"]')) return 'box'
+        return 'nothing'
+    }
+    const pts = (await import('../components/Sandbox/connectors/geometry')).connectorPoints(conn, new Map(live().map(i => [i.id, i])))
+    // A point on the link's horizontal run (elbow: down, across, down).
+    const mx = (pts[2] + pts[4]) / 2, my = pts[3]
+    const res = {
+        linkInsideBigBox: await click(mx, my),
+        bigBoxMiddleEmpty: await click(c0.x - 200, c0.y - 150),
+        bigBoxBorder: await click(c0.x - 300, c0.y),
+        nearArrowLine: await click((a0.x + a1.x) / 2, (a0.y + a1.y) / 2),
+        inArrowBoxFarFromLine: await click(a0.x + 130, a0.y + 30),
+    }
+    await step('clicks', res)
+    // Select the arrow shape and make it a curved link.
+    await click((a0.x + a1.x) / 2, (a0.y + a1.y) / 2)
+    const n0 = live().length
+    ;[...document.querySelectorAll('button[title*="makes it a link"]')].find(b => b.title.startsWith('Curved'))?.click(); await sleep(800)
+    const made = live().find(i => i.type === 'connector' && i.id !== conn.id && i.payload?.stroke === '#5a9cf0')
+    await step('converted', { arrowGone: !live().some(i => i.id === arrow.id), countDelta: live().length - n0, routing: made?.payload?.routing,
+        from: made?.payload?.from?.itemId === top.id ? 'top:' + made.payload.from.side : made?.payload?.from,
+        to: made?.payload?.to?.itemId === right.id ? 'right:' + made.payload.to.side : made?.payload?.to,
+        head: made?.payload?.head, selectedIsLink: !!document.querySelector('input[aria-label="Arrow label"]'),
+        curvedActive: document.querySelector('button[aria-label="Curved"]')?.getAttribute('aria-pressed') })
+    // Undo brings the arrow shape back in one step.
+    key('z', { ctrlKey: true }); await sleep(700)
+    await step('undo', { arrowBack: live().some(i => i.id === arrow.id), linkGone: !live().some(i => i.id === made?.id) })
+    send('done', true)
+}
+if (spec.startsWith('hits:') && boardId) runHits().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 

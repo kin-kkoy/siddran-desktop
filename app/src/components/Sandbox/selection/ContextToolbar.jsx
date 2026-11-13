@@ -23,6 +23,7 @@ import { SHAPES, SHAPE_GROUPS, shapesInGroup, isLineKind } from '../shapes/regis
 import { FONT_FAMILIES, FONT_SIZES, TEXT_PRESETS, stepFontSize, STICKY_COLORS } from '../text/textStyle'
 import { isFrame, FRAME_FILLS } from '../frames/frames'
 import { isFormat } from '../formats/formats'
+import { convertibleLine } from '../connectors/fromLine'
 import { CustomColor } from '../Toolbar/ColorMenu'
 
 /**
@@ -141,6 +142,7 @@ function ContextToolbar({
     slideActions,       // frames ⇄ slides, slide size, new slide, present (slides/SlideButtons)
     onEditText,
     onRevertInk,        // (id) — a smart-drawn shape back to the ink it came from
+    onLineToConnector,  // (routing) — the selected line/arrow shapes become links with that routing
     beginTransaction,
     endTransaction,
     editingShapeId,
@@ -454,6 +456,18 @@ function ContextToolbar({
                         <button className={shapeStyle !== 'solid' ? styles.btnActive : styles.btn}
                             onClick={() => patchItems(lineShapes, { lineStyle: nextShapeStyle })}
                             title={`Line: ${shapeStyle}`} aria-label="Line style">{LINE_GLYPH[shapeStyle]}</button>
+                        {/* A drawn line/arrow has loose ends. Picking a route makes it a
+                            real link (connectors/fromLine.js): attached to the boxes its
+                            ends touch, following them, and straight / elbow / curved. */}
+                        {onLineToConnector && lineShapes.some(convertibleLine) && (
+                            <>
+                                <div className={styles.sep} />
+                                {ROUTINGS.map(r => (
+                                    <button key={r.v} className={styles.btn} onClick={() => onLineToConnector(r.v)}
+                                        title={`${r.title} — makes it a link that follows the boxes it touches`} aria-label={r.title}>{r.label}</button>
+                                ))}
+                            </>
+                        )}
                         <div className={styles.sep} />
                     </>
                 )}

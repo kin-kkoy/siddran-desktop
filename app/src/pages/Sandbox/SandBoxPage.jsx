@@ -26,6 +26,7 @@ import { unionAABB } from '../../components/Sandbox/selection/snapping'
 import { exportStagePNG } from '../../components/Sandbox/Canvas/exportImage'
 import ShortcutsModal from '../../components/Sandbox/Toolbar/ShortcutsModal'
 import DiagramModal from '../../components/Sandbox/flow/DiagramModal'
+import { connectorFromLine, convertibleLine } from '../../components/Sandbox/connectors/fromLine'
 import TemplatesModal from '../../components/Sandbox/templates/TemplatesModal'
 import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
@@ -324,6 +325,23 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         })
         bump()
     }, [act, nextZ, canvas, bump])
+
+    // A drawn line/arrow → a real link with that routing (connectors/fromLine.js),
+    // one undo step; the new links take over the selection.
+    const lineToConnector = useCallback((routing) => {
+        const lines = items.filter(i => canvas.selectedIds.has(i.id) && convertibleLine(i))
+        if (!lines.length) return
+        const made = []
+        beginTransaction()
+        for (const it of lines) {
+            const conn = connectorFromLine(it, items, routing)
+            act.removeItem(it.id)
+            made.push(act.addItem({ ...conn, z_index: it.z_index ?? nextZ() }))
+        }
+        endTransaction()
+        canvas.setSelection(new Set(made.filter(Boolean).map(c => c.id)))
+        bump()
+    }, [items, canvas, act, beginTransaction, endTransaction, nextZ, bump])
 
     // ---- selection ----
     const onSelect = useCallback((id, additive) => {
@@ -1196,6 +1214,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             slideActions={slideActions}
                             onEditText={onEditText}
                             onRevertInk={revertToInk}
+                            onLineToConnector={lineToConnector}
                             beginTransaction={beginTransaction}
                             endTransaction={endTransaction}
                             editingShapeId={editingShapeId}
