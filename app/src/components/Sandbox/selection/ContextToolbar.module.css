@@ -10,7 +10,9 @@
     gap: 0;
     padding: 7px 11px;
     background-color: rgb(18, 18, 30);
-    border: 1px solid var(--border-default);
+    /* High-contrast outline so the bar stands out in a bright room too:
+       white on dark themes, black on light ones. */
+    border: 1px solid var(--outline-contrast, #ffffff);
     border-radius: 14px;
     /* No backdrop-filter, no transform, no lingering animation: each puts the
        bar on its own compositing layer, and on a fractionally-scaled display

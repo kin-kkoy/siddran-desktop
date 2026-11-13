@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { attachedItems, attachTarget, attachPatches, clipRect, isClipped } from './attach'
+import { attachedItems, attachTarget, attachPatches, clipRect, isClipped, clipState } from './attach'
 
 const widget = (id, x, y, w, h, z, extra = {}) => ({ id, type: 'shape', x, y, w, h, rotation: 0, z_index: z, payload: { kind: 'format', ...extra } })
 const card = (id, x, y, w, h, z, extra = {}) => ({ id, type: 'note', x, y, w, h, rotation: 0, z_index: z, payload: { noteId: 1, ...extra } })
@@ -51,6 +51,8 @@ describe('sticky attachment to a widget', () => {
     expect(clipRect(c, byId)).toEqual({ x: 0, y: 0, w: 120, h: 120 })
     expect(isClipped(c, clipRect(c, byId))).toBe(true)
     expect(isClipped(card('D', 10, 10, 50, 50, 2), { x: 0, y: 0, w: 120, h: 120 })).toBe(false)
+    expect(clipState(c, { x: 0, y: 0, w: 120, h: 120 })).toBe('cropped')
+    expect(clipState(card('E', 300, 300, 50, 50, 2), { x: 0, y: 0, w: 120, h: 120 })).toBe('hidden')
     const inner = widget('I', 60, 60, 200, 200, 2, { attachedTo: 'W' })
     const d = card('D', 70, 70, 10, 10, 3, { attachedTo: 'I' })
     expect(clipRect(d, new Map([small, inner, d].map(i => [i.id, i])))).toEqual({ x: 60, y: 60, w: 60, h: 60 })

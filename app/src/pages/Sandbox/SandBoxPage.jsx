@@ -31,7 +31,7 @@ import FrameTitleEditor from '../../components/Sandbox/frames/FrameTitleEditor'
 import { isFrame, framePayload, nextFrameTitle } from '../../components/Sandbox/frames/frames'
 import { isFormat, formatPayload, nextFormatTitle, FORMAT_SIZE } from '../../components/Sandbox/formats/formats'
 import FormatWidget, { FormatFocus } from '../../components/Sandbox/formats/FormatWidget'
-import { attachPatches, clipRect, isClipped } from '../../components/Sandbox/formats/attach'
+import { attachPatches, clipRect, clipState } from '../../components/Sandbox/formats/attach'
 import { getSnapshot as boardItemsNow } from '../../hooks/sandboxItemsStore'
 import { STICKY_DEFAULT, stepFontSize } from '../../components/Sandbox/text/textStyle'
 import { newSandboxItemId } from '../../hooks/useSandbox'
@@ -872,20 +872,24 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
     }
 
     // Things attached to a widget are clipped to it (formats/attach.js); a
-    // widget shows how many of its riders are partly hidden.
+    // widget counts its riders that are cropped (partly showing) or out of view.
     const clipOf = new Map()
-    const hiddenOn = new Map()
+    const cutOn = new Map()   // widget id → { cropped, hidden }
     for (const it of cardItems) {
         const r = it.payload?.attachedTo ? clipRect(it, itemsById) : null
         if (!r) continue
         clipOf.set(it.id, r)
-        if (isClipped(it, r)) hiddenOn.set(it.payload.attachedTo, (hiddenOn.get(it.payload.attachedTo) || 0) + 1)
+        const st = clipState(it, r)
+        if (!st) continue
+        const c = cutOn.get(it.payload.attachedTo) || { cropped: 0, hidden: 0 }
+        c[st] += 1
+        cutOn.set(it.payload.attachedTo, c)
     }
     const cardEl = (item) => {
         if (isFormat(item)) {
             return <FormatWidget item={item} tool={canvas.tool}
                 selected={canvas.selectedIds.has(item.id)} renaming={renamingFormatId === item.id}
-                hiddenCount={hiddenOn.get(item.id) || 0}
+                cut={cutOn.get(item.id)}
                 onSelect={onSelect} onGrab={onGrabFormat} onRemove={onErase} onCommit={onCommitFormat}
                 onOpenFocus={openFormatFocus} onRenameDone={endFormatRename} />
         }

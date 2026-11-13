@@ -299,14 +299,14 @@ async function runAttach() {
     let se = [...document.querySelectorAll('svg rect')].find(r => r.style.cursor === 'nwse-resize' && r.getBoundingClientRect().top > wr.top + wr.height / 2)
     let r0 = se.getBoundingClientRect()
     await dragEl(se, r0.left + 4, r0.top + 4, -150, -110)
-    await step('shrunk', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent })
+    await step('shrunk', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget()?.querySelector('[class*="hiddenBadge"]')?.textContent })
 
     // Move the shrunk widget: the clipped card rides along.
     const t0 = boxOf(text()), f0 = boxOf(fmt())
     const hb = widget().querySelector('header').getBoundingClientRect()
     await dragEl(widget().querySelector('header'), hb.left + 40, hb.top + 10, -200, 60)
     const t1 = boxOf(text()), f1 = boxOf(fmt())
-    await step('moved', { widgetMoved: [f1.x - f0.x, f1.y - f0.y], textMoved: [t1.x - t0.x, t1.y - t0.y], stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent || null })
+    await step('moved', { widgetMoved: [f1.x - f0.x, f1.y - f0.y], textMoved: [t1.x - t0.x, t1.y - t0.y], stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget()?.querySelector('[class*="hiddenBadge"]')?.textContent || null })
 
     // Zoomed out, the clip still lines up.
     stage.container().parentElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, clientX: hb.left, clientY: hb.top, bubbles: true, cancelable: true }))
@@ -320,7 +320,7 @@ async function runAttach() {
     se = [...document.querySelectorAll('svg rect')].find(r => r.style.cursor === 'nwse-resize' && r.getBoundingClientRect().top > wr.top + wr.height / 2)
     r0 = se.getBoundingClientRect()
     await dragEl(se, r0.left + 4, r0.top + 4, 220, 160)
-    await step('grown', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget().querySelector('[class*="hiddenBadge"]')?.textContent || null })
+    await step('grown', { box: boxOf(fmt()), stillAttached: text()?.payload?.attachedTo === fmt()?.id, badge: widget()?.querySelector('[class*="hiddenBadge"]')?.textContent || null })
 
     // Bigger text, twice (Ctrl+Shift+>).
     key('>', { ctrlKey: true, shiftKey: true, code: 'Period' }); await sleep(300)

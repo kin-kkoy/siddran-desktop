@@ -72,7 +72,7 @@ function Chrome({ item, source, focus, renaming, onRenameDone, onToggleFocus, on
 const FORMAT_FONT = 15
 const fontVar = (item) => ({ '--fmt-font': `${item.payload?.fontSize || FORMAT_FONT}px` })
 
-function FormatWidget({ item, tool, selected, renaming, hiddenCount = 0, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
+function FormatWidget({ item, tool, selected, renaming, cut, onSelect, onGrab, onRemove, onCommit, onOpenFocus, onRenameDone }) {
     const commit = useCallback((fn) => onCommit(item.id, fn), [onCommit, item.id])
     const source = useFormatSource(item, commit)
     const locked = !!item.payload?.locked
@@ -108,9 +108,10 @@ function FormatWidget({ item, tool, selected, renaming, hiddenCount = 0, onSelec
         >
             <Chrome item={item} source={source} renaming={renaming} onRenameDone={onRename}
                 onToggleFocus={() => onOpenFocus?.(item.id)} onPickSource={onPickSource} onTitlePointerDown={onTitlePointerDown} />
-            {hiddenCount > 0 && (
-                <span className={styles.hiddenBadge} title={`${hiddenCount} thing${hiddenCount > 1 ? 's' : ''} on this widget ${hiddenCount > 1 ? 'are' : 'is'} cut off — make it bigger to see ${hiddenCount > 1 ? 'them' : 'it'}, or drag ${hiddenCount > 1 ? 'them' : 'it'} off`}>
-                    +{hiddenCount} hidden
+            {cut && (
+                // Cropped: partly showing past the edge. Out of view: none of it shows.
+                <span className={styles.hiddenBadge} title="Attached to this widget but past its edge — make the widget bigger, or drag them off">
+                    {[cut.cropped && `${cut.cropped} cropped`, cut.hidden && `${cut.hidden} out of view`].filter(Boolean).join(' · ')}
                 </span>
             )}
         </div>

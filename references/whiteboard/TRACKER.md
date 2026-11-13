@@ -672,3 +672,10 @@ canvas. It is stored as `type:'shape', kind:'format'` with `payload.format`
     user is at the computer, run probes in a hidden window instead
     (`[workspace 19 silent]`, data only, no screenshots).
 
+- 2026-11-13 · session 5 · user feedback (bright room): the floating bar's
+  outline is now high-contrast. It uses a new theme token
+  `--outline-contrast`: white on dark themes, black on light ones (set by
+  every palette in SettingsContext). The widget badge now says "N cropped"
+  (part of it shows) and/or "N out of view" (none of it shows) instead of
+  "+N hidden". Not seen on screen: the user is at the computer, so no
+  headless screenshots. The user is weighing a per-widget clip ⇄ hang toggle.

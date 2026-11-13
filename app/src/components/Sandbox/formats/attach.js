@@ -100,9 +100,17 @@ function intersect(a, b) {
     return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) }
 }
 
-/** Does `rect` cut off any of `item`? (For the "partly hidden" count.) */
+/** Does `rect` cut off any of `item`? */
 export function isClipped(item, rect) {
-    if (!rect) return false
+    return clipState(item, rect) != null
+}
+
+/** How `rect` shows `item`: null (whole), 'cropped' (partly) or 'hidden' (none of it). */
+export function clipState(item, rect) {
+    if (!rect) return null
     const b = itemAABB(item)
-    return b.x < rect.x - 0.5 || b.y < rect.y - 0.5 || b.x + b.w > rect.x + rect.w + 0.5 || b.y + b.h > rect.y + rect.h + 0.5
+    const cut = b.x < rect.x - 0.5 || b.y < rect.y - 0.5 || b.x + b.w > rect.x + rect.w + 0.5 || b.y + b.h > rect.y + rect.h + 0.5
+    if (!cut) return null
+    const none = b.x >= rect.x + rect.w || b.y >= rect.y + rect.h || b.x + b.w <= rect.x || b.y + b.h <= rect.y
+    return none ? 'hidden' : 'cropped'
 }
