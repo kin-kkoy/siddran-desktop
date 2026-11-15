@@ -83,7 +83,6 @@ function SandboxCanvas({
     onPlaceText,           // (worldPoint)
     onImageDrop,           // (file, worldPoint)
     onShapeDoubleClick,    // (itemId) — double-click a shape to edit text
-    onEmptyDoubleClick,    // (world) — double-click empty canvas to make a box there
     editingShapeId,        // shape currently text-editing → hide its committed text
     clips,                 // Map(itemId → world rect): cropped to a frame/widget (selection/attach.js)
     topGraphicItems = [],  // graphics riding on a widget — drawn on the top canvas, above the widgets
@@ -118,7 +117,7 @@ function SandboxCanvas({
     const latestRef = useRef(null)
     latestRef.current = {
         canvas, items, onWidgetIds, onStrokeCommit, onShapeCommit, onSelect, onMarqueeSelect,
-        onErase, onPrecisionErase, onPrecisionEraseEnd, onSmartStroke, onPaint, onPlaceText, onImageDrop, onShapeDoubleClick, onEmptyDoubleClick, beginTransaction, endTransaction,
+        onErase, onPrecisionErase, onPrecisionEraseEnd, onSmartStroke, onPaint, onPlaceText, onImageDrop, onShapeDoubleClick, beginTransaction, endTransaction,
     }
 
     useLayoutEffect(() => {
@@ -300,32 +299,38 @@ function SandboxCanvas({
             if (panRafRef.current) { cancelAnimationFrame(panRafRef.current); panRafRef.current = 0 }
         }
 
+        // Is this press a pan? The middle button always; Space or the pan tool
+        // with the left button (the selection's own grips excepted).
+        const isPanPress = (e) => {
+            if (e.button === 1) return true
+            const { canvas } = latestRef.current
+            return (e.button === 0 || e.button === undefined) && (canvas.tool === 'hand' || canvas.spacePanning)
+                && e.pointerType !== 'touch' && !e.target?.closest?.('[data-sb-handle="true"]')
+        }
+        // Pans are claimed in the CAPTURE phase, before anything on the board
+        // sees the press. A card or widget underneath (a Doc's editor) would
+        // otherwise run its own handlers first and take focus — and then the
+        // held Space typed spaces into it. preventDefault keeps focus where it
+        // was (and stops the middle button's autoscroll / paste).
+        const onPanCapture = (e) => {
+            if (!isPanPress(e)) return
+            e.preventDefault()
+            e.stopPropagation()
+            lastPanRef.current = screenPointerWorld(e).screen
+            midPanRef.current = e.button === 1
+            el.setPointerCapture?.(e.pointerId)
+        }
+        // The mouse events that follow a pointer press (focus, text selection,
+        // the middle button's paste) are cut off the same way.
+        const onPanMouseCapture = (e) => {
+            if (e.button === 1 || (e.button === 0 && isPanPress(e))) { e.preventDefault(); e.stopPropagation() }
+        }
+
         const onPointerDown = (e) => {
             const { canvas, onPlaceText } = latestRef.current
-            // Middle mouse button → pan from anywhere, regardless of the active
-            // tool (and over cards). preventDefault suppresses the OS autoscroll.
-            //
-            // Panning owns the press outright: stopPropagation keeps it from
-            // reaching a card underneath (cards' React handlers run after this
-            // native listener), which would otherwise start dragging the card
-            // at the same time — or, with Space, instead.
-            if (e.button === 1) {
-                e.preventDefault()
-                e.stopPropagation()
-                lastPanRef.current = screenPointerWorld(e).screen
-                midPanRef.current = true
-                el.setPointerCapture?.(e.pointerId)
-                return
-            }
+            // Pans were taken by onPanCapture before this runs.
+            if (isPanPress(e)) return
             if (e.button !== 0 && e.button !== undefined) return
-            // Space-drag / the pan tool pan over cards too (handles excluded:
-            // those are the selection's own grips).
-            if ((canvas.tool === 'hand' || canvas.spacePanning) && e.pointerType !== 'touch' && !e.target?.closest?.('[data-sb-handle="true"]')) {
-                e.stopPropagation()
-                lastPanRef.current = screenPointerWorld(e).screen
-                el.setPointerCapture?.(e.pointerId)
-                return
-            }
             const target = e.target
             const { screen, world } = screenPointerWorld(e)
             if (target && target !== el && target.closest('[data-sb-handle="true"]')) return
@@ -777,10 +782,9 @@ function SandboxCanvas({
                 (target.closest('[data-sb-card="true"]') && !overTop(world)) || target.closest('[data-sb-handle="true"]')
             )) return
             const hit = topHitAt(world)
+            // A double-click on empty board does nothing (the user's call: it used
+            // to make a box there, too easily by accident).
             if (hit && hit.type === 'shape') cb(hit.id)
-            // Nothing there (cards and handles returned above): make a box on the spot.
-            // Pointer only: with the text or a shape tool a click already makes something.
-            else if (!hit && cv.tool === 'pointer') latestRef.current.onEmptyDoubleClick?.(world)
         }
 
         // Clear the connection-dot hover when the pointer leaves the canvas.
@@ -801,6 +805,9 @@ function SandboxCanvas({
         el.addEventListener('pointerleave', onPointerLeave)
         el.addEventListener('dblclick', onDblClick)
         el.addEventListener('mousedown', onMouseDownMid)
+        el.addEventListener('pointerdown', onPanCapture, true)
+        el.addEventListener('mousedown', onPanMouseCapture, true)
+        el.addEventListener('auxclick', onPanMouseCapture, true)
         return () => {
             el.removeEventListener('pointerdown', onPointerDown)
             el.removeEventListener('pointermove', onPointerMove)
@@ -809,6 +816,9 @@ function SandboxCanvas({
             el.removeEventListener('pointerleave', onPointerLeave)
             el.removeEventListener('dblclick', onDblClick)
             el.removeEventListener('mousedown', onMouseDownMid)
+            el.removeEventListener('pointerdown', onPanCapture, true)
+            el.removeEventListener('mousedown', onPanMouseCapture, true)
+            el.removeEventListener('auxclick', onPanMouseCapture, true)
             if (panRafRef.current) { cancelAnimationFrame(panRafRef.current); panRafRef.current = 0 }
         }
     }, [])

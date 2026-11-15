@@ -65,6 +65,14 @@
     margin: 4px 0;
 }
 
+/* A busy button (PNG export): the icon turns. */
+.spin {
+    animation: sbSpin 0.9s linear infinite;
+}
+@keyframes sbSpin {
+    to { transform: rotate(360deg); }
+}
+
 /* Paint bucket and ink: the icon over a bar in the current colour. */
 .iconSwatch {
     display: inline-flex;

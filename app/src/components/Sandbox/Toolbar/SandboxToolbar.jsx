@@ -1,7 +1,7 @@
 import {
     LuMousePointer2, LuHand, LuShapes,
     LuType, LuImagePlus, LuPaintBucket,
-    LuUndo2, LuRedo2, LuMagnet, LuDownload,
+    LuUndo2, LuRedo2, LuMagnet, LuDownload, LuLoaderCircle,
     LuFrame, LuLayoutTemplate,
 } from 'react-icons/lu'
 import { useRef } from 'react'
@@ -48,7 +48,7 @@ function SandboxToolbar({
     insertMenuOpen, onToggleInsertMenu, onCloseInsertMenu,
     onAttachNoteClick, onAttachTaskClick, onPickImage, onPickPdf, onInsertFormat, onInsertSlides,
     onUndo, onRedo, canUndo, canRedo,
-    snapEnabled, onToggleSnap, onExport,
+    snapEnabled, onToggleSnap, onExport, exporting = false,
     onOpenDiagram,
     onOpenTemplates,
 }) {
@@ -169,8 +169,9 @@ function SandboxToolbar({
             <ToolBtn active={snapEnabled} title="Snap to grid & items" onClick={onToggleSnap}>
                 <LuMagnet size={21} />
             </ToolBtn>
-            <ToolBtn title="Export as PNG" onClick={onExport}>
-                <LuDownload size={21} />
+            {/* While a PNG is being made: a spinner, the button still in place. */}
+            <ToolBtn title={exporting ? 'Exporting PNG…' : 'Export as PNG'} onClick={exporting ? undefined : onExport}>
+                {exporting ? <LuLoaderCircle size={21} className={styles.spin} /> : <LuDownload size={21} />}
             </ToolBtn>
 
             <div className={styles.divider} />

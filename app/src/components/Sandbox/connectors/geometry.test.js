@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { routeConnector, connectorPoints } from './geometry'
+import { routeConnector, connectorPoints, boxAtDrop } from './geometry'
 
 const pairs = (pts) => { const o = []; for (let i = 0; i < pts.length; i += 2) o.push([pts[i], pts[i + 1]]); return o }
 // Every segment is horizontal or vertical.
@@ -79,4 +79,18 @@ describe('detours clear the boxes in between', () => {
     const xs = pts.filter((_, i) => i % 2 === 0)
     expect(Math.max(...xs)).toBeGreaterThanOrEqual(583 + 20)
   })
+})
+
+describe('boxAtDrop', () => {
+    const start = { x: 0, y: 0 }
+    it('dragged rightwards: the box starts at the drop with its left side', () => {
+        expect(boxAtDrop(start, { x: 300, y: 40 }, 120, 60)).toEqual({ x: 300, y: 10, side: 'w' })
+    })
+    it('leftwards: its right side on the drop', () => {
+        expect(boxAtDrop(start, { x: -300, y: 0 }, 120, 60)).toEqual({ x: -420, y: -30, side: 'e' })
+    })
+    it('downwards: its top; upwards: its bottom', () => {
+        expect(boxAtDrop(start, { x: 20, y: 200 }, 120, 60)).toEqual({ x: -40, y: 200, side: 'n' })
+        expect(boxAtDrop(start, { x: 0, y: -200 }, 120, 60)).toEqual({ x: -60, y: -260, side: 's' })
+    })
 })

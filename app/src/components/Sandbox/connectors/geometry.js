@@ -371,3 +371,18 @@ export function labelBox(points, label) {
     const h = LABEL_FONT + 10
     return { x: mid.x - w / 2, y: mid.y - h / 2, w, h }
 }
+
+/**
+ * Where a w×h box goes when a new arrow is dropped at `drop` (Shift+release on
+ * empty board): the box STARTS there. Its edge facing back toward the arrow's
+ * `start` has its midpoint on the drop, and that edge is the side the arrow
+ * attaches to. Which edge: from the drag's main direction (rightwards → the
+ * box's left side, downwards → its top…).
+ */
+export function boxAtDrop(start, drop, w, h) {
+    const dx = drop.x - start.x, dy = drop.y - start.y
+    if (Math.abs(dx) >= Math.abs(dy)) {
+        return dx >= 0 ? { x: drop.x, y: drop.y - h / 2, side: 'w' } : { x: drop.x - w, y: drop.y - h / 2, side: 'e' }
+    }
+    return dy >= 0 ? { x: drop.x - w / 2, y: drop.y, side: 'n' } : { x: drop.x - w / 2, y: drop.y - h, side: 's' }
+}

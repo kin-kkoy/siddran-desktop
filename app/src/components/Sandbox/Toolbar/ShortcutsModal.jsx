@@ -40,7 +40,7 @@ const GROUPS = [
     {
         title: 'Flowchart',
         rows: [
-            ['New box here', ['Double-click']], ['Edit box text', ['Enter']],
+            ['Edit box text', ['Enter']],
             ['Next step, connected', ['Tab']], ['Next branch beside it', ['⇧', 'Tab']],
             ['Step in a direction', ['Alt', 'Arrows']], ['Connect two boxes', ['C']],
             ['Tidy the layout', ['⇧', 'T']], ['Diagram — nodes or text (edits the selected one)', ['D']],

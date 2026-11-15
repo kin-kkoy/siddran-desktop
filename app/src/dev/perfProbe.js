@@ -14,6 +14,7 @@
 //   slides:<boardId> — slides: insert, sizes, panel, presenting, PDF export (runSlides)
 //   dots:<boardId>   — connection dots: no box without Shift, the drag hint, the rotate knob clear of the top dot (runDots)
 //   framestyle:<boardId> — a frame's title size (10–24) and a fully clear frame colour (runFrameStyle)
+//   fourfix:<boardId> — no box on an empty double-click; panning over a Doc never types; a Shift-dropped box starts at the pointer; export doesn't freeze the board (runFourFix)
 //   hits:<boardId>   — clicks reach links inside an unfilled box; a drawn arrow becomes a curved link (runHits)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
@@ -1964,4 +1965,115 @@ async function runFrameStyle() {
     send('done', true)
 }
 if (spec.startsWith('framestyle:') && boardId) runFrameStyle().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── fourfix:<boardId> — (1) a double-click on empty board makes nothing;
+// (2) Space-drag and middle-drag over a Doc pan the board and never focus or
+// type into it; (3) a Shift-dropped box starts at the pointer; (4) PNG export
+// spins its button and doesn't freeze the page.
+async function runFourFix() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const host = stage.container().parentElement
+    const rect = host.getBoundingClientRect()
+    const toWorld = (cx, cy) => ({ x: (cx - rect.left - stage.x()) / stage.scaleX(), y: (cy - rect.top - stage.y()) / stage.scaleY() })
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    // Find an empty spot near the middle of the view.
+    const { itemHitTest } = await import('../components/Sandbox/selection/hitTest')
+    let spot = null
+    for (let dy = 0; dy < 400 && !spot; dy += 40) for (let dx = 0; dx < 600 && !spot; dx += 40) {
+        const c = { x: rect.left + rect.width / 2 + dx, y: rect.top + rect.height / 2 + dy }
+        const w = toWorld(c.x, c.y)
+        if (!live().some(i => itemHitTest(i, w.x, w.y, 40)) && !document.elementFromPoint(c.x, c.y)?.closest('[data-sb-card="true"]')) spot = c
+    }
+    // (1) Double-click on empty board.
+    let n0 = live().length
+    host.dispatchEvent(new MouseEvent('dblclick', { clientX: spot.x, clientY: spot.y, bubbles: true, cancelable: true }))
+    await sleep(600)
+    await step('dblclick', { added: live().length - n0 })
+
+    // (2) A Doc widget, then pans that start on its text.
+    document.querySelector('button[title="Media"]')?.click(); await sleep(500)
+    ;[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Doc')?.click(); await sleep(1800)
+    const doc = live().filter(i => i.payload?.kind === 'format').sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const W = () => document.querySelector(`[data-sb-id="${doc.id}"]`)
+    const cm = () => W()?.querySelector('.cm-content')
+    const docText = () => live().find(i => i.id === doc.id)?.payload?.body ?? cm()?.textContent
+    key('Escape'); await sleep(300)
+    document.activeElement?.blur?.(); await sleep(200)
+    const text0 = docText()
+    const cr = cm().getBoundingClientRect()
+    const at = { x: cr.left + cr.width / 2, y: cr.top + Math.min(40, cr.height / 2) }
+    const panOver = async (button) => {
+        // The board applies a pan once per animation frame; a hidden window gets
+        // none, so stand in a timer for them during the drag.
+        const raf = window.requestAnimationFrame
+        window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16)
+        try { return await panOverInner(button) } finally { window.requestAnimationFrame = raf }
+    }
+    const panOverInner = async (button) => {
+        const sx = stage.x(), sy = stage.y()
+        const down = ptr('pointerdown', at.x, at.y, { button, buttons: button === 1 ? 4 : 1 })
+        cm().dispatchEvent(down)
+        const md = new MouseEvent('mousedown', { clientX: at.x, clientY: at.y, button, bubbles: true, cancelable: true })
+        cm().dispatchEvent(md)
+        for (let i = 1; i <= 8; i++) { await sleep(25); window.dispatchEvent(ptr('pointermove', at.x + i * 15, at.y + i * 10, { button: -1, buttons: button === 1 ? 4 : 1 })); host.dispatchEvent(ptr('pointermove', at.x + i * 15, at.y + i * 10, { button: -1, buttons: button === 1 ? 4 : 1 })) }
+        host.dispatchEvent(ptr('pointerup', at.x + 120, at.y + 80, { button })); window.dispatchEvent(ptr('pointerup', at.x + 120, at.y + 80, { button }))
+        await sleep(400)
+        return { moved: [Math.round(stage.x() - sx), Math.round(stage.y() - sy)], pointerdownBlocked: down.defaultPrevented, mousedownBlocked: md.defaultPrevented, focusInDoc: !!W()?.contains(document.activeElement) }
+    }
+    // Space held (as the app sees it), several key repeats, then the drag.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true }))
+    await sleep(200)
+    const space = await panOver(0)
+    for (let i = 0; i < 5; i++) { (document.activeElement || window).dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', repeat: true, bubbles: true, cancelable: true })); await sleep(30) }
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }))
+    await sleep(300)
+    const middle = await panOver(1)
+    await step('pan-over-doc', { space, middle, textUnchanged: docText() === text0 })
+
+    // (3) A box, its right dot dragged to an empty spot with Shift: the new box's LEFT edge is at the drop.
+    const z = stage.scaleX()
+    const c0 = toWorld(spot.x, spot.y)
+    const B = store.addItem(boardId, { type: 'shape', x: c0.x - 260 / z, y: c0.y - 30, w: 120, h: 60, rotation: 0, z_index: 3000, payload: { kind: 'roundedRect', fill: '#222233', stroke: '#e2ddf5', strokeWidth: 2, text: '' } })
+    await sleep(600)
+    const kc = stage.content.querySelector('canvas')
+    const pB = toClient(B.x + B.w / 2, B.y + B.h / 2)
+    kc.dispatchEvent(ptr('pointerdown', pB.x, pB.y)); window.dispatchEvent(ptr('pointerup', pB.x, pB.y)); kc.dispatchEvent(ptr('pointerup', pB.x, pB.y)); await sleep(600)
+    const dots = [...document.querySelectorAll('g[data-sb-handle="true"]')].filter(g => g.querySelector('title')?.textContent.startsWith('Drag to connect'))
+    const ctr = (g) => { const r = g.querySelector('circle').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }
+    const east = dots.reduce((a, g) => (ctr(g).x > ctr(a).x ? g : a), dots[0]), e0 = ctr(east)
+    const drop = { x: e0.x + 220, y: e0.y + 25 }
+    n0 = live().length
+    east.dispatchEvent(ptr('pointerdown', e0.x, e0.y, { shiftKey: true }))
+    for (let i = 1; i <= 10; i++) { await frame(); window.dispatchEvent(ptr('pointermove', e0.x + (drop.x - e0.x) * i / 10, e0.y + (drop.y - e0.y) * i / 10, { shiftKey: true })) }
+    window.dispatchEvent(ptr('pointerup', drop.x, drop.y, { shiftKey: true })); await sleep(800)
+    key('Escape'); await sleep(300)
+    const nb = live().filter(i => i.type === 'shape' && i.id !== B.id).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))[0]
+    const dw = toWorld(drop.x, drop.y)
+    const link = live().find(i => i.type === 'connector' && i.payload?.to?.itemId === nb?.id)
+    await step('shift-drop', { added: live().length - n0, leftEdgeOff: nb && Math.round(nb.x - dw.x), midYOff: nb && Math.round(nb.y + nb.h / 2 - dw.y), attachSide: link?.payload?.to?.side })
+
+    // (4) Export: the button spins at once; the page keeps answering meanwhile.
+    let maxGap = 0, last = performance.now(), ticking = true
+    const tick = () => { const t = performance.now(); maxGap = Math.max(maxGap, t - last); last = t; if (ticking) setTimeout(tick, 10) }
+    tick()
+    const btn = () => document.querySelector('button[aria-label="Export as PNG"], button[aria-label="Exporting PNG…"]')
+    const t0 = performance.now()
+    btn().click()
+    await sleep(30)
+    const spinning = !!btn()?.querySelector('svg[class*="spin"]')
+    const doneToast = await waitFor(() => [...document.querySelectorAll('*')].find(el => el.children.length === 0 && /Exported PNG|Export failed|Nothing to export/.test(el.textContent || '')), 20000)
+    const took = Math.round(performance.now() - t0)
+    ticking = false
+    await sleep(200)
+    await step('export', { spinningRightAway: spinning, result: doneToast?.textContent, tookMs: took, longestStallMs: Math.round(maxGap), spinnerGone: !btn()?.querySelector('svg[class*="spin"]'), worker: typeof OffscreenCanvas !== 'undefined' })
+    send('done', true)
+}
+if (spec.startsWith('fourfix:') && boardId) runFourFix().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 

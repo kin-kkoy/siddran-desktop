@@ -64,6 +64,14 @@
     color: var(--accent-warning);
 }
 
+/* A busy button (PNG export): the icon turns. */
+.spin {
+    animation: ctxSpin 0.9s linear infinite;
+}
+@keyframes ctxSpin {
+    to { transform: rotate(360deg); }
+}
+
 /* ── Small divider ── */
 .sep {
     width: 1px;

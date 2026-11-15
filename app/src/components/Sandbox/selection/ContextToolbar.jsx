@@ -8,7 +8,7 @@ import {
     LuBold, LuItalic, LuUnderline, LuStrikethrough,
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
-    LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuFrame, LuPaintBucket,
+    LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuLoaderCircle, LuFrame, LuPaintBucket,
     LuPencil, LuMaximize2, LuCrop,
 } from 'react-icons/lu'
 import SlideButtons from '../slides/SlideButtons'
@@ -139,6 +139,7 @@ function ContextToolbar({
     onToggleLock,
     onFrameSelection,
     onExportFrame,
+    exporting = false,  // a PNG export is running: its button spins
     slideActions,       // frames ⇄ slides, slide size, new slide, present (slides/SlideButtons)
     onEditText,
     onRevertInk,        // (id) — a smart-drawn shape back to the ink it came from
@@ -505,8 +506,9 @@ function ContextToolbar({
                         {frames.length === 1 && onExportFrame && (
                             <>
                                 <button className={styles.btn} onClick={() => onEditText?.(frames[0].id)} title="Rename frame (double-click the title)" aria-label="Rename frame">Aa</button>
-                                <button className={styles.btn} onClick={() => onExportFrame?.(frames[0].id)} title="Export this frame as PNG" aria-label="Export frame">
-                                    <LuImageDown size={18} />
+                                <button className={styles.btn} onClick={() => { if (!exporting) onExportFrame?.(frames[0].id) }}
+                                    title={exporting ? 'Exporting PNG…' : 'Export this frame as PNG'} aria-label="Export frame">
+                                    {exporting ? <LuLoaderCircle size={18} className={styles.spin} /> : <LuImageDown size={18} />}
                                 </button>
                             </>
                         )}

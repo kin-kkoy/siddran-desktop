@@ -387,7 +387,6 @@ function DiagramEditorOverlay({ doc, onSave, onCancel }) {
             onMarqueeSelect={onMarqueeSelect}
             onErase={onErase}
             onShapeDoubleClick={onShapeDoubleClick}
-            onEmptyDoubleClick={flow.createAt}
             editingShapeId={editingShapeId}
             beginTransaction={beginTransaction}
             endTransaction={endTransaction}

@@ -417,20 +417,37 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         bump()
     }, [items, canvas.selectedIds, act, beginTransaction, endTransaction, bump])
 
-    const onExport = useCallback(() => {
-        const res = exportStagePNG(stageRef.current, [...frameItems, ...graphicItems, ...topGraphicItems], sandbox?.title, null, topStageRef.current)
-        if (!res.ok) toast.error(res.reason === 'empty' ? 'Nothing to export yet.' : 'Export failed.')
-        else toast.success('Exported PNG (cards not included)')
-    }, [frameItems, graphicItems, topGraphicItems, sandbox?.title])
+    // PNG export runs in the background (exportImage.js): the board stays
+    // usable, and the export buttons spin until it's done. One at a time.
+    const [exporting, setExporting] = useState(false)
+    const exportingRef = useRef(false)
+    const runExport = useCallback(async (job, okText) => {
+        if (exportingRef.current) return
+        exportingRef.current = true
+        setExporting(true)
+        try {
+            const res = await job()
+            if (!res.ok) toast.error(res.reason === 'empty' ? 'Nothing to export yet.' : 'Export failed.')
+            else toast.success(okText)
+        } finally {
+            exportingRef.current = false
+            setExporting(false)
+        }
+    }, [])
+    const onExport = useCallback(() => runExport(
+        () => exportStagePNG(stageRef.current, [...frameItems, ...graphicItems, ...topGraphicItems], sandbox?.title, null, topStageRef.current),
+        'Exported PNG (cards not included)',
+    ), [runExport, frameItems, graphicItems, topGraphicItems, sandbox?.title])
 
     // Export one frame — exactly its rectangle (spec §11.9).
     const onExportFrame = useCallback((id) => {
         const f = items.find(i => i.id === id)
         if (!f) return
-        const res = exportStagePNG(stageRef.current, [f], `${sandbox?.title || 'sandbox'} - ${f.payload?.title || 'Frame'}`, { x: f.x, y: f.y, w: f.w, h: f.h }, topStageRef.current)
-        if (!res.ok) toast.error('Export failed.')
-        else toast.success('Exported the frame (cards not included)')
-    }, [items, sandbox?.title])
+        runExport(
+            () => exportStagePNG(stageRef.current, [f], `${sandbox?.title || 'sandbox'} - ${f.payload?.title || 'Frame'}`, { x: f.x, y: f.y, w: f.w, h: f.h }, topStageRef.current),
+            'Exported the frame (cards not included)',
+        )
+    }, [items, sandbox?.title, runExport])
 
     // ---- placement ----
     const centerWorld = useCallback(() => canvas.worldFromScreen({ x: window.innerWidth / 2, y: window.innerHeight / 2 }), [canvas])
@@ -1140,6 +1157,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                     snapEnabled={canvas.snapEnabled}
                     onToggleSnap={() => canvas.setSnapEnabled(v => !v)}
                     onExport={onExport}
+                    exporting={exporting}
                     onOpenDiagram={() => openDiagram(null)}
                     onOpenTemplates={() => setTemplatesOpen(true)}
                 />
@@ -1211,6 +1229,7 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                             onToggleLock={toggleLock}
                             onFrameSelection={frameSelection}
                             onExportFrame={onExportFrame}
+                            exporting={exporting}
                             slideActions={slideActions}
                             onEditText={onEditText}
                             onRevertInk={revertToInk}
@@ -1224,7 +1243,6 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
                         />
                     }
                     onShapeDoubleClick={onShapeDoubleClick}
-                    onEmptyDoubleClick={flow.createAt}
                     editingShapeId={editingShapeId}
                     clips={board.clips}
                     frameCutLabels={frameCutLabels}

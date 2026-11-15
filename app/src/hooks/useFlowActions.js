@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { newSandboxItemId } from './useSandbox'
-import { facingSide } from '../components/Sandbox/connectors/geometry'
-import { tidy, itemsToFlow, nodeSize } from '../components/Sandbox/flow/flowText'
+import { facingSide, boxAtDrop } from '../components/Sandbox/connectors/geometry'
+import { getItemBounds, getOrientedAnchors } from '../components/Sandbox/selection/itemBounds'
+import { tidy, itemsToFlow } from '../components/Sandbox/flow/flowText'
 import { itemsToGraph, planDiagram, isDiagramShape } from '../components/Sandbox/flow/flowGraph'
 import { unionAABB } from '../components/Sandbox/selection/snapping'
 import { toast } from '../utils/toast'
@@ -52,12 +53,6 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         routing: 'elbow', head: 'arrow', stroke: canvas.strokeColor, strokeWidth: 2, ...extra,
     }), [canvas.strokeColor])
 
-    // A fresh box in the board's current style.
-    const boxPayload = useCallback((kind, text = '') => ({
-        kind, fill: canvas.shapeStyle.fill, stroke: canvas.shapeStyle.stroke, strokeWidth: canvas.shapeStyle.strokeWidth || 2,
-        radius: kind === 'roundedRect' ? 10 : 0, text, textAlign: 'center', textColor: canvas.shapeStyle.stroke, fontSize: 16,
-    }), [canvas.shapeStyle])
-
     /** Tab / Alt+Arrow: the next step `dir` of box `fromId`, connected, in text-edit. */
     const createNext = useCallback((fromId, dir = 's') => {
         const from = items.find((i) => i.id === fromId)
@@ -81,8 +76,9 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
     }, [items, act, beginTransaction, endTransaction, canvas, nextZ, bump, setEditingShapeId, connectorPayload])
 
     /**
-     * A connector dragged from box `fromId` and released on empty canvas: a box
-     * like the source, centred on the drop point, joined on the side facing back.
+     * A connector dragged from box `fromId` and Shift-released on empty canvas: a
+     * box like the source that STARTS at the drop point (its edge facing back
+     * toward the arrow on the pointer), joined on that edge.
      */
     const createConnectedAt = useCallback((fromId, fromSide, world) => {
         const from = items.find((i) => i.id === fromId)
@@ -91,12 +87,15 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         const kind = decision ? 'roundedRect' : (from.payload?.kind || 'roundedRect')
         const w = decision ? 160 : from.w, h = decision ? 64 : from.h
         const id = newSandboxItemId()
-        const box = { id, type: 'shape', x: Math.round(world.x - w / 2), y: Math.round(world.y - h / 2), w, h, rotation: 0 }
-        const centre = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
+        // The new box STARTS at the drop: its edge facing back toward the arrow's
+        // start sits on the pointer (dragged rightwards → its left side there).
+        const start = getOrientedAnchors(getItemBounds(from))[fromSide] || { x: from.x + from.w / 2, y: from.y + from.h / 2 }
+        const at = boxAtDrop(start, world, w, h)
+        const box = { id, type: 'shape', x: Math.round(at.x), y: Math.round(at.y), w, h, rotation: 0 }
         const z = nextZ()
         beginTransaction()
         act.addItem({ ...box, z_index: z, payload: { ...from.payload, kind, radius: kind === 'roundedRect' ? 10 : (from.payload?.radius || 0), text: '', locked: undefined, groupId: undefined } })
-        act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, fromSide, id, facingSide(box, centre)) })
+        act.addItem({ type: 'connector', x: 0, y: 0, w: 0, h: 0, rotation: 0, z_index: z + 1, payload: connectorPayload(fromId, fromSide, id, at.side) })
         endTransaction()
         canvas.selectOnly(id)
         setEditingShapeId(id)
@@ -110,18 +109,6 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         if (!into?.payload?.from?.itemId) return createNext(id, 'e')
         return createNext(into.payload.from.itemId, into.payload.from.side || 's')
     }, [items, createNext])
-
-    /** Double-click on empty canvas: a box right there, ready to type in. */
-    const createAt = useCallback((world) => {
-        const { w, h } = nodeSize('', 'roundedRect')
-        const id = newSandboxItemId()
-        act.addItem({ id, type: 'shape', x: Math.round(world.x - w / 2), y: Math.round(world.y - h / 2), w, h, rotation: 0, z_index: nextZ(), payload: boxPayload('roundedRect') })
-        canvas.setTool('pointer')
-        canvas.selectOnly(id)
-        setEditingShapeId(id)
-        bump()
-        return id
-    }, [act, nextZ, boxPayload, canvas, setEditingShapeId, bump])
 
     /** C with two boxes selected: an arrow from the first picked to the second. */
     const connectSelected = useCallback(() => {
@@ -203,5 +190,5 @@ export function useFlowActions({ items, act, beginTransaction, endTransaction, c
         catch { toast.error('Could not reach the clipboard') }
     }, [items, canvas.selectedIds])
 
-    return { createNext, createSibling, createAt, createConnectedAt, connectSelected, tidySelection, diagramSource, applyDiagram, copyAsText }
+    return { createNext, createSibling, createConnectedAt, connectSelected, tidySelection, diagramSource, applyDiagram, copyAsText }
 }
