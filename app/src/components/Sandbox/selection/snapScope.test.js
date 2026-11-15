@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { snapScope, frameAt, frameMembers } from './snapScope'
-import { computeSnapTo, snapEdge } from './snapping'
+import { computeSnapTo, snapEdge, snapEdgeHit } from './snapping'
 
 const frame = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', x, y, w, h, rotation: 0, z_index: -5, payload: { kind: 'frame', title: id, ...extra } })
 const shape = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', x, y, w, h, rotation: 0, z_index: 3, payload: { kind: 'rect', ...extra } })
@@ -69,5 +69,19 @@ describe('frame-scoped snapping', () => {
     expect(snap.dx).toBeCloseTo(1)
     expect(snapEdge(33, new Float64Array(), 24, 5, 10)).toBe(34)
     expect(snapEdge(23, new Float64Array(), 24, 5)).toBe(24)   // the board's grid, unchanged
+  })
+
+  it('real things beat the grid, and a grid snap draws no guide', () => {
+    // A frame centre at 1206; the grid line at 1200 is nearer (dragged edge at 1201) — the centre still wins.
+    const targets = { xs: Float64Array.from([0, 1206, 2412]), ys: new Float64Array() }
+    const a = computeSnapTo({ x: 1201, y: 5000, w: 0, h: 0 }, targets, 24, 26)
+    expect(a.dx).toBeCloseTo(5)
+    expect(a.guides).toEqual([{ type: 'v', pos: 1206 }])
+    // Nothing real within reach: the grid pulls, silently.
+    const b = computeSnapTo({ x: 1581, y: 5000, w: 0, h: 0 }, targets, 24, 26)
+    expect(b.dx).toBeCloseTo(3)
+    expect(b.guides).toEqual([])
+    expect(snapEdgeHit(1201, targets.xs, 24, 26)).toEqual({ pos: 1206, grid: false })
+    expect(snapEdgeHit(1581, targets.xs, 24, 26)).toEqual({ pos: 1584, grid: true })
   })
 })

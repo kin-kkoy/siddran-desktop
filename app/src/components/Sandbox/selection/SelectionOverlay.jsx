@@ -4,7 +4,7 @@ import {
     getItemBounds, getSelectionBounds, getOrientedAnchors, boxCenter,
     boxUpVector, rotatePoint,
 } from './itemBounds'
-import { computeSnapTo, unionAABB, snapTargets, snapEdge, inView } from './snapping'
+import { computeSnapTo, unionAABB, snapTargets, snapEdgeHit, inView } from './snapping'
 import { snapScope } from './snapScope'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
@@ -295,8 +295,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             const g = []
             const o = d.scope?.origin || { x: 0, y: 0 }
             const ex = d.handleWorld.x + (p.x - d.startWorld.x), ey = d.handleWorld.y + (p.y - d.startWorld.y)
-            if (d.scaleX) { const t = snapEdge(ex, d.lines.xs, SNAP_GRID, thr, o.x); if (t != null) { p.x += t - ex; g.push({ type: 'v', pos: t }) } }
-            if (d.scaleY) { const t = snapEdge(ey, d.lines.ys, SNAP_GRID, thr, o.y); if (t != null) { p.y += t - ey; g.push({ type: 'h', pos: t }) } }
+            if (d.scaleX) { const t = snapEdgeHit(ex, d.lines.xs, SNAP_GRID, thr, o.x); if (t) { p.x += t.pos - ex; if (!t.grid) g.push({ type: 'v', pos: t.pos }) } }
+            if (d.scaleY) { const t = snapEdgeHit(ey, d.lines.ys, SNAP_GRID, thr, o.y); if (t) { p.y += t.pos - ey; if (!t.grid) g.push({ type: 'h', pos: t.pos }) } }
             showGuides(scopedGuides(g, d.scope))
         } else showGuides([])
         const pLocal = rotatePoint(p.x, p.y, A.x, A.y, -θ)

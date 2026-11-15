@@ -2151,6 +2151,8 @@ async function runFrameSnap() {
         await step('outside-ignored', { want: 229, ...(await dragTo(229)) })   // 1 from G's box: scoped, so no snap
         await step('own-thing', { want: 100, ...(await dragTo(103)) })         // 3 from the box on F
         await step('frame-grid', { want: 384, ...(await dragTo(387)) })        // frame grid 384 (board grid would be 378/402)
+        // Centre 8 from the frame's centre (300), every line 4 from a grid line: the centre must win.
+        await step('centre-beats-grid', { want: 276, ...(await dragTo(284)) })
         await step('slide-spot', { want: 461, ...(await dragTo(459)) })        // S's title, mapped into F
         await step('ctrl-held', { want: 103, ...(await dragTo(103, { ctrl: true })) })
         await step('ctrl-mid-drag', { want: 100, ...(await dragTo(103, { mid: async () => {

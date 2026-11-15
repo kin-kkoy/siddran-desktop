@@ -52,35 +52,35 @@ const gridLine = (v, size, origin = 0) => origin + Math.round((v - origin) / siz
 /**
  * computeSnap against prebuilt targets (snapTargets). `origin`: where the grid
  * starts — a frame's top-left inside a scoped frame (selection/snapScope.js).
+ *
+ * Real things win: a line of another item (or of the frame) within the
+ * threshold always beats the grid, however close the grid is — zoomed out, a
+ * grid line is ALWAYS within reach and used to steal the snap from a frame's
+ * centre (seen 2026-11-15). The grid only pulls when nothing real is near,
+ * and draws no guide: there's nothing on the board to point at.
  */
 export function computeSnapTo(movingAABB, targets, gridSize, threshold, origin = { x: 0, y: 0 }) {
+    // Per axis: the nearest real line within reach; failing that, the nearest grid line.
     const best = (movingLines, sorted, o) => {
-        let bestDelta = 0
-        let bestDist = threshold + 1
-        let bestPos = null
+        let thing = null, grid = null
         for (const m of movingLines) {
-            // nearest other-item line
             const t = nearest(sorted, m)
-            if (t != null) {
-                const dist = Math.abs(t - m)
-                if (dist < bestDist) { bestDist = dist; bestDelta = t - m; bestPos = t }
-            }
-            // nearest grid line
+            const dt = t == null ? Infinity : Math.abs(t - m)
+            if (dt <= threshold && (!thing || dt < thing.dist)) thing = { dist: dt, delta: t - m, pos: t }
             if (gridSize > 0) {
-                const g = gridLine(m, gridSize, o)
-                const dist = Math.abs(g - m)
-                if (dist < bestDist) { bestDist = dist; bestDelta = g - m; bestPos = g }
+                const g = gridLine(m, gridSize, o), dg = Math.abs(g - m)
+                if (dg <= threshold && (!grid || dg < grid.dist)) grid = { dist: dg, delta: g - m, pos: g, grid: true }
             }
         }
-        return bestDist <= threshold ? { delta: bestDelta, pos: bestPos } : null
+        return thing || grid
     }
 
     const sx = best(xLines(movingAABB), targets.xs, origin.x)
     const sy = best(yLines(movingAABB), targets.ys, origin.y)
 
     const guides = []
-    if (sx) guides.push({ type: 'v', pos: sx.pos })
-    if (sy) guides.push({ type: 'h', pos: sy.pos })
+    if (sx && !sx.grid) guides.push({ type: 'v', pos: sx.pos })
+    if (sy && !sy.grid) guides.push({ type: 'h', pos: sy.pos })
 
     return { dx: sx ? sx.delta : 0, dy: sy ? sy.delta : 0, guides }
 }
@@ -111,11 +111,12 @@ export function snapLines(items) {
 }
 
 /**
- * Resize-time snapping for ONE moving edge: the nearest line (another item's
- * edge or centre, or the grid) within `threshold` of `v`. Returns the line, or
- * null when nothing is close enough. `origin`: where the grid starts (see computeSnapTo).
+ * Resize-time snapping for ONE moving edge: the nearest line of another item
+ * (edge or centre) within `threshold` of `v` — or, only when there is none,
+ * the nearest grid line (see computeSnapTo: real things win). Returns
+ * { pos, grid } or null when nothing is close enough. `origin`: where the grid starts.
  */
-export function snapEdge(v, lines, gridSize, threshold, origin = 0) {
+export function snapEdgeHit(v, lines, gridSize, threshold, origin = 0) {
     let best = null, bestDist = threshold
     // Sorted targets (snapTargets): binary search; a plain array: scan it.
     const near = lines instanceof Float64Array ? nearest(lines, v) : null
@@ -123,12 +124,16 @@ export function snapEdge(v, lines, gridSize, threshold, origin = 0) {
         const dist = Math.abs(t - v)
         if (dist <= bestDist) { bestDist = dist; best = t }
     }
+    if (best != null) return { pos: best, grid: false }
     if (gridSize > 0) {
         const g = gridLine(v, gridSize, origin)
-        if (Math.abs(g - v) < bestDist || (best == null && Math.abs(g - v) <= threshold)) best = g
+        if (Math.abs(g - v) <= threshold) return { pos: g, grid: true }
     }
-    return best
+    return null
 }
+
+/** snapEdgeHit's line alone (or null). */
+export const snapEdge = (...args) => snapEdgeHit(...args)?.pos ?? null
 
 /** Items worth snapping to: those meeting `rect` (the visible board, plus a margin). */
 export function inView(items, rect) {

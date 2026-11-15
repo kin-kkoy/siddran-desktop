@@ -148,10 +148,12 @@ describe('move snapping against prebuilt targets', () => {
   const brute = (m, items, grid, thr) => {
     const xs = [], ys = []
     for (const it of items) { xs.push(it.x, it.x + it.w / 2, it.x + it.w); ys.push(it.y, it.y + it.h / 2, it.y + it.h) }
+    // Real lines first; the grid only when none is within reach.
     const best = (ml, ts) => {
       let d = 0, bd = thr + 1
+      for (const v of ml) for (const t of ts) if (Math.abs(t - v) < bd) { bd = Math.abs(t - v); d = t - v }
+      if (bd <= thr) return d
       for (const v of ml) {
-        for (const t of ts) if (Math.abs(t - v) < bd) { bd = Math.abs(t - v); d = t - v }
         const g = Math.round(v / grid) * grid
         if (Math.abs(g - v) < bd) { bd = Math.abs(g - v); d = g - v }
       }
