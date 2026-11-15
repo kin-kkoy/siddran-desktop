@@ -15,6 +15,7 @@
 //   dots:<boardId>   — connection dots: no box without Shift, the drag hint, the rotate knob clear of the top dot (runDots)
 //   framestyle:<boardId> — a frame's title size (10–24) and a fully clear frame colour (runFrameStyle)
 //   fourfix:<boardId> — no box on an empty double-click; panning over a Doc never types; a Shift-dropped box starts at the pointer; export doesn't freeze the board (runFourFix)
+//   fsnap:<boardId> — frame-scoped snapping, Ctrl to switch it off, the frame magnet, resize scope (runFrameSnap)
 //   hits:<boardId>   — clicks reach links inside an unfilled box; a drawn arrow becomes a curved link (runHits)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
@@ -2077,3 +2078,116 @@ async function runFourFix() {
 }
 if (spec.startsWith('fourfix:') && boardId) runFourFix().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
 
+
+// ── fsnap:<boardId> — frame-scoped snapping (selection/snapScope.js): over a
+// frame, a dragged box ignores things on the frame above, snaps to its own
+// frame's things and to a grid counted from the frame's corner, borrows spots
+// from same-size frames (slides); Ctrl switches snapping off (also mid-drag);
+// the frame's magnet button opts back into snapping to everything; resizing
+// uses the same scope. Positions are reported relative to the frame's left.
+async function runFrameSnap() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    key('0', { ctrlKey: true }); await sleep(600)      // zoom 100 %: thresholds in world units = px
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const get = (id) => live().find(i => i.id === id)
+    const z = stage.scaleX()
+    const c0 = { x: (innerWidth / 2 - stage.x()) / z, y: (innerHeight / 2 - stage.y()) / z }
+    // fx ≡ 6 (mod 24): the board's grid sits 6 off the frame's own grid.
+    const fx = Math.round((c0.x - 400 - 6) / 24) * 24 + 6, fy = Math.round(c0.y - 60)
+    const frameAt = (x, y, w, h, title) => store.addItem(boardId, { type: 'shape', x, y, w, h, rotation: 0, z_index: -50,
+        payload: { kind: 'frame', title, fill: 'rgba(128,128,150,0.10)', stroke: 'rgba(160,160,190,0.35)', strokeWidth: 1 } })
+    const box = (x, y, w, h, on) => store.addItem(boardId, { type: 'shape', x, y, w, h, rotation: 0, z_index: 4000 + live().length,
+        payload: { kind: 'rect', fill: '#334', stroke: '#99a', strokeWidth: 1, attachedTo: on } })
+    const F = frameAt(fx, fy, 600, 300, 'F probe')
+    const G = frameAt(fx, fy - 280, 600, 250, 'G probe')           // the frame above (another size)
+    const S = frameAt(fx + 700, fy, 600, 300, 'S probe')           // a same-size frame (a slide)
+    box(fx + 100, fy + 50, 80, 40, F.id)                           // on F: lines 100 / 140 / 180
+    box(fx + 228, fy - 180, 48, 48, G.id)                          // on G: 228 / 252 / 276 (mid-grid)
+    box(fx + 540, fy - 180, 48, 48, G.id)                          // on G: 540 / 564 / 588 (mid-grid)
+    box(fx + 700 + 461, fy + 20, 48, 30, S.id)                     // on S: 461 / 485 / 509 in slide terms
+    const M = box(fx + 300, fy + 200, 48, 48, F.id)
+    await sleep(900)
+    const rect = stage.container().getBoundingClientRect()
+    const toClient = (wx, wy) => ({ x: rect.left + stage.x() + wx * stage.scaleX(), y: rect.top + stage.y() + wy * stage.scaleY() })
+    const kc = stage.content.querySelector('canvas')
+    const raf = window.requestAnimationFrame
+    window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16)
+    const guides = () => [...document.querySelectorAll('line[stroke="#5a9cf0"]')].map(l => {
+        const a = l.getAttribute.bind(l)
+        const fTop = toClient(0, fy).y, fBot = toClient(0, fy + 300).y
+        if (a('x1') === a('x2')) {
+            const y1 = a('y1'), y2 = a('y2')
+            return { v: Math.round(((+a('x1') + rect.left - rect.left) - stage.x()) / stage.scaleX() - fx),
+                inFrame: !y2.endsWith('%') && Math.abs(+y1 + rect.top - fTop) < 2 && Math.abs(+y2 + rect.top - fBot) < 2 }
+        }
+        return { h: Math.round((+a('y1') - stage.y()) / stage.scaleY() - fy), wholeView: a('x2').endsWith('%') }
+    })
+    // Drag M so its left edge lands at fx + rel (unsnapped); report where it is
+    // and the guides showing, before letting go. `mid` runs while still held.
+    const dragTo = async (rel, { ctrl = false, mid } = {}) => {
+        key('Escape'); await sleep(200)
+        const m = get(M.id)
+        const p0 = toClient(m.x + m.w / 2, m.y + m.h / 2)
+        const dx = (fx + rel - m.x) * stage.scaleX()
+        kc.dispatchEvent(ptr('pointerdown', p0.x, p0.y, { ctrlKey: ctrl }))
+        // Out and back first, so a drag to where it already is still starts.
+        await sleep(30); window.dispatchEvent(ptr('pointermove', p0.x + 40, p0.y + 40, { ctrlKey: ctrl }))
+        for (let i = 1; i <= 8; i++) { await sleep(30); window.dispatchEvent(ptr('pointermove', p0.x + dx * i / 8, p0.y, { ctrlKey: ctrl })) }
+        await sleep(150)
+        const out = { at: +(get(M.id).x - fx).toFixed(2), guides: guides() }
+        if (mid) Object.assign(out, await mid())
+        window.dispatchEvent(ptr('pointerup', p0.x + dx, p0.y, { ctrlKey: ctrl })); await sleep(400)
+        out.attachedTo = get(M.id).payload?.attachedTo === F.id ? 'F' : get(M.id).payload?.attachedTo
+        return out
+    }
+    try {
+        await step('setup', { zoom: z, view: [innerWidth, innerHeight], fxMod24: ((fx % 24) + 24) % 24 })
+        await step('outside-ignored', { want: 229, ...(await dragTo(229)) })   // 1 from G's box: scoped, so no snap
+        await step('own-thing', { want: 100, ...(await dragTo(103)) })         // 3 from the box on F
+        await step('frame-grid', { want: 384, ...(await dragTo(387)) })        // frame grid 384 (board grid would be 378/402)
+        await step('slide-spot', { want: 461, ...(await dragTo(459)) })        // S's title, mapped into F
+        await step('ctrl-held', { want: 103, ...(await dragTo(103, { ctrl: true })) })
+        await step('ctrl-mid-drag', { want: 100, ...(await dragTo(103, { mid: async () => {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true, bubbles: true })); await sleep(150)
+            const down = { at: +(get(M.id).x - fx).toFixed(2), guides: guides().length }
+            window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', bubbles: true })); await sleep(150)
+            return { ctrlDown: down, ctrlUp: { at: +(get(M.id).x - fx).toFixed(2), guides: guides().length } }
+        } })) })
+        // The frame's magnet: snap to everything again.
+        key('Escape'); await sleep(200)
+        const t = toClient(F.x + 20 / z, F.y - 12 / z)
+        kc.dispatchEvent(ptr('pointerdown', t.x, t.y)); window.dispatchEvent(ptr('pointerup', t.x, t.y)); kc.dispatchEvent(ptr('pointerup', t.x, t.y)); await sleep(700)
+        const mag = () => document.querySelector('button[aria-label="Line up with things outside the frame"]')
+        const before = { present: !!mag(), pressed: mag()?.getAttribute('aria-pressed'), title: mag()?.title }
+        mag()?.click(); await sleep(400)
+        const after = { pressed: mag()?.getAttribute('aria-pressed'), payload: get(F.id).payload.snapOutside, title: mag()?.title }
+        await step('magnet', { before, after })
+        await step('outside-on', { want: 228, ...(await dragTo(229)) })
+        kc.dispatchEvent(ptr('pointerdown', t.x, t.y)); window.dispatchEvent(ptr('pointerup', t.x, t.y)); kc.dispatchEvent(ptr('pointerup', t.x, t.y)); await sleep(700)
+        mag()?.click(); await sleep(400)
+        await step('magnet-off', { pressed: mag()?.getAttribute('aria-pressed'), payload: String(get(F.id).payload.snapOutside) })
+        // Resize: M's right edge dragged to 541 (1 from G's box at 540): scoped, no snap.
+        await dragTo(384)
+        key('Escape'); await sleep(200)
+        const m = get(M.id), pm = toClient(m.x + m.w / 2, m.y + m.h / 2)
+        kc.dispatchEvent(ptr('pointerdown', pm.x, pm.y)); window.dispatchEvent(ptr('pointerup', pm.x, pm.y)); kc.dispatchEvent(ptr('pointerup', pm.x, pm.y)); await sleep(600)
+        const east = [...document.querySelectorAll('rect')].filter(r => r.style.cursor === 'ew-resize')
+            .reduce((a, r) => (!a || r.getBoundingClientRect().x > a.getBoundingClientRect().x ? r : a), null)
+        const er = east.getBoundingClientRect(), e0 = { x: er.left + er.width / 2, y: er.top + er.height / 2 }
+        const rdx = (fx + 541 - (m.x + m.w)) * stage.scaleX()
+        east.dispatchEvent(ptr('pointerdown', e0.x, e0.y))
+        for (let i = 1; i <= 8; i++) { await sleep(30); window.dispatchEvent(ptr('pointermove', e0.x + rdx * i / 8, e0.y)) }
+        await sleep(150)
+        const rs = { right: +(get(M.id).x + get(M.id).w - fx).toFixed(2), guides: guides() }
+        window.dispatchEvent(ptr('pointerup', e0.x + rdx, e0.y)); await sleep(400)
+        await step('resize-outside-ignored', { want: 541, ...rs })
+    } finally { window.requestAnimationFrame = raf }
+    send('done', true)
+}
+if (spec.startsWith('fsnap:') && boardId) runFrameSnap().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

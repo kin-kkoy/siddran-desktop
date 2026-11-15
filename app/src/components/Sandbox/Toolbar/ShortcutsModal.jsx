@@ -34,6 +34,7 @@ const GROUPS = [
         rows: [
             ['Bring to front', [']']], ['Send to back', ['[']],
             ['Nudge', ['←', '↑', '↓', '→']], ['Nudge ×10', ['⇧', 'Arrows']],
+            ['Move or resize without snapping', ['⌘', 'drag']],
             ['Group', ['⌘', 'G']], ['Ungroup', ['⌘', '⇧', 'G']], ['Lock / unlock', ['⌘', '⇧', 'L']],
         ],
     },

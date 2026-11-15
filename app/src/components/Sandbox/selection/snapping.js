@@ -46,9 +46,15 @@ function nearest(arr, v) {
     return Math.abs(a - v) <= Math.abs(b - v) ? a : b
 }
 
-/** computeSnap against prebuilt targets (snapTargets). */
-export function computeSnapTo(movingAABB, targets, gridSize, threshold) {
-    const best = (movingLines, sorted) => {
+/** The grid line nearest `v`, counting steps from `origin` (a frame's corner; 0 = the board's grid). */
+const gridLine = (v, size, origin = 0) => origin + Math.round((v - origin) / size) * size
+
+/**
+ * computeSnap against prebuilt targets (snapTargets). `origin`: where the grid
+ * starts — a frame's top-left inside a scoped frame (selection/snapScope.js).
+ */
+export function computeSnapTo(movingAABB, targets, gridSize, threshold, origin = { x: 0, y: 0 }) {
+    const best = (movingLines, sorted, o) => {
         let bestDelta = 0
         let bestDist = threshold + 1
         let bestPos = null
@@ -61,7 +67,7 @@ export function computeSnapTo(movingAABB, targets, gridSize, threshold) {
             }
             // nearest grid line
             if (gridSize > 0) {
-                const g = Math.round(m / gridSize) * gridSize
+                const g = gridLine(m, gridSize, o)
                 const dist = Math.abs(g - m)
                 if (dist < bestDist) { bestDist = dist; bestDelta = g - m; bestPos = g }
             }
@@ -69,8 +75,8 @@ export function computeSnapTo(movingAABB, targets, gridSize, threshold) {
         return bestDist <= threshold ? { delta: bestDelta, pos: bestPos } : null
     }
 
-    const sx = best(xLines(movingAABB), targets.xs)
-    const sy = best(yLines(movingAABB), targets.ys)
+    const sx = best(xLines(movingAABB), targets.xs, origin.x)
+    const sy = best(yLines(movingAABB), targets.ys, origin.y)
 
     const guides = []
     if (sx) guides.push({ type: 'v', pos: sx.pos })
@@ -107,9 +113,9 @@ export function snapLines(items) {
 /**
  * Resize-time snapping for ONE moving edge: the nearest line (another item's
  * edge or centre, or the grid) within `threshold` of `v`. Returns the line, or
- * null when nothing is close enough.
+ * null when nothing is close enough. `origin`: where the grid starts (see computeSnapTo).
  */
-export function snapEdge(v, lines, gridSize, threshold) {
+export function snapEdge(v, lines, gridSize, threshold, origin = 0) {
     let best = null, bestDist = threshold
     // Sorted targets (snapTargets): binary search; a plain array: scan it.
     const near = lines instanceof Float64Array ? nearest(lines, v) : null
@@ -118,7 +124,7 @@ export function snapEdge(v, lines, gridSize, threshold) {
         if (dist <= bestDist) { bestDist = dist; best = t }
     }
     if (gridSize > 0) {
-        const g = Math.round(v / gridSize) * gridSize
+        const g = gridLine(v, gridSize, origin)
         if (Math.abs(g - v) < bestDist || (best == null && Math.abs(g - v) <= threshold)) best = g
     }
     return best

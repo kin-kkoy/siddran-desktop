@@ -5,6 +5,7 @@ import {
     boxUpVector, rotatePoint,
 } from './itemBounds'
 import { computeSnapTo, unionAABB, snapTargets, snapEdge, inView } from './snapping'
+import { snapScope } from './snapScope'
 import { itemHitTest } from './hitTest'
 import { facingSide, connectorPoints, connectorMidpoint, SIDES } from '../connectors/geometry'
 import { isFrame, frameTitleRect } from '../frames/frames'
@@ -78,7 +79,7 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
     // Guides change far less often than the pointer moves: re-render for them only when they do.
     const guidesKeyRef = useRef('')
     const showGuides = (g) => {
-        const k = g.map(x => `${x.type}${x.pos}`).join('|')
+        const k = g.map(x => `${x.type}${x.pos}:${x.from}:${x.to}`).join('|')
         if (k === guidesKeyRef.current) return
         guidesKeyRef.current = k
         setGuides(g)
@@ -157,6 +158,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         lastMoveRef.current = null
         window.removeEventListener('pointermove', onWindowMove)
         window.removeEventListener('pointerup', onWindowUp)
+        window.removeEventListener('keydown', onGestureKey)
+        window.removeEventListener('keyup', onGestureKey)
         const d = dragRef.current
         const wasPending = d.pending
         dragRef.current = null
@@ -186,9 +189,35 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; flushMove() })
     }
 
-    const applyMove = (e) => {
+    // Ctrl (⌘ on a Mac) pressed or let go mid-drag, the pointer still: snapping
+    // switches off or back on at once, not on the next move.
+    const onGestureKey = (e) => {
+        const d = dragRef.current
+        if (!d || d.pending || !d.lastEvent || (e.key !== 'Control' && e.key !== 'Meta')) return
+        if (d.mode !== 'move' && d.mode !== 'resize') return
+        applyMove(d.lastEvent, e.type === 'keydown')
+    }
+
+    // A box's snapping while it moves or resizes: the targets, the grid's
+    // origin and the guides' extent. Over a frame (not a frame itself): only
+    // that frame's own things (selection/snapScope.js) — else everything on screen.
+    const scopeAt = (d, boxNow) => {
+        if (!d.scoped) return null
+        const c = { x: boxNow.x + boxNow.w / 2, y: boxNow.y + boxNow.h / 2 }
+        return snapScope(c, items || [], d.skip, d.scopeCache)
+    }
+    // Guides inside a scoped frame stop at its edges (they belong to it).
+    const scopedGuides = (guides, scope) => {
+        if (!scope) return guides
+        const f = scope.frame
+        return guides.map(g => g.type === 'v' ? { ...g, from: f.y, to: f.y + f.h } : { ...g, from: f.x, to: f.x + f.w })
+    }
+
+    // `noSnap`: Ctrl/⌘ held — no snapping for as long as it's held.
+    const applyMove = (e, noSnap = e.ctrlKey || e.metaKey) => {
         const d = dragRef.current
         if (!d) return
+        d.lastEvent = e
         // A gesture only really starts once the pointer has moved a few px: a
         // plain click (or the first half of a double-click) must not open an undo
         // step or put up the full-screen drag shield, which would swallow the
@@ -226,13 +255,14 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         if (d.mode === 'move') {
             let dx = p.x - d.startWorld.x
             let dy = p.y - d.startWorld.y
-            if (canvas.snapEnabled && d.baseAABB) {
+            if (canvas.snapEnabled && !noSnap && d.baseAABB) {
                 const moving = { x: d.baseAABB.x + dx, y: d.baseAABB.y + dy, w: d.baseAABB.w, h: d.baseAABB.h }
-                const snap = computeSnapTo(moving, d.targets, SNAP_GRID, SNAP_PX / viewport.zoom)
+                const scope = scopeAt(d, moving)
+                const snap = computeSnapTo(moving, scope ? scope.targets : d.targets, SNAP_GRID, SNAP_PX / viewport.zoom, scope?.origin)
                 dx += snap.dx
                 dy += snap.dy
-                showGuides(snap.guides)
-            }
+                showGuides(scopedGuides(snap.guides, scope))
+            } else showGuides([])
             for (const s of d.snap) updateItem(s.id, { x: s.box.x + dx, y: s.box.y + dy })
             return
         }
@@ -259,14 +289,16 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         // Magnet on: the edge being dragged snaps to other items' edges and
         // centres (a frame's or widget's included — so things line up inside
         // them) and to the grid. Unrotated boxes only.
-        if (canvas.snapEnabled && d.lines && Math.abs(θ % 360) < 0.01) {
+        // On a frame, only that frame's things and its own grid (d.scope, set at the press).
+        if (canvas.snapEnabled && !noSnap && d.lines && Math.abs(θ % 360) < 0.01) {
             const thr = SNAP_PX / viewport.zoom
             const g = []
+            const o = d.scope?.origin || { x: 0, y: 0 }
             const ex = d.handleWorld.x + (p.x - d.startWorld.x), ey = d.handleWorld.y + (p.y - d.startWorld.y)
-            if (d.scaleX) { const t = snapEdge(ex, d.lines.xs, SNAP_GRID, thr); if (t != null) { p.x += t - ex; g.push({ type: 'v', pos: t }) } }
-            if (d.scaleY) { const t = snapEdge(ey, d.lines.ys, SNAP_GRID, thr); if (t != null) { p.y += t - ey; g.push({ type: 'h', pos: t }) } }
-            showGuides(g)
-        }
+            if (d.scaleX) { const t = snapEdge(ex, d.lines.xs, SNAP_GRID, thr, o.x); if (t != null) { p.x += t - ex; g.push({ type: 'v', pos: t }) } }
+            if (d.scaleY) { const t = snapEdge(ey, d.lines.ys, SNAP_GRID, thr, o.y); if (t != null) { p.y += t - ey; g.push({ type: 'h', pos: t }) } }
+            showGuides(scopedGuides(g, d.scope))
+        } else showGuides([])
         const pLocal = rotatePoint(p.x, p.y, A.x, A.y, -θ)
         const h0Local = rotatePoint(d.handleWorld.x, d.handleWorld.y, A.x, A.y, -θ)
         const aLocal = A // pivot maps to itself
@@ -298,6 +330,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
         }
         window.addEventListener('pointermove', onWindowMove)
         window.addEventListener('pointerup', onWindowUp)
+        window.addEventListener('keydown', onGestureKey)
+        window.addEventListener('keyup', onGestureKey)
     }
 
     // Move `list` (and, for frames, what sits on them).
@@ -328,6 +362,9 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             // Snap targets, built once: what's on screen and not moving — not
             // connectors (their stored 0×0 box sits at the origin).
             targets: snapTargets(inView((items || []).filter(it => !selIds.has(it.id) && it.type !== 'connector'), visibleWorld())),
+            // Over a frame, only its own things instead (scopeAt) — unless a
+            // frame is moving: frames line up with everything, as before.
+            scoped: !moving.some(isFrame), skip: selIds, scopeCache: new Map(),
             riders,
         }, moving)
         return true
@@ -523,6 +560,11 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
 
     const onResizeDown = (key) => (e) => {
         const anchors = getOrientedAnchors(box)
+        // Resizing something on a frame: the same scope as moving it. A frame
+        // being resized snaps to everything, as before.
+        const skip = new Set(boxItems.map(b => b.id))
+        const scope = boxItems.some(isFrame) ? null
+            : scopeAt({ scoped: true, skip, scopeCache: null }, box)
         startGesture(e, {
             mode: 'resize',
             anchorWorld: anchors[HANDLES[key].opp],
@@ -531,7 +573,8 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
             scaleX: HANDLES[key].sx,
             scaleY: HANDLES[key].sy,
             // Snap targets: everything not being resized (connectors have no box).
-            lines: snapTargets(inView((items || []).filter(it => it.type !== 'connector' && !boxItems.some(b => b.id === it.id)), visibleWorld())),
+            lines: scope ? scope.targets : snapTargets(inView((items || []).filter(it => it.type !== 'connector' && !skip.has(it.id)), visibleWorld())),
+            scope,
         })
     }
 
@@ -754,11 +797,14 @@ function SelectionOverlay({ canvas, selectedItems, items, updateItem, beginTrans
                 )}
 
                 {/* snap guides — dashed lines through the matched edge/centre */}
+                {/* (inside a scoped frame they run edge to edge of the frame only) */}
                 {guides.map((g, i) => g.type === 'v'
                     ? <line key={i} x1={screenOf({ x: g.pos, y: 0 }).x} x2={screenOf({ x: g.pos, y: 0 }).x}
-                        y1="0" y2="100%" stroke="#5a9cf0" strokeWidth={1} strokeDasharray="3 3" />
+                        y1={g.from != null ? screenOf({ x: 0, y: g.from }).y : '0'} y2={g.to != null ? screenOf({ x: 0, y: g.to }).y : '100%'}
+                        stroke="#5a9cf0" strokeWidth={1} strokeDasharray="3 3" />
                     : <line key={i} y1={screenOf({ x: 0, y: g.pos }).y} y2={screenOf({ x: 0, y: g.pos }).y}
-                        x1="0" x2="100%" stroke="#5a9cf0" strokeWidth={1} strokeDasharray="3 3" />
+                        x1={g.from != null ? screenOf({ x: g.from, y: 0 }).x : '0'} x2={g.to != null ? screenOf({ x: g.to, y: 0 }).x : '100%'}
+                        stroke="#5a9cf0" strokeWidth={1} strokeDasharray="3 3" />
                 )}
             </svg>
         </div>

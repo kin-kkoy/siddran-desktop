@@ -9,7 +9,7 @@ import {
     LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
     LuAlignVerticalJustifyStart, LuAlignVerticalJustifyCenter, LuAlignVerticalJustifyEnd,
     LuLock, LuLockOpen, LuGroup, LuUngroup, LuArrowLeftRight, LuImageDown, LuLoaderCircle, LuFrame, LuPaintBucket,
-    LuPencil, LuMaximize2, LuCrop,
+    LuPencil, LuMaximize2, LuCrop, LuMagnet,
 } from 'react-icons/lu'
 import SlideButtons from '../slides/SlideButtons'
 import { DiagramIcon, NextStepIcon } from '../flow/icons'
@@ -503,6 +503,21 @@ function ContextToolbar({
                             )
                         })()}
                         {cropButton(frames)}
+                        {(() => {
+                            // What's on the frame snaps only to the frame and its own things
+                            // (the default) — or, lit, to everything on the board too. snapScope.js.
+                            const outside = !!frames[0].payload?.snapOutside
+                            return (
+                                <button className={outside ? styles.btnActive : styles.btn} aria-pressed={outside}
+                                    aria-label="Line up with things outside the frame"
+                                    onClick={() => patchItems(frames, { snapOutside: !outside || undefined })}
+                                    title={outside
+                                        ? 'Things on this frame snap to everything on the board — click to snap only to this frame and what\'s on it'
+                                        : 'Things on this frame snap only to this frame and what\'s on it — click to also line them up with things outside'}>
+                                    <LuMagnet size={18} />
+                                </button>
+                            )
+                        })()}
                         {frames.length === 1 && onExportFrame && (
                             <>
                                 <button className={styles.btn} onClick={() => onEditText?.(frames[0].id)} title="Rename frame (double-click the title)" aria-label="Rename frame">Aa</button>
