@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { LuCheck, LuCalendarDays } from 'react-icons/lu'
 import styles from './AttachedTaskCard.module.css'
 import { useCardPointer, cardBoxStyle } from './useCardPointer'
+import { zIcon } from '../formats/zoomBox'
 
 /**
  * Live-reference task card. `item.payload.taskId` is stored; the task is read
@@ -9,7 +10,7 @@ import { useCardPointer, cardBoxStyle } from './useCardPointer'
  * title, then a footer with a priority pill and (if set) a due chip. The left
  * edge is tinted by priority. The whole card drags (the check is data-sb-noedit).
  */
-function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
+function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom, k = 1, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const task = tasks?.find(t => String(t.id) === String(item.payload.taskId))
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
         item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
@@ -19,7 +20,7 @@ function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom,
         ref: elRef,
         'data-sb-card': 'true',
         'data-sb-id': item.id,
-        style: cardBoxStyle(item, selected),
+        style: cardBoxStyle(item, selected, k),
         onPointerDown, onPointerMove, onPointerUp,
     }
 
@@ -48,14 +49,14 @@ function AttachedTaskCard({ item, tasks, onUpdate, onRemove, onToggleTask, zoom,
                     onClick={(e) => { e.stopPropagation(); onToggleTask?.(task.id, !task.is_completed) }}
                     title={task.is_completed ? 'Mark incomplete' : 'Mark complete'}
                 >
-                    {task.is_completed ? <LuCheck size={13} strokeWidth={3} /> : null}
+                    {task.is_completed ? <LuCheck {...zIcon(13)} strokeWidth={3} /> : null}
                 </button>
                 <div className={styles.title}>{task.title || 'Untitled task'}</div>
             </div>
             <div className={styles.meta}>
                 <span className={styles.kind}>TASK</span>
                 <span className={`${styles.prio} ${styles['p_' + prio]}`}>{prio}</span>
-                {due && <span className={styles.due}><LuCalendarDays size={11} /> {due}</span>}
+                {due && <span className={styles.due}><LuCalendarDays {...zIcon(11)} /> {due}</span>}
             </div>
         </div>
     )

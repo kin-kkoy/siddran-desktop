@@ -1,11 +1,12 @@
+/* Every px is calc(Npx * var(--z, 1)): the card's inner scale when zoomed out (cardBoxStyle, formats/zoomBox.js). */
 .box {
     position: absolute;
     pointer-events: auto;
     box-sizing: border-box;
     background: transparent;
-    border: 1px dashed transparent;
-    border-radius: 6px;
-    padding: 6px 8px;
+    border: calc(1px * var(--z, 1)) dashed transparent;
+    border-radius: calc(6px * var(--z, 1));
+    padding: calc(6px * var(--z, 1)) calc(8px * var(--z, 1));
     cursor: grab;
     user-select: none;
 }
@@ -48,11 +49,11 @@
 
 .removeBtn {
     position: absolute;
-    top: -10px;
-    right: -10px;
-    width: 20px;
-    height: 20px;
-    border: 1px solid var(--border-default);
+    top: calc(-10px * var(--z, 1));
+    right: calc(-10px * var(--z, 1));
+    width: calc(20px * var(--z, 1));
+    height: calc(20px * var(--z, 1));
+    border: calc(1px * var(--z, 1)) solid var(--border-default);
     background: var(--bg-surface);
     color: var(--text-muted);
     border-radius: 50%;
@@ -60,7 +61,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: calc(14px * var(--z, 1));
     line-height: 1;
     opacity: 0;
     transition: opacity 0.15s, color 0.15s;

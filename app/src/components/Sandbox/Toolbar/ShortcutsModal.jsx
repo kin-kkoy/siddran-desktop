@@ -53,6 +53,7 @@ const GROUPS = [
         title: 'View',
         rows: [
             ['Pan', ['Space', 'drag']], ['Zoom', ['Scroll']],
+            ['Move left / right', ['⇧', 'Scroll']], ['Move up / down', ['Alt', 'Scroll']],
             ['Zoom to fit', ['1']], ['Reset zoom', ['⌘', '0']], ['This help', ['?']],
         ],
     },

@@ -133,7 +133,9 @@ function SandboxCanvas({
         return () => ro.disconnect()
     }, [])
 
-    // Wheel = zoom-to-cursor.
+    // Wheel = zoom-to-cursor. Shift+wheel moves the view left/right, Alt+wheel
+    // up/down (the user's call, 2026-11-15 — Ctrl stays zoom: a touchpad pinch
+    // arrives as Ctrl+wheel).
     useEffect(() => {
         const el = containerRef.current
         if (!el) return
@@ -155,6 +157,14 @@ function SandboxCanvas({
                 }
             }
             e.preventDefault()
+            if ((e.shiftKey || e.altKey) && !e.ctrlKey && !e.metaKey) {
+                // Some systems turn Shift+wheel into a sideways wheel: take whichever axis moved.
+                const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? el.clientHeight : 1
+                const d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * unit
+                if (e.shiftKey) latestRef.current.canvas.panBy(-d, 0)
+                else latestRef.current.canvas.panBy(0, -d)
+                return
+            }
             const rect = el.getBoundingClientRect()
             const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top }
             latestRef.current.canvas.zoomAt(pointer, e.deltaY)

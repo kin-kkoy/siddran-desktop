@@ -16,6 +16,7 @@
 //   framestyle:<boardId> — a frame's title size (10–24) and a fully clear frame colour (runFrameStyle)
 //   fourfix:<boardId> — no box on an empty double-click; panning over a Doc never types; a Shift-dropped box starts at the pointer; export doesn't freeze the board (runFourFix)
 //   fsnap:<boardId> — frame-scoped snapping, Ctrl to switch it off, the frame magnet, resize scope (runFrameSnap)
+//   cardzoom:<boardId> — text/task cards keep their text in proportion when zoomed out; Shift/Alt+wheel pan (runCardZoom)
 //   hits:<boardId>   — clicks reach links inside an unfilled box; a drawn arrow becomes a curved link (runHits)
 //   glow:<boardId>   — connection outlines, the two-row shape bar, a new diagram centred on the view (runGlow)
 //
@@ -2193,3 +2194,55 @@ async function runFrameSnap() {
     send('done', true)
 }
 if (spec.startsWith('fsnap:') && boardId) runFrameSnap().catch(e => send('error', `${e?.message} @ ${e?.stack}`))
+
+// ── cardzoom:<boardId> — text and task cards keep their text in proportion at
+// any zoom (the inner scale k, Cards/useCardPointer.js cardBoxStyle): the text's
+// on-screen width ÷ the card's must not grow as the board zooms out, and the
+// text card's height is never rewritten by zooming. Then the wheel: Shift moves
+// the view sideways, Alt up/down, plain scroll zooms.
+async function runCardZoom() {
+    await waitFor(() => document.querySelector('#root')?.children.length)
+    await sleep(3000)
+    go(`/sandboxes/${boardId}`)
+    const stage = await waitFor(() => window.Konva?.stages?.find(s => s.container()?.isConnected))
+    await sleep(1500)
+    key('Escape')
+    key('0', { ctrlKey: true }); await sleep(600)
+    const store = await import('../hooks/sandboxItemsStore')
+    const live = () => store.getSnapshot(boardId)
+    const z0 = stage.scaleX()
+    const c0 = { x: (innerWidth / 2 - stage.x()) / z0, y: (innerHeight / 2 - stage.y()) / z0 }
+    const T = store.addItem(boardId, { type: 'text', x: c0.x - 200, y: c0.y - 120, w: 400, h: 40, rotation: 0, z_index: 5000, payload: { text: 'MMMMMMMMMM', fontSize: 18 } })
+    const K = store.addItem(boardId, { type: 'task', x: c0.x - 200, y: c0.y + 20, w: 240, h: 90, rotation: 0, z_index: 5001, payload: { taskId: 'no-such-task' } })
+    await sleep(1200)
+    const el = (id) => document.querySelector(`[data-sb-id="${id}"]`)
+    const textW = (node) => { const r = document.createRange(); r.selectNodeContents(node); return r.getBoundingClientRect().width }
+    const kc = stage.content.querySelector('canvas')
+    const rect = stage.container().getBoundingClientRect()
+    const at = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    const wheel = (opts) => kc.dispatchEvent(new WheelEvent('wheel', { clientX: at.x, clientY: at.y, deltaY: 100, bubbles: true, cancelable: true, ...opts }))
+    const sample = () => {
+        const tb = el(T.id).getBoundingClientRect(), kb = el(K.id).getBoundingClientRect()
+        const tText = el(T.id).querySelector('[class*="text"]'), kLabel = el(K.id).querySelector('[class*="label"]')
+        return { zoom: +stage.scaleX().toFixed(3), k: getComputedStyle(el(T.id)).zoom,
+            textOfCard: +(textW(tText) / tb.width).toFixed(3), taskLabelOfCard: +(textW(kLabel) / kb.width).toFixed(3),
+            cardScreenW: Math.round(tb.width), textCardH: Math.round(live().find(i => i.id === T.id).h) }
+    }
+    const rows = [sample()]
+    for (let n = 0; n < 4; n++) { for (let i = 0; i < 6; i++) { wheel({}); await sleep(60) } await sleep(700); rows.push(sample()) }
+    await step('zoom-out', { rows })
+    for (let n = 0; n < 24; n++) { wheel({ deltaY: -100 }); await sleep(40) }
+    await sleep(700)
+    rows.push(sample())
+    await step('back-in', { last: rows[rows.length - 1] })
+    const pos = () => ({ x: Math.round(stage.x()), y: Math.round(stage.y()), zoom: +stage.scaleX().toFixed(3) })
+    const p0 = pos(); wheel({ shiftKey: true }); await sleep(300)
+    const p1 = pos(); wheel({ altKey: true }); await sleep(300)
+    const p2 = pos(); wheel({ shiftKey: true, deltaY: 0, deltaX: 100 }); await sleep(300)
+    const p3 = pos(); wheel({}); await sleep(300)
+    const p4 = pos()
+    await step('wheel', { shift: { dx: p1.x - p0.x, dy: p1.y - p0.y, zoomSame: p1.zoom === p0.zoom }, alt: { dx: p2.x - p1.x, dy: p2.y - p1.y, zoomSame: p2.zoom === p1.zoom },
+        shiftSideways: { dx: p3.x - p2.x, dy: p3.y - p2.y }, plain: { zoomFrom: p3.zoom, zoomTo: p4.zoom } })
+    send('done', true)
+}
+if (spec.startsWith('cardzoom:') && boardId) runCardZoom().catch(e => send('error', `${e?.message} @ ${e?.stack}`))

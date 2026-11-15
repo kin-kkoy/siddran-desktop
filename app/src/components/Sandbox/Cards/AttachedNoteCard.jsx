@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { zIcon, useKeepScroll } from '../formats/zoomBox'
 import { useNavigate } from 'react-router-dom'
 import { LuExternalLink } from 'react-icons/lu'
 import styles from './AttachedNoteCard.module.css'
@@ -11,19 +12,21 @@ import { markdownToHtml } from '../../Editor/utils/markdownToHtml'
  * rendered (a mini reading view) in a scrollable pane so the card actually shows
  * the note's contents; the header title opens the note. Drag by the header.
  */
-function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
+function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, k = 1, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const note = notes?.find(n => n.id === item.payload.noteId)
     const navigate = useNavigate()
     const html = useMemo(() => (note?.body?.trim() ? markdownToHtml(note.body) : ''), [note?.body])
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
         item, tool, zoom, onSelect, onUpdate, onRemove, beginTransaction, endTransaction, onMoveEnd, onGrab,
     })
+    // The body keeps showing the same part of the note when the inner scale changes.
+    useKeepScroll(elRef, k)
 
     const common = {
         ref: elRef,
         'data-sb-card': 'true',
         'data-sb-id': item.id,
-        style: cardBoxStyle(item, selected),
+        style: cardBoxStyle(item, selected, k),
         onPointerDown, onPointerMove, onPointerUp,
     }
 
@@ -53,7 +56,7 @@ function AttachedNoteCard({ item, notes, onUpdate, onRemove, zoom, tool, selecte
                     title="Open this note"
                     aria-label="Open this note"
                 >
-                    <LuExternalLink size={13} />
+                    <LuExternalLink {...zIcon(13)} />
                 </button>
                 {/* Selected: the floating bar's trash does this, so no × over the handles. */}
                 {!selected && <button className={styles.iconBtn} onClick={() => onRemove(item.id)} title="Detach (note is not deleted)" aria-label="Detach note">×</button>}

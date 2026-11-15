@@ -12,7 +12,7 @@ import { cssTextStyle } from '../text/textStyle'
  * dragging/selection don't fire, and the isEditable keyboard guard keeps canvas
  * shortcuts from stealing keystrokes.
  */
-function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
+function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, k = 1, tool, selected, onSelect, beginTransaction, endTransaction, onMoveEnd, onGrab }) {
     const p = item.payload || {}
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState(p.text || '')
@@ -25,7 +25,7 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
         const ta = taRef.current
         if (!editing || !ta) return
         ta.style.height = 'auto'
-        ta.style.height = `${ta.scrollHeight}px`
+        ta.style.height = `${ta.scrollHeight}px`   // the textarea's own px (already ÷ k)
     }, [editing, draft, p.fontSize, p.fontFamily, p.lineHeight])
 
     const { elRef, onPointerDown, onPointerMove, onPointerUp } = useCardPointer({
@@ -38,7 +38,8 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
     }
 
     const textStyle = {
-        ...cssTextStyle(p, p.fontSize || 18),
+        // Specified k times smaller inside a k-times-magnified card (cardBoxStyle).
+        ...cssTextStyle(p, (p.fontSize || 18) / k),
         color: p.color || 'var(--text-primary)',
     }
 
@@ -49,12 +50,19 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
     // spills out of the box the selection handles show. Measures the content
     // only — never the card it resizes — and writes through the raw store
     // (onAutoSize), so it is not an undo step of its own. offsetHeight is in the
-    // card's own (pre-zoom) CSS px, i.e. world units.
+    // card's own (pre-zoom) CSS px: world units ÷ k (the inner scale).
+    // Zoomed out (k > 1) the text is laid out at a fractional size and may wrap
+    // a hair differently, so it re-measures only when what it shows changes —
+    // zooming alone never rewrites the card's height.
     const contentRef = useRef(null)
+    const measured = useRef('')
     useLayoutEffect(() => {
         const c = contentRef.current
         if (!c || !onAutoSize) return
-        const want = Math.ceil(c.offsetHeight + 14)   // + .box vertical padding & border
+        const key = JSON.stringify([p.text, p.fontSize, p.fontFamily, p.lineHeight, p.bold, p.italic, item.w])
+        if (k > 1 && key === measured.current) return
+        measured.current = key
+        const want = Math.ceil(c.offsetHeight * k + 14)   // + .box vertical padding & border (world px)
         if (Math.abs(want - (item.h || 0)) > 2) onAutoSize(item.id, Math.max(28, want))
     })
 
@@ -65,11 +73,11 @@ function TextBoxCard({ item, onUpdate, onRemove, onAutoSize, editRequest, zoom, 
             data-sb-id={item.id}
             className={`${styles.box} ${selected ? styles.selected : ''}`}
             style={{
-                ...cardBoxStyle(item, selected),
+                ...cardBoxStyle(item, selected, k),
                 background: p.bg || undefined,
                 // While typing the box grows with the textarea; on commit the
                 // auto-size above writes the settled height back.
-                ...(editing ? { height: 'auto', minHeight: item.h } : null),
+                ...(editing ? { height: 'auto', minHeight: item.h / k } : null),
             }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

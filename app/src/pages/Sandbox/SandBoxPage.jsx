@@ -1073,6 +1073,9 @@ function SandBoxPage({ notes, tasks = [], toggleTaskCompletion, mode = 'full', s
         }
         const shared = {
             item, zoom: canvas.viewport.zoom, tool: canvas.tool,
+            // Note, task and text cards keep their insides in proportion the same way (not PDFs:
+            // their page is an iframe that would re-layout — reload — at every step).
+            k: item.type === 'pdf' ? 1 : widgetK,
             selected: canvas.selectedIds.has(item.id), onSelect,
             onUpdate: act.updateItem, onRemove: onErase, beginTransaction, endTransaction, onMoveEnd, onGrab: onGrabItem,
         }

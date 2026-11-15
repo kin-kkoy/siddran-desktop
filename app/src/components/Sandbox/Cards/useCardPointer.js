@@ -70,16 +70,24 @@ export function useCardPointer({ item, zoom, onSelect, onUpdate, beginTransactio
     return { elRef, onPointerDown, onPointerMove, onPointerUp }
 }
 
-/** Inline box style shared by cards — position, size, rotation, selection ring. */
-export function cardBoxStyle(item, selected) {
+/**
+ * Inline box style shared by cards — position, size, rotation, selection ring.
+ * `k`: the card's inner scale when the board is zoomed out (formats/zoomBox.js
+ * — WebKit never draws text specified at 9px+ below 9px, so zoomed out a
+ * card's text would balloon inside it). The card is laid out k times smaller
+ * and magnified k times; inside, every px is `calc(Npx * var(--z, 1))`.
+ */
+export function cardBoxStyle(item, selected, k = 1) {
     return {
-        left: item.x,
-        top: item.y,
-        width: item.w ?? 200,
-        height: item.h != null ? item.h : undefined,
+        zoom: k,
+        '--z': 1 / k,
+        left: item.x / k,
+        top: item.y / k,
+        width: (item.w ?? 200) / k,
+        height: item.h != null ? item.h / k : undefined,
         transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
         transformOrigin: 'center center',
-        outline: selected ? '2px solid var(--accent-warning)' : undefined,
-        outlineOffset: 2,
+        outline: selected ? `${2 / k}px solid var(--accent-warning)` : undefined,
+        outlineOffset: 2 / k,
     }
 }

@@ -1,3 +1,4 @@
+/* Every px is calc(Npx * var(--z, 1)): the card's inner scale when zoomed out (cardBoxStyle, formats/zoomBox.js). */
 .card {
     position: absolute;
     pointer-events: auto;
@@ -6,9 +7,9 @@
     flex-direction: column;
     overflow: hidden;
     background-color: var(--bg-surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    border: calc(1px * var(--z, 1)) solid var(--border-strong);
+    border-radius: calc(10px * var(--z, 1));
+    box-shadow: 0 calc(10px * var(--z, 1)) calc(30px * var(--z, 1)) rgba(0, 0, 0, 0.55);
     color: var(--text-primary);
     -webkit-user-select: none;
     user-select: none;
@@ -19,18 +20,18 @@
 .header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--z, 1));
     flex-shrink: 0;
-    padding: 7px 6px 7px 12px;
+    padding: calc(7px * var(--z, 1)) calc(6px * var(--z, 1)) calc(7px * var(--z, 1)) calc(12px * var(--z, 1));
     background: var(--bg-primary);
-    border-bottom: 1px solid var(--border-default);
+    border-bottom: calc(1px * var(--z, 1)) solid var(--border-default);
     cursor: grab;
 }
 .header:active { cursor: grabbing; }
 
 .label {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: calc(9px * var(--z, 1));
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-muted);
@@ -43,23 +44,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--font-heading, inherit);
-    font-size: 13px;
+    font-size: calc(13px * var(--z, 1));
     font-weight: 600;
     color: var(--text-primary);
 }
 
 .iconBtn {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--z, 1));
+    height: calc(24px * var(--z, 1));
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: none;
     background: transparent;
     color: var(--text-muted);
-    border-radius: 6px;
-    font-size: 15px;
+    border-radius: calc(6px * var(--z, 1));
+    font-size: calc(15px * var(--z, 1));
     line-height: 1;
     cursor: pointer;
     transition: color 0.15s, background-color 0.15s;
@@ -71,30 +72,30 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px 18px;
+    padding: calc(16px * var(--z, 1)) calc(18px * var(--z, 1));
     background: var(--bg-surface-alt, #181826);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 calc(1px * var(--z, 1)) 0 rgba(255, 255, 255, 0.02);
     scrollbar-width: auto;
 }
 /* Chunkier scrollbar so it's easy to grab. */
-.page::-webkit-scrollbar { width: 12px; }
+.page::-webkit-scrollbar { width: calc(12px * var(--z, 1)); }
 .page::-webkit-scrollbar-track { background: transparent; }
 .page::-webkit-scrollbar-thumb {
     background: var(--border-strong);
-    border-radius: 6px;
-    border: 3px solid var(--bg-surface-alt, #181826);
+    border-radius: calc(6px * var(--z, 1));
+    border: calc(3px * var(--z, 1)) solid var(--bg-surface-alt, #181826);
 }
 .page::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 .emptyBody {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: calc(13px * var(--z, 1));
     font-style: italic;
 }
 
 /* Rendered note markdown (non-interactive — the whole page scrolls/drags). */
 .rendered {
     pointer-events: none;
-    font-size: 13px;
+    font-size: calc(13px * var(--z, 1));
     line-height: 1.6;
     color: var(--text-secondary);
     word-break: break-word;
@@ -103,44 +104,44 @@
 .rendered :global(h4), .rendered :global(h5), .rendered :global(h6) {
     font-weight: 700;
     color: var(--text-primary);
-    margin: 10px 0 5px;
+    margin: calc(10px * var(--z, 1)) 0 calc(5px * var(--z, 1));
     line-height: 1.3;
 }
-.rendered :global(h1) { font-size: 18px; }
-.rendered :global(h2) { font-size: 16px; }
-.rendered :global(h3) { font-size: 14px; }
-.rendered :global(h4), .rendered :global(h5), .rendered :global(h6) { font-size: 13px; }
-.rendered :global(p) { margin: 0 0 8px; }
-.rendered :global(ul), .rendered :global(ol) { margin: 0 0 8px; padding-left: 20px; }
-.rendered :global(li) { margin: 2px 0; }
+.rendered :global(h1) { font-size: calc(18px * var(--z, 1)); }
+.rendered :global(h2) { font-size: calc(16px * var(--z, 1)); }
+.rendered :global(h3) { font-size: calc(14px * var(--z, 1)); }
+.rendered :global(h4), .rendered :global(h5), .rendered :global(h6) { font-size: calc(13px * var(--z, 1)); }
+.rendered :global(p) { margin: 0 0 calc(8px * var(--z, 1)); }
+.rendered :global(ul), .rendered :global(ol) { margin: 0 0 calc(8px * var(--z, 1)); padding-left: calc(20px * var(--z, 1)); }
+.rendered :global(li) { margin: calc(2px * var(--z, 1)) 0; }
 .rendered :global(a) { color: var(--accent-blue); }
 .rendered :global(code) {
     font-family: var(--font-mono, monospace);
-    font-size: 12px;
+    font-size: calc(12px * var(--z, 1));
     background: var(--bg-hover);
-    border-radius: 3px;
-    padding: 1px 4px;
+    border-radius: calc(3px * var(--z, 1));
+    padding: calc(1px * var(--z, 1)) calc(4px * var(--z, 1));
 }
 .rendered :global(pre) {
     background: var(--bg-primary);
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: calc(6px * var(--z, 1));
+    padding: calc(10px * var(--z, 1));
     overflow-x: auto;
-    margin: 0 0 8px;
+    margin: 0 0 calc(8px * var(--z, 1));
 }
-.rendered :global(img) { max-width: 100%; height: auto; border-radius: 4px; }
+.rendered :global(img) { max-width: 100%; height: auto; border-radius: calc(4px * var(--z, 1)); }
 .rendered :global(blockquote) {
-    border-left: 2px solid var(--border-strong);
-    padding-left: 10px;
-    margin: 0 0 8px;
+    border-left: calc(2px * var(--z, 1)) solid var(--border-strong);
+    padding-left: calc(10px * var(--z, 1));
+    margin: 0 0 calc(8px * var(--z, 1));
     color: var(--text-muted);
 }
-.rendered :global(hr) { border: none; border-top: 1px solid var(--border-default); margin: 10px 0; }
+.rendered :global(hr) { border: none; border-top: calc(1px * var(--z, 1)) solid var(--border-default); margin: calc(10px * var(--z, 1)) 0; }
 
 .deleted { border-color: var(--accent-danger); opacity: 0.75; }
 .deletedNote {
-    padding: 14px 16px;
-    font-size: 13px;
+    padding: calc(14px * var(--z, 1)) calc(16px * var(--z, 1));
+    font-size: calc(13px * var(--z, 1));
     color: var(--text-muted);
     font-style: italic;
 }
